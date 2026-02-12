@@ -22,6 +22,8 @@ import { Textarea } from './components/ui/textarea';
 type Tab = 'screens' | 'localization' | 'preview' | 'export';
 type Platform = 'ios' | 'android';
 type Align = 'left' | 'center' | 'right';
+type TemplateElementKind = 'text' | 'image';
+type TemplateTextSource = 'title' | 'subtitle' | 'custom';
 
 interface Device {
   id: string;
@@ -57,6 +59,48 @@ interface ShotPlacement {
   cornerRadius: number;
 }
 
+interface TemplateElementBase {
+  id: string;
+  name: string;
+  kind: TemplateElementKind;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  z: number;
+  visible: boolean;
+  opacity: number;
+  rotation: number;
+}
+
+interface TemplateTextElement extends TemplateElementBase {
+  kind: 'text';
+  textSource: TemplateTextSource;
+  customText: string;
+  font: string;
+  size: number;
+  weight: number;
+  align: Align;
+  color: string;
+  backgroundColor: string;
+  padding: number;
+  cornerRadius: number;
+}
+
+interface TemplateImageElement extends TemplateElementBase {
+  kind: 'image';
+  source: 'slotImage' | 'renderedPreview';
+  fit: 'cover' | 'contain';
+  cornerRadius: number;
+  deviceFrame: boolean;
+  frameInset: number;
+  frameRadius: number;
+  frameColor: string;
+  frameWidth: number;
+}
+
+type TemplateElement = TemplateTextElement | TemplateImageElement;
+
 interface TemplateMain {
   background: {
     type: 'solid' | 'gradient';
@@ -76,6 +120,7 @@ interface TemplateMain {
     subtitle: TextBox;
   };
   shotPlacement: ShotPlacement;
+  elements: TemplateElement[];
 }
 
 interface TemplateInstance {
@@ -339,7 +384,256 @@ function imageMimeTypeFromPath(path: string) {
   return 'image/png';
 }
 
+function asNumber(value: unknown, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function createDefaultTemplateElements(main: Pick<TemplateMain, 'frame' | 'text' | 'shotPlacement'>): TemplateElement[] {
+  return [
+    {
+      id: 'image-main',
+      name: 'Screenshot',
+      kind: 'image',
+      x: main.shotPlacement.x,
+      y: main.shotPlacement.y,
+      w: main.shotPlacement.w,
+      h: main.shotPlacement.h,
+      z: 10,
+      visible: true,
+      opacity: 100,
+      rotation: 0,
+      source: 'slotImage',
+      fit: main.shotPlacement.fit,
+      cornerRadius: main.shotPlacement.cornerRadius,
+      deviceFrame: main.frame.enabled,
+      frameInset: main.frame.inset,
+      frameRadius: main.frame.radius,
+      frameColor: '#ffffff',
+      frameWidth: 3
+    },
+    {
+      id: 'text-title',
+      name: 'Title',
+      kind: 'text',
+      x: main.text.title.x,
+      y: main.text.title.y,
+      w: main.text.title.w,
+      h: main.text.title.h,
+      z: 20,
+      visible: true,
+      opacity: 100,
+      rotation: 0,
+      textSource: 'title',
+      customText: '',
+      font: main.text.title.font,
+      size: main.text.title.size,
+      weight: main.text.title.weight,
+      align: main.text.title.align,
+      color: '#f9fafb',
+      backgroundColor: 'transparent',
+      padding: 0,
+      cornerRadius: 0
+    },
+    {
+      id: 'text-subtitle',
+      name: 'Subtitle',
+      kind: 'text',
+      x: main.text.subtitle.x,
+      y: main.text.subtitle.y,
+      w: main.text.subtitle.w,
+      h: main.text.subtitle.h,
+      z: 30,
+      visible: true,
+      opacity: 100,
+      rotation: 0,
+      textSource: 'subtitle',
+      customText: '',
+      font: main.text.subtitle.font,
+      size: main.text.subtitle.size,
+      weight: main.text.subtitle.weight,
+      align: main.text.subtitle.align,
+      color: '#f9fafb',
+      backgroundColor: 'transparent',
+      padding: 0,
+      cornerRadius: 0
+    }
+  ];
+}
+
+function normalizeTemplateElements(raw: unknown, defaults: TemplateElement[]): TemplateElement[] {
+  if (!Array.isArray(raw)) {
+    return clone(defaults);
+  }
+
+  const normalized = raw
+    .map((item, index) => {
+      if (!item || typeof item !== 'object') return null;
+      const source = item as Record<string, unknown>;
+      const kind = source.kind === 'text' || source.kind === 'image' ? source.kind : null;
+      if (!kind) return null;
+
+      const fallback = defaults.find((entry) => entry.kind === kind) || defaults[0];
+      const base = {
+        id: typeof source.id === 'string' && source.id.trim() ? source.id : `${kind}-${index + 1}`,
+        name: typeof source.name === 'string' && source.name.trim()
+          ? source.name
+          : kind === 'text'
+            ? `Text ${index + 1}`
+            : `Image ${index + 1}`,
+        kind,
+        x: asNumber(source.x, fallback?.x || 0),
+        y: asNumber(source.y, fallback?.y || 0),
+        w: Math.max(1, asNumber(source.w, fallback?.w || 100)),
+        h: Math.max(1, asNumber(source.h, fallback?.h || 100)),
+        z: asNumber(source.z, (index + 1) * 10),
+        visible: typeof source.visible === 'boolean' ? source.visible : true,
+        opacity: clampNumber(asNumber(source.opacity, 100), 0, 100),
+        rotation: asNumber(source.rotation, 0)
+      };
+
+      if (kind === 'text') {
+        const align = source.align === 'left' || source.align === 'center' || source.align === 'right'
+          ? source.align
+          : 'left';
+        const textSource = source.textSource === 'title' || source.textSource === 'subtitle' || source.textSource === 'custom'
+          ? source.textSource
+          : 'custom';
+
+        const normalizedText: TemplateTextElement = {
+          ...base,
+          kind: 'text',
+          textSource,
+          customText: typeof source.customText === 'string' ? source.customText : '',
+          font: typeof source.font === 'string' && source.font.trim() ? source.font : 'SF Pro',
+          size: Math.max(1, asNumber(source.size, 48)),
+          weight: Math.max(100, asNumber(source.weight, 600)),
+          align,
+          color: typeof source.color === 'string' && source.color.trim() ? source.color : '#f9fafb',
+          backgroundColor: typeof source.backgroundColor === 'string' && source.backgroundColor.trim()
+            ? source.backgroundColor
+            : 'transparent',
+          padding: Math.max(0, asNumber(source.padding, 0)),
+          cornerRadius: Math.max(0, asNumber(source.cornerRadius, 0))
+        };
+        return normalizedText;
+      }
+
+      const normalizedImage: TemplateImageElement = {
+        ...base,
+        kind: 'image',
+        source: source.source === 'renderedPreview' ? 'renderedPreview' : 'slotImage',
+        fit: source.fit === 'contain' ? 'contain' : 'cover',
+        cornerRadius: Math.max(0, asNumber(source.cornerRadius, 0)),
+        deviceFrame: typeof source.deviceFrame === 'boolean' ? source.deviceFrame : false,
+        frameInset: Math.max(0, asNumber(source.frameInset, 0)),
+        frameRadius: Math.max(0, asNumber(source.frameRadius, 0)),
+        frameColor: typeof source.frameColor === 'string' && source.frameColor.trim()
+          ? source.frameColor
+          : '#ffffff',
+        frameWidth: Math.max(1, asNumber(source.frameWidth, 3))
+      };
+      return normalizedImage;
+    })
+    .filter((item): item is TemplateElement => item !== null);
+
+  if (normalized.length === 0) {
+    return clone(defaults);
+  }
+
+  const seen = new Set<string>();
+  const deduped = normalized.map((item, index) => {
+    let id = item.id;
+    while (seen.has(id)) {
+      id = `${item.kind}-${index + 1}-${seen.size + 1}`;
+    }
+    seen.add(id);
+    return { ...item, id };
+  });
+
+  return deduped
+    .sort((a, b) => a.z - b.z)
+    .map((item, index) => ({ ...item, z: (index + 1) * 10 }));
+}
+
+function syncTemplateLegacyFields(main: TemplateMain): TemplateMain {
+  const sortedElements = [...main.elements].sort((a, b) => a.z - b.z);
+  const firstImage = sortedElements.find((item) => item.kind === 'image');
+  const titleLayer = sortedElements.find((item) => item.kind === 'text' && item.textSource === 'title');
+  const subtitleLayer = sortedElements.find((item) => item.kind === 'text' && item.textSource === 'subtitle');
+
+  return {
+    ...main,
+    elements: sortedElements.map((item, index) => ({ ...item, z: (index + 1) * 10 })),
+    shotPlacement: firstImage
+      ? {
+        ...main.shotPlacement,
+        x: firstImage.x,
+        y: firstImage.y,
+        w: firstImage.w,
+        h: firstImage.h,
+        fit: firstImage.fit,
+        cornerRadius: firstImage.cornerRadius
+      }
+      : main.shotPlacement,
+    frame: firstImage
+      ? {
+        ...main.frame,
+        enabled: firstImage.deviceFrame,
+        inset: firstImage.frameInset,
+        radius: firstImage.frameRadius
+      }
+      : main.frame,
+    text: {
+      title: titleLayer
+        ? {
+          ...main.text.title,
+          x: titleLayer.x,
+          y: titleLayer.y,
+          w: titleLayer.w,
+          h: titleLayer.h,
+          font: titleLayer.font,
+          size: titleLayer.size,
+          weight: titleLayer.weight,
+          align: titleLayer.align
+        }
+        : main.text.title,
+      subtitle: subtitleLayer
+        ? {
+          ...main.text.subtitle,
+          x: subtitleLayer.x,
+          y: subtitleLayer.y,
+          w: subtitleLayer.w,
+          h: subtitleLayer.h,
+          font: subtitleLayer.font,
+          size: subtitleLayer.size,
+          weight: subtitleLayer.weight,
+          align: subtitleLayer.align
+        }
+        : main.text.subtitle
+    }
+  };
+}
+
 function createDefaultProject(): StoreShotDoc {
+  const defaultMainBase: Omit<TemplateMain, 'elements'> = {
+    background: { type: 'gradient', from: '#111827', to: '#1f2937', direction: '180deg' },
+    frame: { type: 'simpleRounded', enabled: true, inset: 80, radius: 80 },
+    text: {
+      title: { x: 80, y: 120, w: 1130, h: 220, font: 'SF Pro', size: 88, weight: 700, align: 'left' },
+      subtitle: { x: 80, y: 330, w: 1130, h: 160, font: 'SF Pro', size: 48, weight: 500, align: 'left' }
+    },
+    shotPlacement: { x: 120, y: 560, w: 1050, h: 2200, fit: 'cover', cornerRadius: 60 }
+  };
+
+  const defaultMain = syncTemplateLegacyFields({
+    ...defaultMainBase,
+    elements: createDefaultTemplateElements(defaultMainBase)
+  });
+
   return {
     schemaVersion: 1,
     project: {
@@ -356,15 +650,7 @@ function createDefaultProject(): StoreShotDoc {
       ]
     },
     template: {
-      main: {
-        background: { type: 'gradient', from: '#111827', to: '#1f2937', direction: '180deg' },
-        frame: { type: 'simpleRounded', enabled: true, inset: 80, radius: 80 },
-        text: {
-          title: { x: 80, y: 120, w: 1130, h: 220, font: 'SF Pro', size: 88, weight: 700, align: 'left' },
-          subtitle: { x: 80, y: 330, w: 1130, h: 160, font: 'SF Pro', size: 48, weight: 500, align: 'left' }
-        },
-        shotPlacement: { x: 120, y: 560, w: 1050, h: 2200, fit: 'cover', cornerRadius: 60 }
-      },
+      main: defaultMain,
       instances: []
     },
     copy: {
@@ -403,6 +689,29 @@ function normalizeProject(raw: unknown): StoreShotDoc {
   if (!raw || typeof raw !== 'object') return base;
 
   const doc = raw as Partial<StoreShotDoc>;
+  const normalizedMain = syncTemplateLegacyFields({
+    ...base.template.main,
+    ...doc.template?.main,
+    background: { ...base.template.main.background, ...doc.template?.main?.background },
+    frame: { ...base.template.main.frame, ...doc.template?.main?.frame },
+    text: {
+      title: { ...base.template.main.text.title, ...doc.template?.main?.text?.title },
+      subtitle: { ...base.template.main.text.subtitle, ...doc.template?.main?.text?.subtitle }
+    },
+    shotPlacement: { ...base.template.main.shotPlacement, ...doc.template?.main?.shotPlacement },
+    elements: normalizeTemplateElements(
+      doc.template?.main?.elements,
+      createDefaultTemplateElements({
+        frame: { ...base.template.main.frame, ...doc.template?.main?.frame },
+        text: {
+          title: { ...base.template.main.text.title, ...doc.template?.main?.text?.title },
+          subtitle: { ...base.template.main.text.subtitle, ...doc.template?.main?.text?.subtitle }
+        },
+        shotPlacement: { ...base.template.main.shotPlacement, ...doc.template?.main?.shotPlacement }
+      })
+    )
+  });
+
   return {
     ...base,
     ...doc,
@@ -417,17 +726,7 @@ function normalizeProject(raw: unknown): StoreShotDoc {
         .sort((a, b) => a.order - b.order)
     },
     template: {
-      main: {
-        ...base.template.main,
-        ...doc.template?.main,
-        background: { ...base.template.main.background, ...doc.template?.main?.background },
-        frame: { ...base.template.main.frame, ...doc.template?.main?.frame },
-        text: {
-          title: { ...base.template.main.text.title, ...doc.template?.main?.text?.title },
-          subtitle: { ...base.template.main.text.subtitle, ...doc.template?.main?.text?.subtitle }
-        },
-        shotPlacement: { ...base.template.main.shotPlacement, ...doc.template?.main?.shotPlacement }
-      },
+      main: normalizedMain,
       instances: doc.template?.instances || []
     },
     copy: {
@@ -487,6 +786,7 @@ export function App() {
   const [selectedDevice, setSelectedDevice] = useState('ios_phone');
   const [selectedLocale, setSelectedLocale] = useState('en-US');
   const [selectedSlot, setSelectedSlot] = useState('slot1');
+  const [selectedTemplateElementId, setSelectedTemplateElementId] = useState('text-title');
   const [screenFocusTrigger, setScreenFocusTrigger] = useState(0);
   const [slotPreviewUrls, setSlotPreviewUrls] = useState<Record<string, string>>({});
   const [slotPreviewPaths, setSlotPreviewPaths] = useState<Record<string, string>>({});
@@ -535,6 +835,22 @@ export function App() {
   );
 
   const llmConfig = doc.pipelines.localization.llmCli || clone(defaultLlmConfig);
+  const templateElements = useMemo(
+    () => [...doc.template.main.elements].sort((a, b) => a.z - b.z),
+    [doc.template.main.elements]
+  );
+  const selectedTemplateElement = useMemo(
+    () => templateElements.find((item) => item.id === selectedTemplateElementId) || templateElements[0] || null,
+    [selectedTemplateElementId, templateElements]
+  );
+  const selectedElementFontOptions = useMemo(() => {
+    if (!selectedTemplateElement || selectedTemplateElement.kind !== 'text') {
+      return availableFonts;
+    }
+
+    const merged = new Set([...availableFonts, selectedTemplateElement.font]);
+    return [...merged].sort((a, b) => a.localeCompare(b));
+  }, [availableFonts, selectedTemplateElement]);
   const slotSourceLoadKey = useMemo(() => {
     const entries = doc.project.slots.map((slot) => ({ id: slot.id, sourceImagePath: slot.sourceImagePath }));
     slotSourceEntriesRef.current = entries;
@@ -559,6 +875,17 @@ export function App() {
       setSelectedSlot(doc.project.slots[0]?.id || 'slot1');
     }
   }, [doc.project.devices, doc.project.locales, doc.project.slots, selectedDevice, selectedLocale, selectedSlot]);
+
+  useEffect(() => {
+    if (templateElements.length === 0) {
+      setSelectedTemplateElementId('');
+      return;
+    }
+
+    if (!templateElements.some((item) => item.id === selectedTemplateElementId)) {
+      setSelectedTemplateElementId(templateElements[0].id);
+    }
+  }, [selectedTemplateElementId, templateElements]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -683,6 +1010,7 @@ export function App() {
     await runWithLog(async () => {
       const next = clone(doc);
       next.project.slots = reorderSlots(next.project.slots);
+      next.template.main = syncTemplateLegacyFields(next.template.main);
       next.pipelines.export.outputDir = outputDir;
       await writeTextFile(projectPath, JSON.stringify(next, null, 2));
       return `Saved project: ${projectPath}`;
@@ -990,72 +1318,128 @@ export function App() {
     updateCopyByKey(selectedSubtitleKey, selectedLocale, value);
   }, [selectedLocale, selectedSubtitleKey, updateCopyByKey]);
 
+  const updateTemplateMain = useCallback((mutator: (main: TemplateMain) => void) => {
+    setDoc((current) => {
+      const nextMain = clone(current.template.main);
+      mutator(nextMain);
+
+      return {
+        ...current,
+        template: {
+          ...current.template,
+          main: syncTemplateLegacyFields(nextMain)
+        }
+      };
+    });
+  }, []);
+
   const updateTemplateBackground = useCallback((patch: Partial<TemplateMain['background']>) => {
-    setDoc((current) => ({
-      ...current,
-      template: {
-        ...current.template,
-        main: {
-          ...current.template.main,
-          background: {
-            ...current.template.main.background,
-            ...patch
-          }
-        }
-      }
-    }));
-  }, []);
+    updateTemplateMain((main) => {
+      main.background = {
+        ...main.background,
+        ...patch
+      };
+    });
+  }, [updateTemplateMain]);
 
-  const updateTemplateFrame = useCallback((patch: Partial<TemplateMain['frame']>) => {
-    setDoc((current) => ({
-      ...current,
-      template: {
-        ...current.template,
-        main: {
-          ...current.template.main,
-          frame: {
-            ...current.template.main.frame,
-            ...patch
-          }
-        }
-      }
-    }));
-  }, []);
+  const updateTemplateElement = useCallback((elementId: string, mutator: (element: TemplateElement) => TemplateElement) => {
+    updateTemplateMain((main) => {
+      const index = main.elements.findIndex((item) => item.id === elementId);
+      if (index < 0) return;
+      main.elements[index] = mutator(main.elements[index]);
+    });
+  }, [updateTemplateMain]);
 
-  const updateTemplateTextBox = useCallback((kind: 'title' | 'subtitle', patch: Partial<TextBox>) => {
-    setDoc((current) => ({
-      ...current,
-      template: {
-        ...current.template,
-        main: {
-          ...current.template.main,
-          text: {
-            ...current.template.main.text,
-            [kind]: {
-              ...current.template.main.text[kind],
-              ...patch
-            }
-          }
-        }
-      }
-    }));
-  }, []);
+  const addTemplateElement = useCallback((kind: TemplateElementKind) => {
+    let createdId = '';
 
-  const updateShotPlacement = useCallback((patch: Partial<ShotPlacement>) => {
-    setDoc((current) => ({
-      ...current,
-      template: {
-        ...current.template,
-        main: {
-          ...current.template.main,
-          shotPlacement: {
-            ...current.template.main.shotPlacement,
-            ...patch
-          }
-        }
+    updateTemplateMain((main) => {
+      const existingIds = new Set(main.elements.map((item) => item.id));
+      let nextNumber = 1;
+      while (existingIds.has(`${kind}-${nextNumber}`)) {
+        nextNumber += 1;
       }
-    }));
-  }, []);
+      createdId = `${kind}-${nextNumber}`;
+
+      const topZ = main.elements.reduce((max, item) => Math.max(max, item.z), 0);
+      if (kind === 'text') {
+        const newTextElement: TemplateTextElement = {
+          id: createdId,
+          name: `Text ${nextNumber}`,
+          kind: 'text',
+          x: 120,
+          y: 120,
+          w: 900,
+          h: 200,
+          z: topZ + 10,
+          visible: true,
+          opacity: 100,
+          rotation: 0,
+          textSource: 'custom',
+          customText: 'New text',
+          font: availableFonts[0] || 'SF Pro',
+          size: 64,
+          weight: 700,
+          align: 'left',
+          color: '#f9fafb',
+          backgroundColor: 'transparent',
+          padding: 0,
+          cornerRadius: 0
+        };
+        main.elements.push(newTextElement);
+        return;
+      }
+
+      const newImageElement: TemplateImageElement = {
+        id: createdId,
+        name: `Image ${nextNumber}`,
+        kind: 'image',
+        x: 120,
+        y: 560,
+        w: 1000,
+        h: 2000,
+        z: topZ + 10,
+        visible: true,
+        opacity: 100,
+        rotation: 0,
+        source: 'slotImage',
+        fit: 'cover',
+        cornerRadius: 48,
+        deviceFrame: false,
+        frameInset: 0,
+        frameRadius: 72,
+        frameColor: '#ffffff',
+        frameWidth: 3
+      };
+      main.elements.push(newImageElement);
+    });
+
+    if (createdId) {
+      setSelectedTemplateElementId(createdId);
+    }
+  }, [availableFonts, updateTemplateMain]);
+
+  const removeTemplateElement = useCallback((elementId: string) => {
+    updateTemplateMain((main) => {
+      if (main.elements.length <= 1) return;
+      main.elements = main.elements.filter((item) => item.id !== elementId);
+    });
+  }, [updateTemplateMain]);
+
+  const moveTemplateElement = useCallback((elementId: string, direction: -1 | 1) => {
+    updateTemplateMain((main) => {
+      const ordered = [...main.elements].sort((a, b) => a.z - b.z);
+      const fromIndex = ordered.findIndex((item) => item.id === elementId);
+      if (fromIndex < 0) return;
+
+      const toIndex = fromIndex + direction;
+      if (toIndex < 0 || toIndex >= ordered.length) return;
+
+      const [picked] = ordered.splice(fromIndex, 1);
+      ordered.splice(toIndex, 0, picked);
+      main.elements = ordered.map((item, index) => ({ ...item, z: (index + 1) * 10 }));
+    });
+  }, [updateTemplateMain]);
 
   const handleSelectSlot = useCallback((slotId: string) => {
     startSlotTransition(() => {
@@ -1119,120 +1503,366 @@ export function App() {
     }
   }
 
-  const templateInspectorSection = useMemo(() => (
-    <>
-      <Card className="border-dashed">
-        <CardHeader>
-          <CardTitle>Background / Frame</CardTitle>
-          <CardDescription>배경과 프레임 설정</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <LabeledField label="Background Type">
+  const templateInspectorSection = useMemo(() => {
+    let selectedElementInspector: React.ReactNode = null;
+
+    if (selectedTemplateElement?.kind === 'text') {
+      const textElement = selectedTemplateElement;
+      selectedElementInspector = (
+        <>
+          <LabeledField label="Text Source">
             <Select
-              value={doc.template.main.background.type}
-              onValueChange={(value) => updateTemplateBackground({ type: value as 'solid' | 'gradient' })}
+              value={textElement.textSource}
+              onValueChange={(value) => updateTemplateElement(textElement.id, (current) => (
+                current.kind === 'text' ? { ...current, textSource: value as TemplateTextSource } : current
+              ))}
             >
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="solid">solid</SelectItem>
-                <SelectItem value="gradient">gradient</SelectItem>
+                <SelectItem value="title">slot title</SelectItem>
+                <SelectItem value="subtitle">slot subtitle</SelectItem>
+                <SelectItem value="custom">custom text</SelectItem>
               </SelectContent>
             </Select>
           </LabeledField>
 
-          {doc.template.main.background.type === 'solid' ? (
-            <LabeledField label="Color">
-              <Input
-                value={doc.template.main.background.value || '#111827'}
-                onChange={(event) => updateTemplateBackground({ value: event.target.value })}
+          {textElement.textSource === 'custom' ? (
+            <LabeledField label="Custom Text">
+              <Textarea
+                value={textElement.customText}
+                onChange={(event) => updateTemplateElement(textElement.id, (current) => (
+                  current.kind === 'text' ? { ...current, customText: event.target.value } : current
+                ))}
+                className="min-h-[96px]"
               />
             </LabeledField>
-          ) : (
-            <>
-              <LabeledField label="From">
-                <Input value={doc.template.main.background.from || '#111827'} onChange={(event) => updateTemplateBackground({ from: event.target.value })} />
-              </LabeledField>
-              <LabeledField label="To">
-                <Input value={doc.template.main.background.to || '#1f2937'} onChange={(event) => updateTemplateBackground({ to: event.target.value })} />
-              </LabeledField>
-              <LabeledField label="Direction">
-                <Input value={doc.template.main.background.direction || '180deg'} onChange={(event) => updateTemplateBackground({ direction: event.target.value })} />
-              </LabeledField>
-            </>
-          )}
-
-          <SwitchRow
-            label="Enable Frame"
-            checked={doc.template.main.frame.enabled}
-            onCheckedChange={(checked) => updateTemplateFrame({ enabled: checked })}
-          />
+          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
+            <LabeledField label="Font">
+              <Select
+                value={textElement.font}
+                onValueChange={(value) => updateTemplateElement(textElement.id, (current) => (
+                  current.kind === 'text' ? { ...current, font: value } : current
+                ))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {selectedElementFontOptions.map((font) => (
+                    <SelectItem key={font} value={font}>{font}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </LabeledField>
             <NumberField
-              label="Frame Inset"
-              value={doc.template.main.frame.inset}
-              onValueChange={(value) => updateTemplateFrame({ inset: value })}
+              label="Size"
+              value={textElement.size}
+              onValueChange={(value) => updateTemplateElement(textElement.id, (current) => (
+                current.kind === 'text' ? { ...current, size: value } : current
+              ))}
             />
             <NumberField
-              label="Frame Radius"
-              value={doc.template.main.frame.radius}
-              onValueChange={(value) => updateTemplateFrame({ radius: value })}
+              label="Weight"
+              value={textElement.weight}
+              onValueChange={(value) => updateTemplateElement(textElement.id, (current) => (
+                current.kind === 'text' ? { ...current, weight: value } : current
+              ))}
+            />
+            <LabeledField label="Align">
+              <Select
+                value={textElement.align}
+                onValueChange={(value) => updateTemplateElement(textElement.id, (current) => (
+                  current.kind === 'text' ? { ...current, align: value as Align } : current
+                ))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="left">left</SelectItem>
+                  <SelectItem value="center">center</SelectItem>
+                  <SelectItem value="right">right</SelectItem>
+                </SelectContent>
+              </Select>
+            </LabeledField>
+            <LabeledField label="Text Color">
+              <Input
+                value={textElement.color}
+                onChange={(event) => updateTemplateElement(textElement.id, (current) => (
+                  current.kind === 'text' ? { ...current, color: event.target.value } : current
+                ))}
+              />
+            </LabeledField>
+            <LabeledField label="Background Color">
+              <Input
+                value={textElement.backgroundColor}
+                onChange={(event) => updateTemplateElement(textElement.id, (current) => (
+                  current.kind === 'text' ? { ...current, backgroundColor: event.target.value } : current
+                ))}
+              />
+            </LabeledField>
+            <NumberField
+              label="Padding"
+              value={textElement.padding}
+              onValueChange={(value) => updateTemplateElement(textElement.id, (current) => (
+                current.kind === 'text' ? { ...current, padding: value } : current
+              ))}
+            />
+            <NumberField
+              label="Corner Radius"
+              value={textElement.cornerRadius}
+              onValueChange={(value) => updateTemplateElement(textElement.id, (current) => (
+                current.kind === 'text' ? { ...current, cornerRadius: value } : current
+              ))}
             />
           </div>
-        </CardContent>
-      </Card>
+        </>
+      );
+    } else if (selectedTemplateElement?.kind === 'image') {
+      const imageElement = selectedTemplateElement;
+      selectedElementInspector = (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <LabeledField label="Source">
+              <Select
+                value={imageElement.source}
+                onValueChange={(value) => updateTemplateElement(imageElement.id, (current) => (
+                  current.kind === 'image' ? { ...current, source: value as 'slotImage' | 'renderedPreview' } : current
+                ))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="slotImage">slot source image</SelectItem>
+                  <SelectItem value="renderedPreview">rendered preview image</SelectItem>
+                </SelectContent>
+              </Select>
+            </LabeledField>
+            <LabeledField label="Fit">
+              <Select
+                value={imageElement.fit}
+                onValueChange={(value) => updateTemplateElement(imageElement.id, (current) => (
+                  current.kind === 'image' ? { ...current, fit: value as 'cover' | 'contain' } : current
+                ))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cover">cover</SelectItem>
+                  <SelectItem value="contain">contain</SelectItem>
+                </SelectContent>
+              </Select>
+            </LabeledField>
+            <NumberField
+              label="Corner Radius"
+              value={imageElement.cornerRadius}
+              onValueChange={(value) => updateTemplateElement(imageElement.id, (current) => (
+                current.kind === 'image' ? { ...current, cornerRadius: value } : current
+              ))}
+            />
+          </div>
 
-      <Card className="border-dashed">
-        <CardHeader>
-          <CardTitle>Text / Shot Placement</CardTitle>
-          <CardDescription>텍스트 박스와 샷 위치 설정</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <TemplateBoxEditor
-            title="Title Box"
-            box={doc.template.main.text.title}
-            fontOptions={availableFonts}
-            onChange={(patch) => updateTemplateTextBox('title', patch)}
-          />
-          <TemplateBoxEditor
-            title="Subtitle Box"
-            box={doc.template.main.text.subtitle}
-            fontOptions={availableFonts}
-            onChange={(patch) => updateTemplateTextBox('subtitle', patch)}
+          <SwitchRow
+            label="Device Frame (Image only)"
+            checked={imageElement.deviceFrame}
+            onCheckedChange={(checked) => updateTemplateElement(imageElement.id, (current) => (
+              current.kind === 'image' ? { ...current, deviceFrame: checked } : current
+            ))}
           />
 
-          <div className="rounded-md border p-3">
-            <p className="mb-2 text-sm font-medium">Shot Placement</p>
+          {imageElement.deviceFrame ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <NumberField label="X" value={doc.template.main.shotPlacement.x} onValueChange={(value) => updateShotPlacement({ x: value })} />
-              <NumberField label="Y" value={doc.template.main.shotPlacement.y} onValueChange={(value) => updateShotPlacement({ y: value })} />
-              <NumberField label="Width" value={doc.template.main.shotPlacement.w} onValueChange={(value) => updateShotPlacement({ w: value })} />
-              <NumberField label="Height" value={doc.template.main.shotPlacement.h} onValueChange={(value) => updateShotPlacement({ h: value })} />
-              <NumberField label="Corner Radius" value={doc.template.main.shotPlacement.cornerRadius} onValueChange={(value) => updateShotPlacement({ cornerRadius: value })} />
-              <LabeledField label="Fit">
-                <Select
-                  value={doc.template.main.shotPlacement.fit}
-                  onValueChange={(value) => updateShotPlacement({ fit: value as 'cover' | 'contain' })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cover">cover</SelectItem>
-                    <SelectItem value="contain">contain</SelectItem>
-                  </SelectContent>
-                </Select>
+              <NumberField
+                label="Frame Inset"
+                value={imageElement.frameInset}
+                onValueChange={(value) => updateTemplateElement(imageElement.id, (current) => (
+                  current.kind === 'image' ? { ...current, frameInset: value } : current
+                ))}
+              />
+              <NumberField
+                label="Frame Radius"
+                value={imageElement.frameRadius}
+                onValueChange={(value) => updateTemplateElement(imageElement.id, (current) => (
+                  current.kind === 'image' ? { ...current, frameRadius: value } : current
+                ))}
+              />
+              <NumberField
+                label="Frame Width"
+                value={imageElement.frameWidth}
+                onValueChange={(value) => updateTemplateElement(imageElement.id, (current) => (
+                  current.kind === 'image' ? { ...current, frameWidth: value } : current
+                ))}
+              />
+              <LabeledField label="Frame Color">
+                <Input
+                  value={imageElement.frameColor}
+                  onChange={(event) => updateTemplateElement(imageElement.id, (current) => (
+                    current.kind === 'image' ? { ...current, frameColor: event.target.value } : current
+                  ))}
+                />
               </LabeledField>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-    </>
-  ), [
-    availableFonts,
-    doc.template.main,
-    updateShotPlacement,
+          ) : null}
+        </>
+      );
+    }
+
+    return (
+      <>
+        <Card className="border-dashed">
+          <CardHeader>
+            <CardTitle>Background</CardTitle>
+            <CardDescription>캔버스 배경 설정</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <LabeledField label="Background Type">
+              <Select
+                value={doc.template.main.background.type}
+                onValueChange={(value) => updateTemplateBackground({ type: value as 'solid' | 'gradient' })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="solid">solid</SelectItem>
+                  <SelectItem value="gradient">gradient</SelectItem>
+                </SelectContent>
+              </Select>
+            </LabeledField>
+
+            {doc.template.main.background.type === 'solid' ? (
+              <LabeledField label="Color">
+                <Input
+                  value={doc.template.main.background.value || '#111827'}
+                  onChange={(event) => updateTemplateBackground({ value: event.target.value })}
+                />
+              </LabeledField>
+            ) : (
+              <>
+                <LabeledField label="From">
+                  <Input value={doc.template.main.background.from || '#111827'} onChange={(event) => updateTemplateBackground({ from: event.target.value })} />
+                </LabeledField>
+                <LabeledField label="To">
+                  <Input value={doc.template.main.background.to || '#1f2937'} onChange={(event) => updateTemplateBackground({ to: event.target.value })} />
+                </LabeledField>
+                <LabeledField label="Direction">
+                  <Input value={doc.template.main.background.direction || '180deg'} onChange={(event) => updateTemplateBackground({ direction: event.target.value })} />
+                </LabeledField>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-dashed">
+          <CardHeader>
+            <CardTitle>Layers</CardTitle>
+            <CardDescription>텍스트/이미지 요소를 추가하고 순서를 조정합니다.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => addTemplateElement('text')}>
+                <Plus className="mr-1 h-4 w-4" />Add Text
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => addTemplateElement('image')}>
+                <Plus className="mr-1 h-4 w-4" />Add Image
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {templateElements.map((element, index) => (
+                <div key={element.id} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className={`flex-1 rounded-md border px-3 py-2 text-left text-sm ${
+                      selectedTemplateElement?.id === element.id ? 'border-primary bg-primary/10' : 'border-border'
+                    }`}
+                    onClick={() => setSelectedTemplateElementId(element.id)}
+                  >
+                    <span className="font-medium">{element.name}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">{element.kind}</span>
+                  </button>
+                  <Button size="sm" variant="outline" disabled={index === 0} onClick={() => moveTemplateElement(element.id, -1)}>
+                    <ArrowUp className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant="outline" disabled={index === templateElements.length - 1} onClick={() => moveTemplateElement(element.id, 1)}>
+                    <ArrowDown className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant="destructive" disabled={templateElements.length <= 1} onClick={() => removeTemplateElement(element.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {selectedTemplateElement ? (
+          <Card className="border-dashed">
+            <CardHeader>
+              <CardTitle>Element Inspector</CardTitle>
+              <CardDescription>{selectedTemplateElement.name} · {selectedTemplateElement.kind}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <LabeledField label="Element Name">
+                <Input
+                  value={selectedTemplateElement.name}
+                  onChange={(event) => updateTemplateElement(selectedTemplateElement.id, (current) => ({
+                    ...current,
+                    name: event.target.value
+                  }))}
+                />
+              </LabeledField>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <NumberField
+                  label="X"
+                  value={selectedTemplateElement.x}
+                  onValueChange={(value) => updateTemplateElement(selectedTemplateElement.id, (current) => ({ ...current, x: value }))}
+                />
+                <NumberField
+                  label="Y"
+                  value={selectedTemplateElement.y}
+                  onValueChange={(value) => updateTemplateElement(selectedTemplateElement.id, (current) => ({ ...current, y: value }))}
+                />
+                <NumberField
+                  label="Width"
+                  value={selectedTemplateElement.w}
+                  onValueChange={(value) => updateTemplateElement(selectedTemplateElement.id, (current) => ({ ...current, w: value }))}
+                />
+                <NumberField
+                  label="Height"
+                  value={selectedTemplateElement.h}
+                  onValueChange={(value) => updateTemplateElement(selectedTemplateElement.id, (current) => ({ ...current, h: value }))}
+                />
+                <NumberField
+                  label="Opacity"
+                  value={selectedTemplateElement.opacity}
+                  onValueChange={(value) => updateTemplateElement(selectedTemplateElement.id, (current) => ({ ...current, opacity: value }))}
+                />
+                <NumberField
+                  label="Rotation"
+                  value={selectedTemplateElement.rotation}
+                  onValueChange={(value) => updateTemplateElement(selectedTemplateElement.id, (current) => ({ ...current, rotation: value }))}
+                />
+              </div>
+
+              <SwitchRow
+                label="Visible"
+                checked={selectedTemplateElement.visible}
+                onCheckedChange={(checked) => updateTemplateElement(selectedTemplateElement.id, (current) => ({ ...current, visible: checked }))}
+              />
+
+              {selectedElementInspector}
+            </CardContent>
+          </Card>
+        ) : null}
+      </>
+    );
+  }, [
+    addTemplateElement,
+    doc.template.main.background,
+    moveTemplateElement,
+    removeTemplateElement,
+    selectedElementFontOptions,
+    selectedTemplateElement,
+    setSelectedTemplateElementId,
+    templateElements,
     updateTemplateBackground,
-    updateTemplateFrame,
-    updateTemplateTextBox
+    updateTemplateElement
   ]);
 
   function renderSelectedInspector() {
@@ -2898,38 +3528,51 @@ function wrapLines(
 
 function drawTextBlock(
   context: CanvasRenderingContext2D,
-  box: TextBox,
+  layer: TemplateTextElement,
   text: string
 ) {
-  const size = Math.max(1, box.size || 48);
-  const weight = box.weight || 600;
-  const family = box.font || 'SF Pro';
+  const size = Math.max(1, layer.size || 48);
+  const weight = layer.weight || 600;
+  const family = layer.font || 'SF Pro';
+  const padding = Math.max(0, layer.padding || 0);
+  const contentX = layer.x + padding;
+  const contentY = layer.y + padding;
+  const contentWidth = Math.max(1, layer.w - padding * 2);
+  const contentHeight = Math.max(1, layer.h - padding * 2);
   const lineHeight = size * 1.2;
-  const maxLines = Math.max(1, Math.floor(box.h / lineHeight));
+  const maxLines = Math.max(1, Math.floor(contentHeight / lineHeight));
+
+  if (layer.backgroundColor && layer.backgroundColor !== 'transparent') {
+    context.save();
+    drawRoundedRectPath(context, layer.x, layer.y, layer.w, layer.h, layer.cornerRadius || 0);
+    context.fillStyle = layer.backgroundColor;
+    context.fill();
+    context.restore();
+  }
 
   context.save();
   context.beginPath();
-  context.rect(box.x, box.y, box.w, box.h);
+  context.rect(contentX, contentY, contentWidth, contentHeight);
   context.clip();
 
   context.font = `${weight} ${size}px "${family}", "Apple SD Gothic Neo", sans-serif`;
-  context.fillStyle = '#f9fafb';
+  context.fillStyle = layer.color || '#f9fafb';
   context.textBaseline = 'top';
-  context.textAlign = box.align === 'center' ? 'center' : box.align === 'right' ? 'right' : 'left';
+  context.textAlign = layer.align === 'center' ? 'center' : layer.align === 'right' ? 'right' : 'left';
   context.shadowColor = 'rgba(0,0,0,0.2)';
   context.shadowBlur = Math.max(1, Math.round(size * 0.2));
   context.shadowOffsetX = 0;
   context.shadowOffsetY = Math.max(1, Math.round(size * 0.05));
 
-  const lines = wrapLines(context, text, box.w, maxLines);
-  let y = box.y;
+  const lines = wrapLines(context, text, contentWidth, maxLines);
+  let y = contentY;
   for (const line of lines) {
-    if (y + lineHeight > box.y + box.h + 1) break;
-    const x = box.align === 'center'
-      ? box.x + box.w / 2
-      : box.align === 'right'
-        ? box.x + box.w
-        : box.x;
+    if (y + lineHeight > contentY + contentHeight + 1) break;
+    const x = layer.align === 'center'
+      ? contentX + contentWidth / 2
+      : layer.align === 'right'
+        ? contentX + contentWidth
+        : contentX;
     context.fillText(line, x, y);
     y += lineHeight;
   }
@@ -2946,16 +3589,6 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
   template,
   device
 }: SlotRenderPreviewProps) {
-  if (renderedPreviewUrl) {
-      return (
-        <img
-          src={renderedPreviewUrl}
-          alt={`${slotId} preview`}
-          className="max-h-[760px] w-auto max-w-full"
-        />
-      );
-    }
-
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -3001,78 +3634,106 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
       }
       context.fillRect(0, 0, width, height);
 
-      const frame = template.frame;
-      if (frame.enabled) {
+      const layers = [...template.elements]
+        .filter((item) => item.visible !== false)
+        .sort((a, b) => a.z - b.z);
+
+      for (const layer of layers) {
+        const opacity = clampNumber(layer.opacity, 0, 100) / 100;
+        const centerX = layer.x + layer.w / 2;
+        const centerY = layer.y + layer.h / 2;
+        const radians = (layer.rotation * Math.PI) / 180;
+
         context.save();
-        drawRoundedRectPath(
-          context,
-          frame.inset,
-          frame.inset,
-          Math.max(0, width - frame.inset * 2),
-          Math.max(0, height - frame.inset * 2),
-          frame.radius
-        );
-        context.strokeStyle = 'rgba(255,255,255,0.25)';
-        context.lineWidth = 3;
-        context.stroke();
+        context.translate(centerX, centerY);
+        context.rotate(radians);
+        context.translate(-centerX, -centerY);
+        context.globalAlpha = context.globalAlpha * opacity;
+
+        if (layer.kind === 'text') {
+          const textValue = layer.textSource === 'title'
+            ? title
+            : layer.textSource === 'subtitle'
+              ? subtitle
+              : layer.customText;
+          drawTextBlock(context, layer, textValue);
+          context.restore();
+          continue;
+        }
+
+        context.save();
+        drawRoundedRectPath(context, layer.x, layer.y, layer.w, layer.h, layer.cornerRadius || 0);
+        context.fillStyle = 'rgba(15,23,42,0.7)';
+        context.fill();
         context.restore();
-      }
 
-      const shot = template.shotPlacement;
-      context.save();
-      drawRoundedRectPath(context, shot.x, shot.y, shot.w, shot.h, shot.cornerRadius || 0);
-      context.fillStyle = 'rgba(15,23,42,0.7)';
-      context.fill();
-      context.restore();
+        const imageSource = layer.source === 'renderedPreview'
+          ? (renderedPreviewUrl || sourceImageUrl)
+          : (sourceImageUrl || renderedPreviewUrl);
 
-      if (sourceImageUrl) {
-        try {
-          const image = await loadPreviewImage(sourceImageUrl);
-          if (cancelled) return;
+        if (imageSource) {
+          try {
+            const image = await loadPreviewImage(imageSource);
+            if (cancelled) return;
 
-          const imageWidth = Math.max(1, image.naturalWidth || image.width);
-          const imageHeight = Math.max(1, image.naturalHeight || image.height);
-          const scale = shot.fit === 'contain'
-            ? Math.min(shot.w / imageWidth, shot.h / imageHeight)
-            : Math.max(shot.w / imageWidth, shot.h / imageHeight);
-          const drawWidth = imageWidth * scale;
-          const drawHeight = imageHeight * scale;
-          const drawX = shot.x + (shot.w - drawWidth) / 2;
-          const drawY = shot.y + (shot.h - drawHeight) / 2;
+            const imageWidth = Math.max(1, image.naturalWidth || image.width);
+            const imageHeight = Math.max(1, image.naturalHeight || image.height);
+            const scale = layer.fit === 'contain'
+              ? Math.min(layer.w / imageWidth, layer.h / imageHeight)
+              : Math.max(layer.w / imageWidth, layer.h / imageHeight);
+            const drawWidth = imageWidth * scale;
+            const drawHeight = imageHeight * scale;
+            const drawX = layer.x + (layer.w - drawWidth) / 2;
+            const drawY = layer.y + (layer.h - drawHeight) / 2;
+
+            context.save();
+            drawRoundedRectPath(context, layer.x, layer.y, layer.w, layer.h, layer.cornerRadius || 0);
+            context.clip();
+            context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+            context.restore();
+          } catch {
+            drawCheckerPattern(context, layer.x, layer.y, layer.w, layer.h, 28);
+          }
+        } else {
+          context.save();
+          drawRoundedRectPath(context, layer.x, layer.y, layer.w, layer.h, layer.cornerRadius || 0);
+          context.clip();
+          drawCheckerPattern(context, layer.x, layer.y, layer.w, layer.h, 28);
+          context.restore();
 
           context.save();
-          drawRoundedRectPath(context, shot.x, shot.y, shot.w, shot.h, shot.cornerRadius || 0);
-          context.clip();
-          context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+          context.fillStyle = '#475569';
+          context.font = `${Math.max(20, Math.round(width * 0.024))}px "SF Pro", sans-serif`;
+          context.textAlign = 'center';
+          context.textBaseline = 'middle';
+          context.fillText('Select image', layer.x + layer.w / 2, layer.y + layer.h / 2);
           context.restore();
-        } catch {
-          drawCheckerPattern(context, shot.x, shot.y, shot.w, shot.h, 28);
         }
-      } else {
-        context.save();
-        drawRoundedRectPath(context, shot.x, shot.y, shot.w, shot.h, shot.cornerRadius || 0);
-        context.clip();
-        drawCheckerPattern(context, shot.x, shot.y, shot.w, shot.h, 28);
-        context.restore();
 
-        context.save();
-        context.fillStyle = '#475569';
-        context.font = `${Math.max(20, Math.round(width * 0.024))}px "SF Pro", sans-serif`;
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
-        context.fillText('Select image', shot.x + shot.w / 2, shot.y + shot.h / 2);
+        if (layer.deviceFrame) {
+          const frameX = layer.x + layer.frameInset;
+          const frameY = layer.y + layer.frameInset;
+          const frameW = Math.max(0, layer.w - layer.frameInset * 2);
+          const frameH = Math.max(0, layer.h - layer.frameInset * 2);
+          if (frameW > 0 && frameH > 0) {
+            context.save();
+            drawRoundedRectPath(context, frameX, frameY, frameW, frameH, layer.frameRadius);
+            context.lineWidth = layer.frameWidth;
+            context.strokeStyle = layer.frameColor || '#ffffff';
+            context.stroke();
+            context.restore();
+          }
+        }
+
         context.restore();
       }
-
-      drawTextBlock(context, template.text.title, title);
-      drawTextBlock(context, template.text.subtitle, subtitle);
     }
 
     void drawToCanvas();
     return () => {
       cancelled = true;
     };
-  }, [device.height, device.width, sourceImageUrl, subtitle, template, title]);
+  }, [device.height, device.width, renderedPreviewUrl, sourceImageUrl, subtitle, template, title]);
 
   return (
     <canvas
