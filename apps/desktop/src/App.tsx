@@ -2056,6 +2056,11 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   } | null>(null);
   const spacePanRef = useRef(false);
   const [zoom, setZoom] = useState(1);
+  const [inputDebug, setInputDebug] = useState({
+    wheelCount: 0,
+    panCount: 0,
+    last: 'idle'
+  });
 
   const clampZoom = useCallback((value: number) => {
     return Math.min(SLOT_CANVAS_MAX_ZOOM, Math.max(SLOT_CANVAS_MIN_ZOOM, value));
@@ -2234,6 +2239,11 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     event.stopPropagation();
     viewport.scrollLeft += horizontal;
     viewport.scrollTop += vertical;
+    setInputDebug((prev) => ({
+      ...prev,
+      wheelCount: prev.wheelCount + 1,
+      last: `wheel dx:${horizontal.toFixed(1)} dy:${vertical.toFixed(1)} x:${Math.round(viewport.scrollLeft)} y:${Math.round(viewport.scrollTop)}`
+    }));
   }, [applyZoomAtPoint, resolveWheelAnchor]);
 
   useEffect(() => {
@@ -2438,6 +2448,12 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
       startTop: viewport.scrollTop
     };
 
+    setInputDebug((prev) => ({
+      ...prev,
+      panCount: prev.panCount + 1,
+      last: `pan-start x:${Math.round(viewport.scrollLeft)} y:${Math.round(viewport.scrollTop)}`
+    }));
+
     event.currentTarget.setPointerCapture(event.pointerId);
     event.preventDefault();
   }, []);
@@ -2461,6 +2477,13 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     panRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const viewport = viewportRef.current;
+    if (viewport) {
+      setInputDebug((prev) => ({
+        ...prev,
+        last: `pan-end x:${Math.round(viewport.scrollLeft)} y:${Math.round(viewport.scrollTop)}`
+      }));
     }
   }, []);
 
@@ -2598,6 +2621,10 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
             Fit
           </Button>
         </div>
+      </div>
+
+      <div className="pointer-events-none fixed bottom-3 left-3 z-40 rounded-md border bg-card/90 px-2 py-1 font-mono text-[10px] text-muted-foreground shadow">
+        wheel:{inputDebug.wheelCount} pan:{inputDebug.panCount} {inputDebug.last}
       </div>
     </div>
   );
