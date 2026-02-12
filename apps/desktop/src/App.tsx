@@ -2235,14 +2235,20 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
 
     if (Math.abs(horizontal) < 0.01 && Math.abs(vertical) < 0.01) return;
 
+    const beforeLeft = viewport.scrollLeft;
+    const beforeTop = viewport.scrollTop;
     event.preventDefault();
     event.stopPropagation();
     viewport.scrollLeft += horizontal;
     viewport.scrollTop += vertical;
+    const afterLeft = viewport.scrollLeft;
+    const afterTop = viewport.scrollTop;
+    const maxX = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+    const maxY = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
     setInputDebug((prev) => ({
       ...prev,
       wheelCount: prev.wheelCount + 1,
-      last: `wheel dx:${horizontal.toFixed(1)} dy:${vertical.toFixed(1)} x:${Math.round(viewport.scrollLeft)} y:${Math.round(viewport.scrollTop)}`
+      last: `wheel dx:${horizontal.toFixed(1)} dy:${vertical.toFixed(1)} x:${Math.round(beforeLeft)}>${Math.round(afterLeft)}/${Math.round(maxX)} y:${Math.round(beforeTop)}>${Math.round(afterTop)}/${Math.round(maxY)}`
     }));
   }, [applyZoomAtPoint, resolveWheelAnchor]);
 
@@ -2465,8 +2471,18 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     const viewport = viewportRef.current;
     if (!viewport) return;
 
+    const beforeLeft = viewport.scrollLeft;
+    const beforeTop = viewport.scrollTop;
     viewport.scrollLeft = state.startLeft - (event.clientX - state.startClientX);
     viewport.scrollTop = state.startTop - (event.clientY - state.startClientY);
+    const afterLeft = viewport.scrollLeft;
+    const afterTop = viewport.scrollTop;
+    const maxX = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+    const maxY = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+    setInputDebug((prev) => ({
+      ...prev,
+      last: `pan-move x:${Math.round(beforeLeft)}>${Math.round(afterLeft)}/${Math.round(maxX)} y:${Math.round(beforeTop)}>${Math.round(afterTop)}/${Math.round(maxY)}`
+    }));
     event.preventDefault();
   }, []);
 
