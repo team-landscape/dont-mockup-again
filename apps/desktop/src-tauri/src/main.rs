@@ -10,6 +10,34 @@ use tauri::Manager;
 #[cfg(target_os = "macos")]
 use objc2_web_kit::WKWebView;
 
+#[cfg(target_os = "macos")]
+fn disable_swipe_navigation<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+    if let Err(error) = window.with_webview(|webview| unsafe {
+        let view: &WKWebView = &*webview.inner().cast();
+        view.setAllowsBackForwardNavigationGestures(false);
+    }) {
+        eprintln!(
+            "failed to disable back-forward swipe gestures for webview `{}`: {}",
+            window.label(),
+            error
+        );
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn disable_swipe_navigation_in_webview<R: tauri::Runtime>(webview: &tauri::Webview<R>) {
+    if let Err(error) = webview.with_webview(|platform_webview| unsafe {
+        let view: &WKWebView = &*platform_webview.inner().cast();
+        view.setAllowsBackForwardNavigationGestures(false);
+    }) {
+        eprintln!(
+            "failed to disable back-forward swipe gestures for webview `{}`: {}",
+            webview.label(),
+            error
+        );
+    }
+}
+
 fn project_root() -> PathBuf {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
     root.canonicalize().unwrap_or(root)
@@ -266,14 +294,15 @@ fn main() {
     tauri::Builder::default()
         .setup(|app| {
             #[cfg(target_os = "macos")]
-            if let Some(main_webview) = app.get_webview_window("main") {
-                let _ = main_webview.with_webview(|webview| unsafe {
-                    let view: &WKWebView = &*webview.inner().cast();
-                    view.setAllowsBackForwardNavigationGestures(false);
-                });
+            for (_, webview_window) in app.webview_windows() {
+                disable_swipe_navigation(&webview_window);
             }
 
             Ok(())
+        })
+        .on_page_load(|window, _payload| {
+            #[cfg(target_os = "macos")]
+            disable_swipe_navigation_in_webview(window);
         })
         .invoke_handler(tauri::generate_handler![
             run_pipeline,
