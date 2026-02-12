@@ -2047,6 +2047,13 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     originX: number;
     originY: number;
   } | null>(null);
+  const panRef = useRef<{
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    startLeft: number;
+    startTop: number;
+  } | null>(null);
   const [zoom, setZoom] = useState(1);
 
   const clampZoom = useCallback((value: number) => {
@@ -2229,16 +2236,36 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   }, [applyZoomAtPoint, resolveWheelAnchor]);
 
   useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-
     const listener = (event: WheelEvent) => {
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+
+      const target = event.target;
+      const targetInsideViewport = target instanceof Node && viewport.contains(target);
+      const rect = viewport.getBoundingClientRect();
+      const pointer = pointerRef.current;
+      const pointerInsideViewport = pointer
+        ? pointer.clientX >= rect.left
+          && pointer.clientX <= rect.right
+          && pointer.clientY >= rect.top
+          && pointer.clientY <= rect.bottom
+        : false;
+      const eventInsideViewport = event.clientX >= rect.left
+        && event.clientX <= rect.right
+        && event.clientY >= rect.top
+        && event.clientY <= rect.bottom;
+      const isRootTarget = target === document.body || target === document.documentElement;
+
+      if (!targetInsideViewport && !(isRootTarget && (eventInsideViewport || pointerInsideViewport))) {
+        return;
+      }
+
       handleCanvasWheel(event);
     };
 
-    viewport.addEventListener('wheel', listener, { passive: false, capture: true });
+    window.addEventListener('wheel', listener, { passive: false, capture: true });
     return () => {
-      viewport.removeEventListener('wheel', listener, { capture: true });
+      window.removeEventListener('wheel', listener, { capture: true });
     };
   }, [handleCanvasWheel]);
 
@@ -2349,6 +2376,48 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     }
   }, []);
 
+  const handleViewportPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('[data-slot-card]')) return;
+
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    panRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startLeft: viewport.scrollLeft,
+      startTop: viewport.scrollTop
+    };
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }, []);
+
+  const handleViewportPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = panRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    viewport.scrollLeft = state.startLeft - (event.clientX - state.startClientX);
+    viewport.scrollTop = state.startTop - (event.clientY - state.startClientY);
+    event.preventDefault();
+  }, []);
+
+  const handleViewportPointerEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = panRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+
+    panRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }, []);
+
   useEffect(() => {
     const timers: number[] = [];
     const schedule = (delayMs: number) => {
@@ -2417,7 +2486,11 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
       ref={viewportRef}
       className={viewportClassName}
       style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
+      onPointerDown={handleViewportPointerDown}
+      onPointerUp={handleViewportPointerEnd}
+      onPointerCancel={handleViewportPointerEnd}
       onPointerMove={rememberPointer}
+      onPointerMoveCapture={handleViewportPointerMove}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -2431,6 +2504,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
             return (
               <div
                 key={item.slot.id}
+                data-slot-card
                 className="absolute w-[540px]"
                 style={{ left: position.x, top: position.y }}
               >
