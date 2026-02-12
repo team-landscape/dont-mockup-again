@@ -1,0 +1,22 @@
+{
+  "platforms": {
+    "ios": {
+      "minScreenshots": 1,
+      "maxScreenshots": 10,
+      "allowAlpha": true,
+      "minWidth": 640,
+      "maxWidth": 3000,
+      "minHeight": 1136,
+      "maxHeight": 3000
+    },
+    "android": {
+      "minScreenshots": 2,
+      "maxScreenshots": 8,
+      "allowAlpha": false,
+      "minWidth": 320,
+      "maxWidth": 3000,
+      "minHeight": 640,
+      "maxHeight": 3000
+    }
+  }
+}
