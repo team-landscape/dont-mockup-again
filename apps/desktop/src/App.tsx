@@ -583,9 +583,13 @@ function normalizeSlotBackgrounds(
 
 function syncTemplateLegacyFields(main: TemplateMain): TemplateMain {
   const sortedElements = [...main.elements].sort((a, b) => a.z - b.z);
-  const firstImage = sortedElements.find((item) => item.kind === 'image');
-  const titleLayer = sortedElements.find((item) => item.kind === 'text' && item.textSource === 'title');
-  const subtitleLayer = sortedElements.find((item) => item.kind === 'text' && item.textSource === 'subtitle');
+  const firstImage = sortedElements.find((item): item is TemplateImageElement => item.kind === 'image');
+  const titleLayer = sortedElements.find(
+    (item): item is TemplateTextElement => item.kind === 'text' && item.textSource === 'title'
+  );
+  const subtitleLayer = sortedElements.find(
+    (item): item is TemplateTextElement => item.kind === 'text' && item.textSource === 'subtitle'
+  );
 
   return {
     ...main,
@@ -814,7 +818,6 @@ export function App() {
   const projectPath = 'examples/sample.storeshot.json';
   const [doc, setDoc] = useState<StoreShotDoc>(() => createDefaultProject());
   const [outputDir, setOutputDir] = useState('dist');
-  const [log, setLog] = useState('Ready');
   const [isBusy, setIsBusy] = useState(false);
   const [byoyPath, setByoyPath] = useState('examples/byoy.sample.json');
   const [selectedDevice, setSelectedDevice] = useState('ios_phone');
@@ -1028,7 +1031,6 @@ export function App() {
 
   useEffect(() => {
     if (!isTauriRuntime()) {
-      setLog('Web UI preview mode. Tauri commands are disabled. Run `tauri:dev` for full functionality.');
       return;
     }
 
@@ -1040,10 +1042,9 @@ export function App() {
         const normalized = normalizeProject(parsed);
         setDoc(normalized);
         setOutputDir(normalized.pipelines.export.outputDir || 'dist');
-        setLog(`Loaded project: ${projectPath}`);
       })
       .catch(() => {
-        setLog('Sample project could not be auto-loaded. Create New or Load manually.');
+        // Sample file might not exist in clean environments.
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1056,40 +1057,32 @@ export function App() {
     });
   }
 
-  async function runWithLog(action: () => Promise<string>) {
+  async function runWithBusy(action: () => Promise<void>) {
     setIsBusy(true);
     try {
-      const output = await action();
-      setLog(output);
-      return output;
-    } catch (error) {
-      const message = String(error);
-      setLog(message);
-      throw error;
+      await action();
     } finally {
       setIsBusy(false);
     }
   }
 
   async function handleLoadProject() {
-    await runWithLog(async () => {
+    await runWithBusy(async () => {
       const text = await readTextFile(projectPath);
       const parsed = extractJson(text);
       const normalized = normalizeProject(parsed);
       setDoc(normalized);
       setOutputDir(normalized.pipelines.export.outputDir || 'dist');
-      return `Loaded project: ${projectPath}`;
     });
   }
 
   async function handleSaveProject() {
-    await runWithLog(async () => {
+    await runWithBusy(async () => {
       const next = clone(doc);
       next.project.slots = reorderSlots(next.project.slots);
       next.template.main = syncTemplateLegacyFields(next.template.main);
       next.pipelines.export.outputDir = outputDir;
       await writeTextFile(projectPath, JSON.stringify(next, null, 2));
-      return `Saved project: ${projectPath}`;
     });
   }
 
@@ -1098,7 +1091,6 @@ export function App() {
     setDoc(fresh);
     setOutputDir(fresh.pipelines.export.outputDir);
     setIssues([]);
-    setLog('Created new in-memory project. Save to persist.');
   }
 
   function togglePlatform(platform: Platform, checked: boolean) {
@@ -1185,7 +1177,7 @@ export function App() {
   }
 
   async function handleImportByoy() {
-    await runWithLog(async () => {
+    await runWithBusy(async () => {
       const text = await readTextFile(byoyPath);
       const parsed = extractJson(text);
       if (!parsed || typeof parsed !== 'object') {
@@ -1202,8 +1194,6 @@ export function App() {
           }
         }
       });
-
-      return `Imported BYOY JSON from ${byoyPath}`;
     });
   }
 
@@ -1234,39 +1224,32 @@ export function App() {
   }
 
   async function handleRender() {
-    await runWithLog(async () => {
-      const output = await runPipeline('render', [projectPath, renderDir]);
-      const previewSummary = await loadSlotPreviewMap();
-      return `${output}\nLoaded ${previewSummary.loaded}/${previewSummary.total} slot preview(s).`;
+    await runWithBusy(async () => {
+      await runPipeline('render', [projectPath, renderDir]);
+      await loadSlotPreviewMap();
     });
   }
 
   async function handleValidate() {
-    await runWithLog(async () => {
+    await runWithBusy(async () => {
       const output = await runPipeline('validate', [projectPath]);
       const parsed = extractJson(output) as { issues?: ValidateIssue[] } | null;
       setIssues(parsed?.issues || []);
-      return output;
     });
   }
 
   async function handleExport() {
-    await runWithLog(async () => {
+    await runWithBusy(async () => {
       const flags: string[] = [];
       if (doc.pipelines.export.zip) flags.push('--zip');
 
-      return runPipeline('export', [projectPath, renderDir, outputDir, ...flags]);
+      await runPipeline('export', [projectPath, renderDir, outputDir, ...flags]);
     });
   }
 
   async function handleRefreshPreview() {
-    await runWithLog(async () => {
-      const previewSummary = await loadSlotPreviewMap();
-      if (!previewSummary.selectedPath) {
-        return `No preview image found for ${selectedDevice}/${selectedLocale}/${selectedSlot}.`;
-      }
-
-      return `Loaded ${previewSummary.loaded}/${previewSummary.total} slot preview(s). Selected: ${selectedSlot}`;
+    await runWithBusy(async () => {
+      await loadSlotPreviewMap();
     });
   }
 
@@ -1276,7 +1259,6 @@ export function App() {
 
   function handleCompleteOnboarding() {
     if (!onboardingReady) {
-      setLog('Onboarding requires at least 1 locale, 1 platform, and 1 device.');
       return;
     }
 
@@ -1294,7 +1276,6 @@ export function App() {
     }
 
     setIsOnboardingOpen(false);
-    setLog('Onboarding completed.');
   }
 
   function upsertLlmConfig(mutator: (cfg: LlmCliConfig) => void) {
@@ -1567,7 +1548,7 @@ export function App() {
     const outputPath = `examples/assets/source/uploads/${elementId}-${Date.now()}.${normalizedExtension}`;
 
     try {
-      await runWithLog(async () => {
+      await runWithBusy(async () => {
         const base64 = await browserFileToBase64(file);
         const mime = imageMimeTypeFromPath(file.name);
         await writeFileBase64(outputPath, base64);
@@ -1586,11 +1567,9 @@ export function App() {
           ...current,
           [elementId]: `data:${mime};base64,${base64}`
         }));
-
-        return `Selected image for ${elementId}: ${outputPath}`;
       });
     } catch {
-      // runWithLog already writes error text into the pipeline log.
+      // Keep file picker UX resilient if writing image fails.
     } finally {
       templateImageTargetRef.current = null;
     }
@@ -2550,13 +2529,6 @@ function ColorField({ label, value, onValueChange, fallbackColor = '#111827' }: 
   );
 }
 
-interface TemplateBoxEditorProps {
-  title: string;
-  box: TextBox;
-  fontOptions: string[];
-  onChange: (patch: Partial<TextBox>) => void;
-}
-
 interface LocaleSelectorProps {
   value: string[];
   options: string[];
@@ -2624,57 +2596,6 @@ const InspectorCopyFields = memo(function InspectorCopyFields({
     </>
   );
 });
-
-function TemplateBoxEditor({ title, box, fontOptions, onChange }: TemplateBoxEditorProps) {
-  const mergedFonts = useMemo(() => {
-    const unique = new Set<string>();
-    for (const font of fontOptions) {
-      const trimmed = font.trim();
-      if (trimmed) unique.add(trimmed);
-    }
-
-    const current = box.font.trim();
-    if (current) unique.add(current);
-
-    return [...unique].sort((a, b) => a.localeCompare(b));
-  }, [box.font, fontOptions]);
-
-  const selectedFont = box.font.trim() || mergedFonts[0] || 'SF Pro';
-
-  return (
-    <div className="rounded-md border p-3">
-      <p className="mb-2 text-sm font-medium">{title}</p>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <NumberField label="X" value={box.x} onValueChange={(value) => onChange({ x: value })} />
-        <NumberField label="Y" value={box.y} onValueChange={(value) => onChange({ y: value })} />
-        <NumberField label="Width" value={box.w} onValueChange={(value) => onChange({ w: value })} />
-        <NumberField label="Height" value={box.h} onValueChange={(value) => onChange({ h: value })} />
-        <LabeledField label="Font">
-          <Select value={selectedFont} onValueChange={(value) => onChange({ font: value })}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {mergedFonts.map((font) => (
-                <SelectItem key={font} value={font}>{font}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </LabeledField>
-        <NumberField label="Size" value={box.size} onValueChange={(value) => onChange({ size: value })} />
-        <NumberField label="Weight" value={box.weight} onValueChange={(value) => onChange({ weight: value })} />
-        <LabeledField label="Align">
-          <Select value={box.align} onValueChange={(value) => onChange({ align: value as Align })}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="left">left</SelectItem>
-              <SelectItem value="center">center</SelectItem>
-              <SelectItem value="right">right</SelectItem>
-            </SelectContent>
-          </Select>
-        </LabeledField>
-      </div>
-    </div>
-  );
-}
 
 function LocaleSelector({ value, options, onChange }: LocaleSelectorProps) {
   const [search, setSearch] = useState('');
