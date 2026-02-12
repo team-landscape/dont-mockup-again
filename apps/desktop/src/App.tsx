@@ -1676,22 +1676,22 @@ export function App() {
                 </SelectContent>
               </Select>
             </LabeledField>
-            <LabeledField label="Text Color">
-              <Input
-                value={textElement.color}
-                onChange={(event) => updateTemplateElement(textElement.id, (current) => (
-                  current.kind === 'text' ? { ...current, color: event.target.value } : current
-                ))}
-              />
-            </LabeledField>
-            <LabeledField label="Background Color">
-              <Input
-                value={textElement.backgroundColor}
-                onChange={(event) => updateTemplateElement(textElement.id, (current) => (
-                  current.kind === 'text' ? { ...current, backgroundColor: event.target.value } : current
-                ))}
-              />
-            </LabeledField>
+            <ColorField
+              label="Text Color"
+              value={textElement.color}
+              fallbackColor="#f9fafb"
+              onValueChange={(value) => updateTemplateElement(textElement.id, (current) => (
+                current.kind === 'text' ? { ...current, color: value } : current
+              ))}
+            />
+            <ColorField
+              label="Background Color"
+              value={textElement.backgroundColor}
+              fallbackColor="#111827"
+              onValueChange={(value) => updateTemplateElement(textElement.id, (current) => (
+                current.kind === 'text' ? { ...current, backgroundColor: value } : current
+              ))}
+            />
             <NumberField
               label="Padding"
               value={textElement.padding}
@@ -1808,14 +1808,14 @@ export function App() {
                   current.kind === 'image' ? { ...current, frameWidth: value } : current
                 ))}
               />
-              <LabeledField label="Frame Color">
-                <Input
-                  value={imageElement.frameColor}
-                  onChange={(event) => updateTemplateElement(imageElement.id, (current) => (
-                    current.kind === 'image' ? { ...current, frameColor: event.target.value } : current
-                  ))}
-                />
-              </LabeledField>
+              <ColorField
+                label="Frame Color"
+                value={imageElement.frameColor}
+                fallbackColor="#ffffff"
+                onValueChange={(value) => updateTemplateElement(imageElement.id, (current) => (
+                  current.kind === 'image' ? { ...current, frameColor: value } : current
+                ))}
+              />
             </div>
           ) : null}
         </>
@@ -1846,20 +1846,26 @@ export function App() {
             </LabeledField>
 
             {selectedSlotBackground.type === 'solid' ? (
-              <LabeledField label="Color">
-                <Input
-                  value={selectedSlotBackground.value || '#111827'}
-                  onChange={(event) => updateTemplateBackground({ value: event.target.value })}
-                />
-              </LabeledField>
+              <ColorField
+                label="Color"
+                value={selectedSlotBackground.value || '#111827'}
+                fallbackColor="#111827"
+                onValueChange={(value) => updateTemplateBackground({ value })}
+              />
             ) : (
               <>
-                <LabeledField label="From">
-                  <Input value={selectedSlotBackground.from || '#111827'} onChange={(event) => updateTemplateBackground({ from: event.target.value })} />
-                </LabeledField>
-                <LabeledField label="To">
-                  <Input value={selectedSlotBackground.to || '#1f2937'} onChange={(event) => updateTemplateBackground({ to: event.target.value })} />
-                </LabeledField>
+                <ColorField
+                  label="From"
+                  value={selectedSlotBackground.from || '#111827'}
+                  fallbackColor="#111827"
+                  onValueChange={(value) => updateTemplateBackground({ from: value })}
+                />
+                <ColorField
+                  label="To"
+                  value={selectedSlotBackground.to || '#1f2937'}
+                  fallbackColor="#1f2937"
+                  onValueChange={(value) => updateTemplateBackground({ to: value })}
+                />
                 <LabeledField label="Direction">
                   <Input value={selectedSlotBackground.direction || '180deg'} onChange={(event) => updateTemplateBackground({ direction: event.target.value })} />
                 </LabeledField>
@@ -2478,6 +2484,68 @@ function NumberField({ label, value, onValueChange }: NumberFieldProps) {
         value={Number.isFinite(value) ? String(value) : ''}
         onChange={(event) => onValueChange(Number(event.target.value))}
       />
+    </LabeledField>
+  );
+}
+
+const HEX_COLOR_PATTERN = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+function normalizeHexColor(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(HEX_COLOR_PATTERN);
+  if (!match) return null;
+  const raw = match[1].toLowerCase();
+  if (raw.length === 6) return `#${raw}`;
+  return `#${raw.split('').map((char) => `${char}${char}`).join('')}`;
+}
+
+interface ColorFieldProps {
+  label: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  fallbackColor?: string;
+}
+
+function ColorField({ label, value, onValueChange, fallbackColor = '#111827' }: ColorFieldProps) {
+  const normalizedHex = normalizeHexColor(value);
+  const pickerValue = normalizedHex || fallbackColor;
+  const isTransparent = value.trim().toLowerCase() === 'transparent';
+  const previewStyle: CSSProperties = isTransparent
+    ? {
+      backgroundImage: [
+        'linear-gradient(45deg, rgba(148,163,184,0.35) 25%, transparent 25%)',
+        'linear-gradient(-45deg, rgba(148,163,184,0.35) 25%, transparent 25%)',
+        'linear-gradient(45deg, transparent 75%, rgba(148,163,184,0.35) 75%)',
+        'linear-gradient(-45deg, transparent 75%, rgba(148,163,184,0.35) 75%)'
+      ].join(','),
+      backgroundSize: '10px 10px',
+      backgroundPosition: '0 0, 0 5px, 5px -5px, -5px 0'
+    }
+    : { backgroundColor: normalizedHex || value || fallbackColor };
+
+  return (
+    <LabeledField label={label}>
+      <div className="flex items-center gap-2">
+        <div
+          className="h-9 w-9 rounded-md border bg-muted"
+          style={previewStyle}
+          aria-label={`${label} preview`}
+        />
+        <Input
+          value={value}
+          placeholder="#111827"
+          className="font-mono text-xs"
+          onChange={(event) => onValueChange(event.target.value)}
+        />
+        <Input
+          type="color"
+          value={pickerValue}
+          className="h-9 w-12 cursor-pointer p-1"
+          onChange={(event) => onValueChange(event.target.value)}
+          aria-label={`${label} picker`}
+        />
+      </div>
     </LabeledField>
   );
 }
