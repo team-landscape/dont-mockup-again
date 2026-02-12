@@ -231,6 +231,7 @@ const SLOT_CANVAS_BASE_X = 9600;
 const SLOT_CANVAS_BASE_Y = 880;
 const SLOT_CANVAS_MIN_ZOOM = 0.45;
 const SLOT_CANVAS_MAX_ZOOM = 2.4;
+const PINCH_ZOOM_ACCELERATION = 1.18;
 
 async function runPipeline(command: string, args: string[]) {
   return invokeCommand<string>('run_pipeline', { command, args });
@@ -2442,7 +2443,10 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
 
     event.preventDefault();
     const scale = pinch.distance / pinchRef.current.startDistance;
-    const nextZoom = pinchRef.current.startZoom * scale;
+    const acceleratedScale = scale >= 1
+      ? 1 + ((scale - 1) * PINCH_ZOOM_ACCELERATION)
+      : Math.max(0.1, 1 - ((1 - scale) * PINCH_ZOOM_ACCELERATION));
+    const nextZoom = pinchRef.current.startZoom * acceleratedScale;
     applyZoomAtPoint(nextZoom, pinch.centerX, pinch.centerY);
   }, [applyZoomAtPoint, readPinch]);
 
