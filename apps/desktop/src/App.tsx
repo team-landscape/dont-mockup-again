@@ -2048,6 +2048,8 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     originX: number;
     originY: number;
   } | null>(null);
+  const dragPendingPositionRef = useRef<{ slotId: string; position: SlotCanvasPosition } | null>(null);
+  const dragMoveFrameRef = useRef<number | null>(null);
   const panRef = useRef<{
     pointerId: number;
     startClientX: number;
@@ -2480,28 +2482,61 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
 
     onSelect(slotId);
     event.currentTarget.setPointerCapture(event.pointerId);
+    event.stopPropagation();
     event.preventDefault();
   }, [onSelect, positions]);
+
+  const flushDragMove = useCallback(() => {
+    dragMoveFrameRef.current = null;
+    const pending = dragPendingPositionRef.current;
+    if (!pending) return;
+    onPositionChange(pending.slotId, pending.position);
+  }, [onPositionChange]);
 
   const handleDragPointerMove = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
     const state = dragRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
 
     const currentZoom = zoomRef.current;
-    const nextX = Math.round(state.originX + ((event.clientX - state.startClientX) / currentZoom));
-    const nextY = Math.round(state.originY + ((event.clientY - state.startClientY) / currentZoom));
+    const nextX = state.originX + ((event.clientX - state.startClientX) / currentZoom);
+    const nextY = state.originY + ((event.clientY - state.startClientY) / currentZoom);
     const boundedX = Math.max(0, Math.min(SLOT_CANVAS_WIDTH - SLOT_CANVAS_CARD_WIDTH, nextX));
     const boundedY = Math.max(0, Math.min(SLOT_CANVAS_HEIGHT - SLOT_CANVAS_CARD_HEIGHT, nextY));
-    onPositionChange(state.slotId, { x: boundedX, y: boundedY });
-  }, [onPositionChange]);
+    dragPendingPositionRef.current = { slotId: state.slotId, position: { x: boundedX, y: boundedY } };
+    if (dragMoveFrameRef.current == null) {
+      dragMoveFrameRef.current = window.requestAnimationFrame(flushDragMove);
+    }
+    event.stopPropagation();
+    event.preventDefault();
+  }, [flushDragMove]);
 
   const handleDragPointerEnd = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
     const state = dragRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
+
+    if (dragMoveFrameRef.current != null) {
+      window.cancelAnimationFrame(dragMoveFrameRef.current);
+      dragMoveFrameRef.current = null;
+    }
+    if (dragPendingPositionRef.current && dragPendingPositionRef.current.slotId === state.slotId) {
+      onPositionChange(state.slotId, dragPendingPositionRef.current.position);
+    }
+    dragPendingPositionRef.current = null;
+
     dragRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    event.stopPropagation();
+    event.preventDefault();
+  }, [onPositionChange]);
+
+  useEffect(() => {
+    return () => {
+      if (dragMoveFrameRef.current != null) {
+        window.cancelAnimationFrame(dragMoveFrameRef.current);
+      }
+    };
   }, []);
 
   const handleViewportPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
