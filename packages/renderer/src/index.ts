@@ -13,6 +13,7 @@ import { renderSceneWithFallback } from './fallbackPng.ts';
 function ensureTemplateDefaults(template) {
   return {
     background: template.background || { type: 'solid', value: '#111827' },
+    slotBackgrounds: template.slotBackgrounds || {},
     frame: template.frame || { enabled: true, type: 'simpleRounded', inset: 64, radius: 72 },
     text: template.text || {
       title: { x: 80, y: 120, w: 1000, h: 180, font: 'SF Pro', size: 72, weight: 700, align: 'left' },
@@ -25,6 +26,10 @@ function ensureTemplateDefaults(template) {
 function buildScene(projectContext, job) {
   const { doc, dir } = projectContext;
   const template = ensureTemplateDefaults(resolveTemplateForInstance(doc, job.device.id, job.locale));
+  const background = {
+    ...(template.background || {}),
+    ...(template.slotBackgrounds?.[job.slot.id] || {})
+  };
   const copy = getSlotCopy(doc, job.slot.id, job.locale);
 
   const titleBox = template.text?.title;
@@ -36,7 +41,7 @@ function buildScene(projectContext, job) {
   return {
     width: job.device.width,
     height: job.device.height,
-    background: template.background,
+    background,
     frame: template.frame,
     shotPlacement: template.shotPlacement,
     shotImagePath: path.resolve(dir, job.slot.sourceImagePath),

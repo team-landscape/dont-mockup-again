@@ -89,7 +89,8 @@ interface TemplateTextElement extends TemplateElementBase {
 
 interface TemplateImageElement extends TemplateElementBase {
   kind: 'image';
-  source: 'slotImage' | 'renderedPreview';
+  source: 'slotImage' | 'customImage';
+  imagePath: string;
   fit: 'cover' | 'contain';
   cornerRadius: number;
   deviceFrame: boolean;
@@ -100,15 +101,17 @@ interface TemplateImageElement extends TemplateElementBase {
 }
 
 type TemplateElement = TemplateTextElement | TemplateImageElement;
+type TemplateBackground = {
+  type: 'solid' | 'gradient';
+  value?: string;
+  from?: string;
+  to?: string;
+  direction?: string;
+};
 
 interface TemplateMain {
-  background: {
-    type: 'solid' | 'gradient';
-    value?: string;
-    from?: string;
-    to?: string;
-    direction?: string;
-  };
+  background: TemplateBackground;
+  slotBackgrounds: Record<string, TemplateBackground>;
   frame: {
     type: 'simpleRounded';
     enabled: boolean;
@@ -269,8 +272,8 @@ const SLOT_CANVAS_WIDTH = 24000;
 const SLOT_CANVAS_HEIGHT = 16000;
 const SLOT_CANVAS_CARD_WIDTH = 540;
 const SLOT_CANVAS_CARD_HEIGHT = 760;
-const SLOT_CANVAS_GAP_X = 12;
-const SLOT_CANVAS_GAP_Y = 16;
+const SLOT_CANVAS_GAP_X = 4;
+const SLOT_CANVAS_GAP_Y = 4;
 const SLOT_CANVAS_DEFAULT_COLS = 3;
 const SLOT_CANVAS_BASE_X = 9600;
 const SLOT_CANVAS_BASE_Y = 880;
@@ -407,6 +410,7 @@ function createDefaultTemplateElements(main: Pick<TemplateMain, 'frame' | 'text'
       opacity: 100,
       rotation: 0,
       source: 'slotImage',
+      imagePath: '',
       fit: main.shotPlacement.fit,
       cornerRadius: main.shotPlacement.cornerRadius,
       deviceFrame: main.frame.enabled,
@@ -525,7 +529,8 @@ function normalizeTemplateElements(raw: unknown, defaults: TemplateElement[]): T
       const normalizedImage: TemplateImageElement = {
         ...base,
         kind: 'image',
-        source: source.source === 'renderedPreview' ? 'renderedPreview' : 'slotImage',
+        source: source.source === 'customImage' ? 'customImage' : 'slotImage',
+        imagePath: typeof source.imagePath === 'string' ? source.imagePath : '',
         fit: source.fit === 'contain' ? 'contain' : 'cover',
         cornerRadius: Math.max(0, asNumber(source.cornerRadius, 0)),
         deviceFrame: typeof source.deviceFrame === 'boolean' ? source.deviceFrame : false,
@@ -557,6 +562,23 @@ function normalizeTemplateElements(raw: unknown, defaults: TemplateElement[]): T
   return deduped
     .sort((a, b) => a.z - b.z)
     .map((item, index) => ({ ...item, z: (index + 1) * 10 }));
+}
+
+function normalizeSlotBackgrounds(
+  slots: Slot[],
+  slotBackgrounds: Record<string, TemplateBackground> | undefined,
+  fallback: TemplateBackground
+): Record<string, TemplateBackground> {
+  const next: Record<string, TemplateBackground> = {};
+
+  for (const slot of slots) {
+    next[slot.id] = {
+      ...fallback,
+      ...(slotBackgrounds?.[slot.id] || {})
+    };
+  }
+
+  return next;
 }
 
 function syncTemplateLegacyFields(main: TemplateMain): TemplateMain {
@@ -619,8 +641,17 @@ function syncTemplateLegacyFields(main: TemplateMain): TemplateMain {
 }
 
 function createDefaultProject(): StoreShotDoc {
+  const defaultSlots: Slot[] = [
+    { id: 'slot1', order: 1, sourceImagePath: 'examples/assets/source/shot1.png' },
+    { id: 'slot2', order: 2, sourceImagePath: 'examples/assets/source/shot2.png' },
+    { id: 'slot3', order: 3, sourceImagePath: 'examples/assets/source/shot3.png' }
+  ];
+
+  const defaultBackground: TemplateBackground = { type: 'gradient', from: '#111827', to: '#1f2937', direction: '180deg' };
+
   const defaultMainBase: Omit<TemplateMain, 'elements'> = {
-    background: { type: 'gradient', from: '#111827', to: '#1f2937', direction: '180deg' },
+    background: defaultBackground,
+    slotBackgrounds: normalizeSlotBackgrounds(defaultSlots, {}, defaultBackground),
     frame: { type: 'simpleRounded', enabled: true, inset: 80, radius: 80 },
     text: {
       title: { x: 80, y: 120, w: 1130, h: 220, font: 'SF Pro', size: 88, weight: 700, align: 'left' },
@@ -643,11 +674,7 @@ function createDefaultProject(): StoreShotDoc {
       platforms: ['ios', 'android'],
       locales: ['en-US', 'ko-KR'],
       devices: clone(devicePresets.map((preset) => preset.value)),
-      slots: [
-        { id: 'slot1', order: 1, sourceImagePath: 'examples/assets/source/shot1.png' },
-        { id: 'slot2', order: 2, sourceImagePath: 'examples/assets/source/shot2.png' },
-        { id: 'slot3', order: 3, sourceImagePath: 'examples/assets/source/shot3.png' }
-      ]
+      slots: defaultSlots
     },
     template: {
       main: defaultMain,
@@ -689,10 +716,19 @@ function normalizeProject(raw: unknown): StoreShotDoc {
   if (!raw || typeof raw !== 'object') return base;
 
   const doc = raw as Partial<StoreShotDoc>;
+  const normalizedSlots = (doc.project?.slots || base.project.slots)
+    .map((slot, index) => ({ ...slot, order: slot.order || index + 1 }))
+    .sort((a, b) => a.order - b.order);
+  const mergedBackground = { ...base.template.main.background, ...doc.template?.main?.background };
   const normalizedMain = syncTemplateLegacyFields({
     ...base.template.main,
     ...doc.template?.main,
-    background: { ...base.template.main.background, ...doc.template?.main?.background },
+    background: mergedBackground,
+    slotBackgrounds: normalizeSlotBackgrounds(
+      normalizedSlots,
+      doc.template?.main?.slotBackgrounds as Record<string, TemplateBackground> | undefined,
+      mergedBackground
+    ),
     frame: { ...base.template.main.frame, ...doc.template?.main?.frame },
     text: {
       title: { ...base.template.main.text.title, ...doc.template?.main?.text?.title },
@@ -721,9 +757,7 @@ function normalizeProject(raw: unknown): StoreShotDoc {
       platforms: (doc.project?.platforms || base.project.platforms) as Platform[],
       locales: doc.project?.locales || base.project.locales,
       devices: doc.project?.devices || base.project.devices,
-      slots: (doc.project?.slots || base.project.slots)
-        .map((slot, index) => ({ ...slot, order: slot.order || index + 1 }))
-        .sort((a, b) => a.order - b.order)
+      slots: normalizedSlots
     },
     template: {
       main: normalizedMain,
@@ -791,6 +825,7 @@ export function App() {
   const [slotPreviewUrls, setSlotPreviewUrls] = useState<Record<string, string>>({});
   const [slotPreviewPaths, setSlotPreviewPaths] = useState<Record<string, string>>({});
   const [slotSourceUrls, setSlotSourceUrls] = useState<Record<string, string>>({});
+  const [templateImageUrls, setTemplateImageUrls] = useState<Record<string, string>>({});
   const [availableFonts, setAvailableFonts] = useState<string[]>(defaultSystemFonts);
   const [issues, setIssues] = useState<ValidateIssue[]>([]);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(() => {
@@ -801,8 +836,8 @@ export function App() {
     if (typeof window === 'undefined') return false;
     return window.matchMedia(XL_MEDIA_QUERY).matches;
   });
-  const slotFileInputRef = useRef<HTMLInputElement>(null);
-  const slotFileTargetRef = useRef<string | null>(null);
+  const templateImageInputRef = useRef<HTMLInputElement>(null);
+  const templateImageTargetRef = useRef<string | null>(null);
   const slotSourceEntriesRef = useRef<Array<{ id: string; sourceImagePath: string }>>([]);
   const [, startSlotTransition] = useTransition();
 
@@ -856,6 +891,13 @@ export function App() {
     slotSourceEntriesRef.current = entries;
     return entries.map((entry) => `${entry.id}:${entry.sourceImagePath}`).join('|');
   }, [doc.project.slots]);
+  const templateImageLoadKey = useMemo(
+    () => doc.template.main.elements
+      .filter((item): item is TemplateImageElement => item.kind === 'image')
+      .map((item) => `${item.id}:${item.imagePath}`)
+      .join('|'),
+    [doc.template.main.elements]
+  );
 
   useEffect(() => {
     if (activeTab !== 'screens') return;
@@ -949,6 +991,40 @@ export function App() {
       cancelled = true;
     };
   }, [slotSourceLoadKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTemplateImages() {
+      if (!isTauriRuntime()) {
+        if (!cancelled) setTemplateImageUrls({});
+        return;
+      }
+
+      const next: Record<string, string> = {};
+      const imageElements = doc.template.main.elements.filter((item): item is TemplateImageElement => item.kind === 'image');
+      for (const element of imageElements) {
+        if (!element.imagePath) continue;
+
+        try {
+          const base64 = await readFileBase64(element.imagePath);
+          const mime = imageMimeTypeFromPath(element.imagePath);
+          next[element.id] = `data:${mime};base64,${base64}`;
+        } catch {
+          // Missing custom image is allowed while editing.
+        }
+      }
+
+      if (!cancelled) {
+        setTemplateImageUrls(next);
+      }
+    }
+
+    void loadTemplateImages();
+    return () => {
+      cancelled = true;
+    };
+  }, [doc.template.main.elements, templateImageLoadKey]);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -1093,6 +1169,9 @@ export function App() {
       next.project.slots.push(newSlot);
       next.copy.keys[fieldKey(newSlot.id, 'title')] = {};
       next.copy.keys[fieldKey(newSlot.id, 'subtitle')] = {};
+      next.template.main.slotBackgrounds[newSlot.id] = {
+        ...next.template.main.background
+      };
     });
   }
 
@@ -1101,6 +1180,7 @@ export function App() {
       next.project.slots = reorderSlots(next.project.slots.filter((slot) => slot.id !== slotId));
       delete next.copy.keys[fieldKey(slotId, 'title')];
       delete next.copy.keys[fieldKey(slotId, 'subtitle')];
+      delete next.template.main.slotBackgrounds[slotId];
     });
   }
 
@@ -1240,6 +1320,13 @@ export function App() {
     () => (selectedSlotData ? fieldKey(selectedSlotData.id, 'subtitle') : ''),
     [selectedSlotData]
   );
+  const selectedSlotBackground = useMemo<TemplateBackground>(() => {
+    if (!selectedSlotData) return doc.template.main.background;
+    return {
+      ...doc.template.main.background,
+      ...(doc.template.main.slotBackgrounds[selectedSlotData.id] || {})
+    };
+  }, [doc.template.main.background, doc.template.main.slotBackgrounds, selectedSlotData]);
   const previewPath = slotPreviewPaths[selectedSlot] || '';
   const previewDataUrl = slotPreviewUrls[selectedSlot] || '';
   const onboardingReady = doc.project.locales.length > 0
@@ -1275,10 +1362,18 @@ export function App() {
       titleValue: doc.copy.keys[fieldKey(slot.id, 'title')]?.[selectedLocale] || '',
       subtitleValue: doc.copy.keys[fieldKey(slot.id, 'subtitle')]?.[selectedLocale] || '',
       renderedPreviewUrl: slotPreviewUrls[slot.id],
-      sourceImageUrl: slotSourceUrls[slot.id]
+      sourceImageUrl: slotSourceUrls[slot.id],
+      template: {
+        ...doc.template.main,
+        background: {
+          ...doc.template.main.background,
+          ...(doc.template.main.slotBackgrounds[slot.id] || {})
+        }
+      }
     }))
   ), [
     doc.copy.keys,
+    doc.template.main,
     selectedLocale,
     slotPreviewUrls,
     slotSourceUrls,
@@ -1335,12 +1430,14 @@ export function App() {
 
   const updateTemplateBackground = useCallback((patch: Partial<TemplateMain['background']>) => {
     updateTemplateMain((main) => {
-      main.background = {
-        ...main.background,
+      const slotId = selectedSlotData?.id || selectedSlot;
+      const current = main.slotBackgrounds[slotId] || main.background;
+      main.slotBackgrounds[slotId] = {
+        ...current,
         ...patch
       };
     });
-  }, [updateTemplateMain]);
+  }, [selectedSlot, selectedSlotData, updateTemplateMain]);
 
   const updateTemplateElement = useCallback((elementId: string, mutator: (element: TemplateElement) => TemplateElement) => {
     updateTemplateMain((main) => {
@@ -1403,6 +1500,7 @@ export function App() {
         opacity: 100,
         rotation: 0,
         source: 'slotImage',
+        imagePath: '',
         fit: 'cover',
         cornerRadius: 48,
         deviceFrame: false,
@@ -1447,18 +1545,18 @@ export function App() {
     });
   }, [startSlotTransition]);
 
-  const openSlotImagePicker = useCallback((slotId: string) => {
-    slotFileTargetRef.current = slotId;
-    slotFileInputRef.current?.click();
+  const openTemplateImagePicker = useCallback((elementId: string) => {
+    templateImageTargetRef.current = elementId;
+    templateImageInputRef.current?.click();
   }, []);
 
-  async function handleSlotFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const slotId = slotFileTargetRef.current;
+  async function handleTemplateImageFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const elementId = templateImageTargetRef.current;
     const file = event.target.files?.[0];
     event.target.value = '';
 
-    if (!slotId || !file) {
-      slotFileTargetRef.current = null;
+    if (!elementId || !file) {
+      templateImageTargetRef.current = null;
       return;
     }
 
@@ -1466,7 +1564,7 @@ export function App() {
       ? (file.name.split('.').pop() || 'png').toLowerCase()
       : 'png';
     const normalizedExtension = extension.replace(/[^a-z0-9]/g, '') || 'png';
-    const outputPath = `examples/assets/source/uploads/${slotId}-${Date.now()}.${normalizedExtension}`;
+    const outputPath = `examples/assets/source/uploads/${elementId}-${Date.now()}.${normalizedExtension}`;
 
     try {
       await runWithLog(async () => {
@@ -1474,32 +1572,27 @@ export function App() {
         const mime = imageMimeTypeFromPath(file.name);
         await writeFileBase64(outputPath, base64);
 
-        updateDoc((next) => {
-          const target = next.project.slots.find((item) => item.id === slotId);
-          if (target) target.sourceImagePath = outputPath;
-        });
-        setSlotSourceUrls((current) => ({
+        updateTemplateElement(elementId, (current) => (
+          current.kind === 'image'
+            ? {
+              ...current,
+              source: 'customImage',
+              imagePath: outputPath
+            }
+            : current
+        ));
+
+        setTemplateImageUrls((current) => ({
           ...current,
-          [slotId]: `data:${mime};base64,${base64}`
+          [elementId]: `data:${mime};base64,${base64}`
         }));
 
-        setSlotPreviewUrls((current) => {
-          const next = { ...current };
-          delete next[slotId];
-          return next;
-        });
-        setSlotPreviewPaths((current) => {
-          const next = { ...current };
-          delete next[slotId];
-          return next;
-        });
-
-        return `Selected image for ${slotId}: ${outputPath}`;
+        return `Selected image for ${elementId}: ${outputPath}`;
       });
     } catch {
       // runWithLog already writes error text into the pipeline log.
     } finally {
-      slotFileTargetRef.current = null;
+      templateImageTargetRef.current = null;
     }
   }
 
@@ -1621,22 +1714,44 @@ export function App() {
       selectedElementInspector = (
         <>
           <div className="grid gap-3 sm:grid-cols-2">
-            <LabeledField label="Source (Selected Slot)">
+            <LabeledField label="Source">
               <div className="space-y-2">
-                <p className="truncate rounded-md border bg-muted/60 p-2 text-xs">
-                  {selectedSlotData?.sourceImagePath || 'No source image selected'}
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    if (!selectedSlotData) return;
-                    openSlotImagePicker(selectedSlotData.id);
-                  }}
-                  disabled={!selectedSlotData}
+                <Select
+                  value={imageElement.source}
+                  onValueChange={(value) => updateTemplateElement(imageElement.id, (current) => (
+                    current.kind === 'image'
+                      ? {
+                        ...current,
+                        source: value as 'slotImage' | 'customImage'
+                      }
+                      : current
+                  ))}
                 >
-                  Choose Image
-                </Button>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="slotImage">Selected slot image</SelectItem>
+                    <SelectItem value="customImage">Custom image</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {imageElement.source === 'customImage' ? (
+                  <>
+                    <p className="truncate rounded-md border bg-muted/60 p-2 text-xs">
+                      {imageElement.imagePath || 'No custom image selected'}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openTemplateImagePicker(imageElement.id)}
+                    >
+                      Choose Image
+                    </Button>
+                  </>
+                ) : (
+                  <p className="truncate rounded-md border bg-muted/60 p-2 text-xs">
+                    {selectedSlotData?.sourceImagePath || 'No slot image selected'}
+                  </p>
+                )}
               </div>
             </LabeledField>
             <LabeledField label="Fit">
@@ -1712,12 +1827,14 @@ export function App() {
         <Card className="border-dashed">
           <CardHeader>
             <CardTitle>Background</CardTitle>
-            <CardDescription>캔버스 배경 설정</CardDescription>
+            <CardDescription>
+              {selectedSlotData ? `${selectedSlotData.id} 배경 설정` : '슬롯별 배경 설정'}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <LabeledField label="Background Type">
               <Select
-                value={doc.template.main.background.type}
+                value={selectedSlotBackground.type}
                 onValueChange={(value) => updateTemplateBackground({ type: value as 'solid' | 'gradient' })}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1728,23 +1845,23 @@ export function App() {
               </Select>
             </LabeledField>
 
-            {doc.template.main.background.type === 'solid' ? (
+            {selectedSlotBackground.type === 'solid' ? (
               <LabeledField label="Color">
                 <Input
-                  value={doc.template.main.background.value || '#111827'}
+                  value={selectedSlotBackground.value || '#111827'}
                   onChange={(event) => updateTemplateBackground({ value: event.target.value })}
                 />
               </LabeledField>
             ) : (
               <>
                 <LabeledField label="From">
-                  <Input value={doc.template.main.background.from || '#111827'} onChange={(event) => updateTemplateBackground({ from: event.target.value })} />
+                  <Input value={selectedSlotBackground.from || '#111827'} onChange={(event) => updateTemplateBackground({ from: event.target.value })} />
                 </LabeledField>
                 <LabeledField label="To">
-                  <Input value={doc.template.main.background.to || '#1f2937'} onChange={(event) => updateTemplateBackground({ to: event.target.value })} />
+                  <Input value={selectedSlotBackground.to || '#1f2937'} onChange={(event) => updateTemplateBackground({ to: event.target.value })} />
                 </LabeledField>
                 <LabeledField label="Direction">
-                  <Input value={doc.template.main.background.direction || '180deg'} onChange={(event) => updateTemplateBackground({ direction: event.target.value })} />
+                  <Input value={selectedSlotBackground.direction || '180deg'} onChange={(event) => updateTemplateBackground({ direction: event.target.value })} />
                 </LabeledField>
               </>
             )}
@@ -1858,11 +1975,11 @@ export function App() {
     );
   }, [
     addTemplateElement,
-    doc.template.main.background,
     moveTemplateElement,
-    openSlotImagePicker,
+    openTemplateImagePicker,
     removeTemplateElement,
     selectedElementFontOptions,
+    selectedSlotBackground,
     selectedSlotData,
     selectedTemplateElement,
     setSelectedTemplateElementId,
@@ -1928,11 +2045,11 @@ export function App() {
   return (
     <div className="grid min-h-screen w-full max-w-[1600px] gap-4 p-4 lg:p-6">
       <input
-        ref={slotFileInputRef}
+        ref={templateImageInputRef}
         type="file"
         accept="image/png,image/jpeg,image/webp"
         className="hidden"
-        onChange={(event) => { void handleSlotFileChange(event); }}
+        onChange={(event) => { void handleTemplateImageFileChange(event); }}
       />
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Tab)} className="relative">
@@ -1970,7 +2087,7 @@ export function App() {
                 items={screenCanvasSlots}
                 positions={slotCanvasPositions}
                 selectedSlot={selectedSlot}
-                template={doc.template.main}
+                templateImageUrls={templateImageUrls}
                 device={selectedDeviceSpec}
                 onSelect={handleSelectSlot}
                 onReorder={reorderSlotByDrag}
@@ -2595,6 +2712,7 @@ interface CanvasSlotItem {
   subtitleValue: string;
   renderedPreviewUrl?: string;
   sourceImageUrl?: string;
+  template: TemplateMain;
 }
 
 interface InfiniteSlotCanvasProps {
@@ -2603,7 +2721,7 @@ interface InfiniteSlotCanvasProps {
   items: CanvasSlotItem[];
   positions: Record<string, SlotCanvasPosition>;
   selectedSlot: string;
-  template: TemplateMain;
+  templateImageUrls: Record<string, string>;
   device: Device;
   onSelect: (slotId: string) => void;
   onReorder: (slotId: string, targetIndex: number) => void;
@@ -2615,7 +2733,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   items,
   positions,
   selectedSlot,
-  template,
+  templateImageUrls,
   device,
   onSelect,
   onReorder
@@ -3313,7 +3431,8 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
                   subtitleValue={item.subtitleValue}
                   renderedPreviewUrl={item.renderedPreviewUrl}
                   sourceImageUrl={item.sourceImageUrl}
-                  template={template}
+                  template={item.template}
+                  templateImageUrls={templateImageUrls}
                   device={device}
                   onSelect={onSelect}
                 />
@@ -3346,6 +3465,7 @@ interface SlotCardProps {
   renderedPreviewUrl?: string;
   sourceImageUrl?: string;
   template: TemplateMain;
+  templateImageUrls: Record<string, string>;
   device: Device;
   onSelect: (slotId: string) => void;
 }
@@ -3357,6 +3477,7 @@ const SlotCard = memo(function SlotCard({
   renderedPreviewUrl,
   sourceImageUrl,
   template,
+  templateImageUrls,
   device,
   onSelect
 }: SlotCardProps) {
@@ -3373,6 +3494,7 @@ const SlotCard = memo(function SlotCard({
         renderedPreviewUrl={renderedPreviewUrl}
         sourceImageUrl={sourceImageUrl}
         template={template}
+        templateImageUrls={templateImageUrls}
         device={device}
       />
     </button>
@@ -3384,6 +3506,7 @@ const SlotCard = memo(function SlotCard({
   && prev.renderedPreviewUrl === next.renderedPreviewUrl
   && prev.sourceImageUrl === next.sourceImageUrl
   && prev.template === next.template
+  && prev.templateImageUrls === next.templateImageUrls
   && prev.device === next.device
   && prev.onSelect === next.onSelect
 ));
@@ -3395,6 +3518,7 @@ interface SlotRenderPreviewProps {
   renderedPreviewUrl?: string;
   sourceImageUrl?: string;
   template: TemplateMain;
+  templateImageUrls: Record<string, string>;
   device: Device;
 }
 
@@ -3576,6 +3700,7 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
   renderedPreviewUrl,
   sourceImageUrl,
   template,
+  templateImageUrls,
   device
 }: SlotRenderPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -3656,8 +3781,8 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
         context.fill();
         context.restore();
 
-        const imageSource = layer.source === 'renderedPreview'
-          ? (renderedPreviewUrl || sourceImageUrl)
+        const imageSource = layer.source === 'customImage'
+          ? (templateImageUrls[layer.id] || sourceImageUrl || renderedPreviewUrl)
           : (sourceImageUrl || renderedPreviewUrl);
 
         if (imageSource) {
@@ -3722,7 +3847,7 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
     return () => {
       cancelled = true;
     };
-  }, [device.height, device.width, renderedPreviewUrl, sourceImageUrl, subtitle, template, title]);
+  }, [device.height, device.width, renderedPreviewUrl, sourceImageUrl, subtitle, template, templateImageUrls, title]);
 
   return (
     <canvas
