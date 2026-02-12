@@ -1621,19 +1621,23 @@ export function App() {
       selectedElementInspector = (
         <>
           <div className="grid gap-3 sm:grid-cols-2">
-            <LabeledField label="Source">
-              <Select
-                value={imageElement.source}
-                onValueChange={(value) => updateTemplateElement(imageElement.id, (current) => (
-                  current.kind === 'image' ? { ...current, source: value as 'slotImage' | 'renderedPreview' } : current
-                ))}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="slotImage">slot source image</SelectItem>
-                  <SelectItem value="renderedPreview">rendered preview image</SelectItem>
-                </SelectContent>
-              </Select>
+            <LabeledField label="Source (Selected Slot)">
+              <div className="space-y-2">
+                <p className="truncate rounded-md border bg-muted/60 p-2 text-xs">
+                  {selectedSlotData?.sourceImagePath || 'No source image selected'}
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (!selectedSlotData) return;
+                    openSlotImagePicker(selectedSlotData.id);
+                  }}
+                  disabled={!selectedSlotData}
+                >
+                  Choose Image
+                </Button>
+              </div>
             </LabeledField>
             <LabeledField label="Fit">
               <Select
@@ -1856,8 +1860,10 @@ export function App() {
     addTemplateElement,
     doc.template.main.background,
     moveTemplateElement,
+    openSlotImagePicker,
     removeTemplateElement,
     selectedElementFontOptions,
+    selectedSlotData,
     selectedTemplateElement,
     setSelectedTemplateElementId,
     templateElements,
@@ -1878,12 +1884,6 @@ export function App() {
           <CardContent className="space-y-3">
             {selectedSlotData ? (
               <>
-                <LabeledField label="Source Image">
-                  <p className="truncate rounded-md border bg-muted/60 p-2 text-xs">
-                    {selectedSlotData.sourceImagePath}
-                  </p>
-                </LabeledField>
-
                 <InspectorCopyFields
                   locale={selectedLocale}
                   titleValue={doc.copy.keys[fieldKey(selectedSlotData.id, 'title')]?.[selectedLocale] || ''}
@@ -1892,18 +1892,7 @@ export function App() {
                   onSubtitleChange={handleSelectedSubtitleChange}
                 />
 
-                <p className="rounded-md border bg-muted/60 p-2 text-xs">
-                  {slotPreviewPaths[selectedSlotData.id] || `${selectedPlatform}/${selectedDevice}/${selectedLocale}/${selectedSlotData.id}.png`}
-                </p>
-
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openSlotImagePicker(selectedSlotData.id)}
-                  >
-                    Choose Image
-                  </Button>
                   <Button
                     size="sm"
                     variant="outline"
