@@ -2056,6 +2056,8 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   } | null>(null);
   const spacePanRef = useRef(false);
   const [zoom, setZoom] = useState(1);
+  const [viewportOffset, setViewportOffsetState] = useState<SlotCanvasPosition>({ x: 0, y: 0 });
+  const viewportOffsetRef = useRef<SlotCanvasPosition>({ x: 0, y: 0 });
   const [inputDebug, setInputDebug] = useState({
     wheelCount: 0,
     panCount: 0,
@@ -2081,18 +2083,65 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     backgroundPosition: '0 0, 0 0, 0 0, 0 0'
   }), []);
 
-  const scaledBoardOuterStyle = useMemo<CSSProperties>(() => ({
-    width: SLOT_CANVAS_WIDTH * zoom,
-    height: SLOT_CANVAS_HEIGHT * zoom
-  }), [zoom]);
-
-  const scaledBoardInnerStyle = useMemo<CSSProperties>(() => ({
+  const boardContentStyle = useMemo<CSSProperties>(() => ({
     ...boardStyle,
+    width: SLOT_CANVAS_WIDTH,
+    height: SLOT_CANVAS_HEIGHT
+  }), [boardStyle]);
+
+  const getViewportScrollBounds = useCallback((zoomValue: number) => {
+    const viewport = viewportRef.current;
+    if (!viewport) {
+      return { maxX: 0, maxY: 0 };
+    }
+
+    return {
+      maxX: Math.max(0, SLOT_CANVAS_WIDTH * zoomValue - viewport.clientWidth),
+      maxY: Math.max(0, SLOT_CANVAS_HEIGHT * zoomValue - viewport.clientHeight)
+    };
+  }, []);
+
+  const setViewportOffset = useCallback((x: number, y: number, zoomValue: number = zoomRef.current) => {
+    const { maxX, maxY } = getViewportScrollBounds(zoomValue);
+    const next: SlotCanvasPosition = {
+      x: Math.max(0, Math.min(maxX, x)),
+      y: Math.max(0, Math.min(maxY, y))
+    };
+
+    viewportOffsetRef.current = next;
+    setViewportOffsetState((previous) => {
+      if (Math.abs(previous.x - next.x) < 0.01 && Math.abs(previous.y - next.y) < 0.01) {
+        return previous;
+      }
+      return next;
+    });
+
+    return next;
+  }, [getViewportScrollBounds]);
+
+  const boardTransformStyle = useMemo<CSSProperties>(() => ({
     width: SLOT_CANVAS_WIDTH,
     height: SLOT_CANVAS_HEIGHT,
     transformOrigin: 'top left',
-    transform: `scale(${zoom})`
-  }), [boardStyle, zoom]);
+    transform: `translate(${-viewportOffset.x}px, ${-viewportOffset.y}px) scale(${zoom})`,
+    willChange: 'transform'
+  }), [viewportOffset.x, viewportOffset.y, zoom]);
+
+  useEffect(() => {
+    setViewportOffset(viewportOffsetRef.current.x, viewportOffsetRef.current.y, zoom);
+  }, [setViewportOffset, zoom]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(() => {
+      setViewportOffset(viewportOffsetRef.current.x, viewportOffsetRef.current.y, zoomRef.current);
+    });
+
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [setViewportOffset]);
 
   const focusViewportOnSlots = useCallback((behavior: ScrollBehavior = 'auto') => {
     const viewport = viewportRef.current;
@@ -2115,13 +2164,31 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
 
     const centerX = ((minX + maxX) / 2) * zoomRef.current;
     const centerY = ((minY + maxY) / 2) * zoomRef.current;
+    const targetX = centerX - viewport.clientWidth / 2;
+    const targetY = centerY - viewport.clientHeight / 2;
 
-    viewport.scrollTo({
-      left: Math.max(0, centerX - viewport.clientWidth / 2),
-      top: Math.max(0, centerY - viewport.clientHeight / 2),
-      behavior
-    });
-  }, [items, positions]);
+    if (behavior === 'smooth') {
+      const start = viewportOffsetRef.current;
+      const deltaX = targetX - start.x;
+      const deltaY = targetY - start.y;
+      const startTime = performance.now();
+      const duration = 180;
+
+      const tick = (now: number) => {
+        const progress = Math.min(1, (now - startTime) / duration);
+        const ease = 1 - Math.pow(1 - progress, 3);
+        setViewportOffset(start.x + deltaX * ease, start.y + deltaY * ease, zoomRef.current);
+        if (progress < 1) {
+          requestAnimationFrame(tick);
+        }
+      };
+
+      requestAnimationFrame(tick);
+      return;
+    }
+
+    setViewportOffset(targetX, targetY, zoomRef.current);
+  }, [items, positions, setViewportOffset]);
 
   const applyZoomAtPoint = useCallback((nextZoomValue: number, clientX: number, clientY: number) => {
     const viewport = viewportRef.current;
@@ -2134,17 +2201,15 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     const rect = viewport.getBoundingClientRect();
     const pointX = clientX - rect.left;
     const pointY = clientY - rect.top;
-    const worldX = (viewport.scrollLeft + pointX) / currentZoom;
-    const worldY = (viewport.scrollTop + pointY) / currentZoom;
+    const currentOffset = viewportOffsetRef.current;
+    const worldX = (currentOffset.x + pointX) / currentZoom;
+    const worldY = (currentOffset.y + pointY) / currentZoom;
 
     setZoom(nextZoom);
     requestAnimationFrame(() => {
-      const currentViewport = viewportRef.current;
-      if (!currentViewport) return;
-      currentViewport.scrollLeft = Math.max(0, worldX * nextZoom - pointX);
-      currentViewport.scrollTop = Math.max(0, worldY * nextZoom - pointY);
+      setViewportOffset(worldX * nextZoom - pointX, worldY * nextZoom - pointY, nextZoom);
     });
-  }, [clampZoom]);
+  }, [clampZoom, setViewportOffset]);
 
   const pickViewportCenterAnchor = useCallback(() => {
     const viewport = viewportRef.current;
@@ -2235,22 +2300,20 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
 
     if (Math.abs(horizontal) < 0.01 && Math.abs(vertical) < 0.01) return;
 
-    const beforeLeft = viewport.scrollLeft;
-    const beforeTop = viewport.scrollTop;
+    const beforeLeft = viewportOffsetRef.current.x;
+    const beforeTop = viewportOffsetRef.current.y;
     event.preventDefault();
     event.stopPropagation();
-    viewport.scrollLeft += horizontal;
-    viewport.scrollTop += vertical;
-    const afterLeft = viewport.scrollLeft;
-    const afterTop = viewport.scrollTop;
-    const maxX = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
-    const maxY = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+    const next = setViewportOffset(beforeLeft + horizontal, beforeTop + vertical, zoomRef.current);
+    const afterLeft = next.x;
+    const afterTop = next.y;
+    const { maxX, maxY } = getViewportScrollBounds(zoomRef.current);
     setInputDebug((prev) => ({
       ...prev,
       wheelCount: prev.wheelCount + 1,
       last: `wheel dx:${horizontal.toFixed(1)} dy:${vertical.toFixed(1)} x:${Math.round(beforeLeft)}>${Math.round(afterLeft)}/${Math.round(maxX)} y:${Math.round(beforeTop)}>${Math.round(afterTop)}/${Math.round(maxY)}`
     }));
-  }, [applyZoomAtPoint, resolveWheelAnchor]);
+  }, [applyZoomAtPoint, getViewportScrollBounds, resolveWheelAnchor, setViewportOffset]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -2450,14 +2513,14 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
       pointerId: event.pointerId,
       startClientX: event.clientX,
       startClientY: event.clientY,
-      startLeft: viewport.scrollLeft,
-      startTop: viewport.scrollTop
+      startLeft: viewportOffsetRef.current.x,
+      startTop: viewportOffsetRef.current.y
     };
 
     setInputDebug((prev) => ({
       ...prev,
       panCount: prev.panCount + 1,
-      last: `pan-start x:${Math.round(viewport.scrollLeft)} y:${Math.round(viewport.scrollTop)}`
+      last: `pan-start x:${Math.round(viewportOffsetRef.current.x)} y:${Math.round(viewportOffsetRef.current.y)}`
     }));
 
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -2468,23 +2531,22 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     const state = panRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
 
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-
-    const beforeLeft = viewport.scrollLeft;
-    const beforeTop = viewport.scrollTop;
-    viewport.scrollLeft = state.startLeft - (event.clientX - state.startClientX);
-    viewport.scrollTop = state.startTop - (event.clientY - state.startClientY);
-    const afterLeft = viewport.scrollLeft;
-    const afterTop = viewport.scrollTop;
-    const maxX = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
-    const maxY = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+    const beforeLeft = viewportOffsetRef.current.x;
+    const beforeTop = viewportOffsetRef.current.y;
+    const next = setViewportOffset(
+      state.startLeft - (event.clientX - state.startClientX),
+      state.startTop - (event.clientY - state.startClientY),
+      zoomRef.current
+    );
+    const afterLeft = next.x;
+    const afterTop = next.y;
+    const { maxX, maxY } = getViewportScrollBounds(zoomRef.current);
     setInputDebug((prev) => ({
       ...prev,
       last: `pan-move x:${Math.round(beforeLeft)}>${Math.round(afterLeft)}/${Math.round(maxX)} y:${Math.round(beforeTop)}>${Math.round(afterTop)}/${Math.round(maxY)}`
     }));
     event.preventDefault();
-  }, []);
+  }, [getViewportScrollBounds, setViewportOffset]);
 
   const handleViewportPointerEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const state = panRef.current;
@@ -2494,13 +2556,10 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    const viewport = viewportRef.current;
-    if (viewport) {
-      setInputDebug((prev) => ({
-        ...prev,
-        last: `pan-end x:${Math.round(viewport.scrollLeft)} y:${Math.round(viewport.scrollTop)}`
-      }));
-    }
+    setInputDebug((prev) => ({
+      ...prev,
+      last: `pan-end x:${Math.round(viewportOffsetRef.current.x)} y:${Math.round(viewportOffsetRef.current.y)}`
+    }));
   }, []);
 
   useEffect(() => {
@@ -2534,8 +2593,8 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     const position = positions[selectedSlot];
     if (!position) return;
 
-    const left = viewport.scrollLeft;
-    const top = viewport.scrollTop;
+    const left = viewportOffsetRef.current.x;
+    const top = viewportOffsetRef.current.y;
     const right = left + viewport.clientWidth;
     const bottom = top + viewport.clientHeight;
     const scaledX = position.x * zoomRef.current;
@@ -2555,16 +2614,16 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
 
     if (visible) return;
 
-    viewport.scrollTo({
-      left: Math.max(0, nodeLeft - viewport.clientWidth / 2 + scaledWidth / 2),
-      top: Math.max(0, nodeTop - viewport.clientHeight / 2 + scaledHeight / 2),
-      behavior: 'smooth'
-    });
-  }, [positions, selectedSlot, zoom]);
+    setViewportOffset(
+      nodeLeft - viewport.clientWidth / 2 + scaledWidth / 2,
+      nodeTop - viewport.clientHeight / 2 + scaledHeight / 2,
+      zoomRef.current
+    );
+  }, [positions, selectedSlot, setViewportOffset, zoom]);
 
   const viewportClassName = className
-    ? `relative overflow-x-scroll overflow-y-scroll overscroll-none ${className}`
-    : 'relative h-[78vh] overflow-x-scroll overflow-y-scroll overscroll-none rounded-md border bg-muted/20';
+    ? `relative overflow-hidden overscroll-none ${className}`
+    : 'relative h-[78vh] overflow-hidden overscroll-none rounded-md border bg-muted/20';
 
   return (
     <div
@@ -2581,8 +2640,8 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}
     >
-      <div className="relative" style={scaledBoardOuterStyle}>
-        <div className="absolute left-0 top-0" style={scaledBoardInnerStyle}>
+      <div className="absolute left-0 top-0" style={boardTransformStyle}>
+        <div className="relative" style={boardContentStyle}>
           {items.map((item, index) => {
             const position = positions[item.slot.id] || defaultSlotCanvasPosition(index);
 
