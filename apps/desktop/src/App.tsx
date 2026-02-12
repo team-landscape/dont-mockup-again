@@ -2063,6 +2063,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   const viewportOffsetRef = useRef<SlotCanvasPosition>({ x: 0, y: 0 });
   const transformFrameRef = useRef<number | null>(null);
   const focusAnimationFrameRef = useRef<number | null>(null);
+  const suppressNextSelectionCenterRef = useRef(false);
 
   const clampZoom = useCallback((value: number) => {
     return Math.min(SLOT_CANVAS_MAX_ZOOM, Math.max(SLOT_CANVAS_MIN_ZOOM, value));
@@ -2498,6 +2499,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     };
     panRef.current = null;
     cancelFocusAnimation();
+    suppressNextSelectionCenterRef.current = true;
     // Keep selection ref in sync to avoid post-drag auto-centering jump.
     selectedSlotRef.current = slotId;
 
@@ -2545,12 +2547,15 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     dragPendingPositionRef.current = null;
 
     dragRef.current = null;
+    if (selectedSlot === state.slotId) {
+      suppressNextSelectionCenterRef.current = false;
+    }
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     event.stopPropagation();
     event.preventDefault();
-  }, [onPositionChange]);
+  }, [onPositionChange, selectedSlot]);
 
   useEffect(() => {
     return () => {
@@ -2639,6 +2644,10 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     selectedSlotRef.current = selectedSlot;
     if (dragRef.current) return;
     if (previous === selectedSlot) return;
+    if (suppressNextSelectionCenterRef.current) {
+      suppressNextSelectionCenterRef.current = false;
+      return;
+    }
 
     const position = positions[selectedSlot];
     if (!position) return;
