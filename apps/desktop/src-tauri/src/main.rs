@@ -1,0 +1,289 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use std::collections::BTreeSet;
+use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
+use tauri::Manager;
+
+#[cfg(target_os = "macos")]
+use objc2_web_kit::WKWebView;
+
+fn project_root() -> PathBuf {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    root.canonicalize().unwrap_or(root)
+}
+
+fn resolve_project_path(input: &str) -> PathBuf {
+    let candidate = PathBuf::from(input);
+    if candidate.is_absolute() {
+        candidate
+    } else {
+        project_root().join(candidate)
+    }
+}
+
+fn collect_png_files(dir: &PathBuf, acc: &mut Vec<PathBuf>) -> Result<(), String> {
+    let entries = fs::read_dir(dir).map_err(|error| format!("read_dir failed: {}", error))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("read_dir entry failed: {}", error))?;
+        let path = entry.path();
+        if path.is_dir() {
+            collect_png_files(&path, acc)?;
+            continue;
+        }
+
+        let is_png = path
+            .extension()
+            .and_then(|value| value.to_str())
+            .map(|value| value.eq_ignore_ascii_case("png"))
+            .unwrap_or(false);
+
+        if is_png {
+            acc.push(path);
+        }
+    }
+
+    Ok(())
+}
+
+fn fallback_font_list() -> Vec<String> {
+    [
+        "SF Pro",
+        "SF Pro Display",
+        "SF Pro Text",
+        "Apple SD Gothic Neo",
+        "Helvetica Neue",
+        "Arial",
+        "Noto Sans",
+        "Roboto",
+        "Inter",
+    ]
+    .iter()
+    .map(|item| item.to_string())
+    .collect()
+}
+
+fn normalize_font_list(fonts: Vec<String>) -> Vec<String> {
+    let mut unique = BTreeSet::new();
+    for font in fonts {
+        let trimmed = font.trim();
+        if !trimmed.is_empty() {
+            unique.insert(trimmed.to_string());
+        }
+    }
+
+    if unique.is_empty() {
+        return fallback_font_list();
+    }
+
+    unique.into_iter().collect()
+}
+
+fn collect_system_fonts() -> Result<Vec<String>, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let output = Command::new("system_profiler")
+            .args(["SPFontsDataType", "-detailLevel", "mini"])
+            .output()
+            .map_err(|error| format!("failed to execute system_profiler: {}", error))?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+
+        let raw = String::from_utf8_lossy(&output.stdout);
+        let mut fonts = Vec::new();
+        for line in raw.lines() {
+            let trimmed = line.trim();
+            if let Some(name) = trimmed.strip_prefix("Full Name:") {
+                fonts.push(name.trim().to_string());
+                continue;
+            }
+
+            if let Some(name) = trimmed.strip_prefix("Family:") {
+                fonts.push(name.trim().to_string());
+            }
+        }
+
+        return Ok(normalize_font_list(fonts));
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let output = Command::new("fc-list")
+            .args([":", "family"])
+            .output()
+            .map_err(|error| format!("failed to execute fc-list: {}", error))?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+
+        let raw = String::from_utf8_lossy(&output.stdout);
+        let mut fonts = Vec::new();
+        for line in raw.lines() {
+            let families = line.split(':').next_back().unwrap_or(line);
+            for family in families.split(',') {
+                fonts.push(family.trim().to_string());
+            }
+        }
+
+        return Ok(normalize_font_list(fonts));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let output = Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                "Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts' | Select-Object -Property * -ExcludeProperty PS* | ForEach-Object { $_.PSObject.Properties.Name }",
+            ])
+            .output()
+            .map_err(|error| format!("failed to execute powershell: {}", error))?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+
+        let raw = String::from_utf8_lossy(&output.stdout);
+        let mut fonts = Vec::new();
+        for line in raw.lines() {
+            let cleaned = line
+                .replace('\u{feff}', "")
+                .split('(')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string();
+
+            if !cleaned.is_empty() {
+                fonts.push(cleaned);
+            }
+        }
+
+        return Ok(normalize_font_list(fonts));
+    }
+
+    #[allow(unreachable_code)]
+    Ok(fallback_font_list())
+}
+
+#[tauri::command]
+fn run_pipeline(command: String, args: Vec<String>) -> Result<String, String> {
+    let workspace_root = project_root();
+    let script = workspace_root.join("scripts/pipeline.js");
+
+    let output = Command::new("node")
+        .arg("--import")
+        .arg("tsx")
+        .arg(script)
+        .arg(command)
+        .args(args)
+        .current_dir(workspace_root)
+        .output()
+        .map_err(|error| format!("failed to execute node: {}", error))?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+#[tauri::command]
+fn read_text_file(path: String) -> Result<String, String> {
+    let resolved = resolve_project_path(&path);
+    fs::read_to_string(&resolved).map_err(|error| format!("failed to read {}: {}", resolved.display(), error))
+}
+
+#[tauri::command]
+fn write_text_file(path: String, content: String) -> Result<(), String> {
+    let resolved = resolve_project_path(&path);
+
+    if let Some(parent) = resolved.parent() {
+        fs::create_dir_all(parent).map_err(|error| format!("failed to create parent dirs: {}", error))?;
+    }
+
+    fs::write(&resolved, content).map_err(|error| format!("failed to write {}: {}", resolved.display(), error))
+}
+
+#[tauri::command]
+fn list_png_files(path: String) -> Result<Vec<String>, String> {
+    let resolved = resolve_project_path(&path);
+    if !resolved.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut files = Vec::new();
+    collect_png_files(&resolved, &mut files)?;
+    files.sort();
+
+    let root = project_root();
+    let results = files
+        .into_iter()
+        .map(|file| {
+            file.strip_prefix(&root)
+                .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_else(|_| file.to_string_lossy().replace('\\', "/"))
+        })
+        .collect::<Vec<String>>();
+
+    Ok(results)
+}
+
+#[tauri::command]
+fn read_file_base64(path: String) -> Result<String, String> {
+    let resolved = resolve_project_path(&path);
+    let bytes = fs::read(&resolved).map_err(|error| format!("failed to read {}: {}", resolved.display(), error))?;
+    Ok(STANDARD.encode(bytes))
+}
+
+#[tauri::command]
+fn write_file_base64(path: String, data_base64: String) -> Result<(), String> {
+    let resolved = resolve_project_path(&path);
+
+    if let Some(parent) = resolved.parent() {
+        fs::create_dir_all(parent).map_err(|error| format!("failed to create parent dirs: {}", error))?;
+    }
+
+    let bytes = STANDARD
+        .decode(data_base64.as_bytes())
+        .map_err(|error| format!("failed to decode base64: {}", error))?;
+
+    fs::write(&resolved, bytes).map_err(|error| format!("failed to write {}: {}", resolved.display(), error))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn list_system_fonts() -> Result<Vec<String>, String> {
+    Ok(collect_system_fonts().unwrap_or_else(|_| fallback_font_list()))
+}
+
+fn main() {
+    tauri::Builder::default()
+        .setup(|app| {
+            #[cfg(target_os = "macos")]
+            if let Some(main_webview) = app.get_webview_window("main") {
+                let _ = main_webview.with_webview(|webview| unsafe {
+                    let view: &WKWebView = &*webview.inner().cast();
+                    view.setAllowsBackForwardNavigationGestures(false);
+                });
+            }
+
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            run_pipeline,
+            read_text_file,
+            write_text_file,
+            list_png_files,
+            read_file_base64,
+            write_file_base64,
+            list_system_fonts
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
