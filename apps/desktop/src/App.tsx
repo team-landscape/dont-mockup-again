@@ -2062,6 +2062,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   const zoomLabelRef = useRef<HTMLSpanElement>(null);
   const viewportOffsetRef = useRef<SlotCanvasPosition>({ x: 0, y: 0 });
   const transformFrameRef = useRef<number | null>(null);
+  const focusAnimationFrameRef = useRef<number | null>(null);
 
   const clampZoom = useCallback((value: number) => {
     return Math.min(SLOT_CANVAS_MAX_ZOOM, Math.max(SLOT_CANVAS_MIN_ZOOM, value));
@@ -2122,6 +2123,13 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     transformFrameRef.current = window.requestAnimationFrame(flushBoardTransform);
   }, [flushBoardTransform]);
 
+  const cancelFocusAnimation = useCallback(() => {
+    if (focusAnimationFrameRef.current != null) {
+      window.cancelAnimationFrame(focusAnimationFrameRef.current);
+      focusAnimationFrameRef.current = null;
+    }
+  }, []);
+
   const setViewportOffset = useCallback((x: number, y: number, zoomValue: number = zoomRef.current) => {
     const { maxX, maxY } = getViewportScrollBounds(zoomValue);
     const next: SlotCanvasPosition = {
@@ -2160,6 +2168,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   const focusViewportOnSlots = useCallback((behavior: ScrollBehavior = 'auto') => {
     const viewport = viewportRef.current;
     if (!viewport || items.length === 0) return;
+    cancelFocusAnimation();
 
     let minX = Number.POSITIVE_INFINITY;
     let minY = Number.POSITIVE_INFINITY;
@@ -2189,20 +2198,27 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
       const duration = 180;
 
       const tick = (now: number) => {
+        if (dragRef.current) {
+          focusAnimationFrameRef.current = null;
+          return;
+        }
         const progress = Math.min(1, (now - startTime) / duration);
         const ease = 1 - Math.pow(1 - progress, 3);
         setViewportOffset(start.x + deltaX * ease, start.y + deltaY * ease, zoomRef.current);
         if (progress < 1) {
-          requestAnimationFrame(tick);
+          focusAnimationFrameRef.current = window.requestAnimationFrame(tick);
+        } else {
+          focusAnimationFrameRef.current = null;
         }
       };
 
-      requestAnimationFrame(tick);
+      focusAnimationFrameRef.current = window.requestAnimationFrame(tick);
       return;
     }
 
+    if (dragRef.current) return;
     setViewportOffset(targetX, targetY, zoomRef.current);
-  }, [items, positions, setViewportOffset]);
+  }, [cancelFocusAnimation, items, positions, setViewportOffset]);
 
   const applyZoomAtPoint = useCallback((nextZoomValue: number, clientX: number, clientY: number) => {
     const viewport = viewportRef.current;
@@ -2270,6 +2286,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   const handleCanvasWheel = useCallback((event: WheelEvent) => {
     const viewport = viewportRef.current;
     if (!viewport) return;
+    if (dragRef.current) return;
 
     if (event.ctrlKey || event.metaKey) {
       event.preventDefault();
@@ -2479,12 +2496,14 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
       originX: origin.x,
       originY: origin.y
     };
+    panRef.current = null;
+    cancelFocusAnimation();
 
     onSelect(slotId);
     event.currentTarget.setPointerCapture(event.pointerId);
     event.stopPropagation();
     event.preventDefault();
-  }, [onSelect, positions]);
+  }, [cancelFocusAnimation, onSelect, positions]);
 
   const flushDragMove = useCallback(() => {
     dragMoveFrameRef.current = null;
@@ -2536,10 +2555,14 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
       if (dragMoveFrameRef.current != null) {
         window.cancelAnimationFrame(dragMoveFrameRef.current);
       }
+      if (focusAnimationFrameRef.current != null) {
+        window.cancelAnimationFrame(focusAnimationFrameRef.current);
+      }
     };
   }, []);
 
   const handleViewportPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragRef.current) return;
     if (event.button !== 0 && event.button !== 1) return;
     const target = event.target as HTMLElement | null;
     const isInteractive = Boolean(target?.closest('button, input, textarea, select, [role="button"], [contenteditable="true"]'));
@@ -2566,6 +2589,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   const handleViewportPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const state = panRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
+    if (dragRef.current) return;
 
     setViewportOffset(
       state.startLeft - (event.clientX - state.startClientX),
@@ -2608,6 +2632,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
+    if (dragRef.current) return;
 
     const previous = selectedSlotRef.current;
     selectedSlotRef.current = selectedSlot;
