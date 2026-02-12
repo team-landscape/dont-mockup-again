@@ -2054,6 +2054,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     startLeft: number;
     startTop: number;
   } | null>(null);
+  const spacePanRef = useRef(false);
   const [zoom, setZoom] = useState(1);
 
   const clampZoom = useCallback((value: number) => {
@@ -2236,38 +2237,79 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   }, [applyZoomAtPoint, resolveWheelAnchor]);
 
   useEffect(() => {
-    const listener = (event: WheelEvent) => {
-      const viewport = viewportRef.current;
-      if (!viewport) return;
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const viewportListener = (event: WheelEvent) => {
+      handleCanvasWheel(event);
+    };
+    const windowFallbackListener = (event: WheelEvent) => {
+      const currentViewport = viewportRef.current;
+      if (!currentViewport) return;
 
       const target = event.target;
-      const targetInsideViewport = target instanceof Node && viewport.contains(target);
-      const rect = viewport.getBoundingClientRect();
-      const pointer = pointerRef.current;
-      const pointerInsideViewport = pointer
-        ? pointer.clientX >= rect.left
-          && pointer.clientX <= rect.right
-          && pointer.clientY >= rect.top
-          && pointer.clientY <= rect.bottom
-        : false;
+      const targetInsideViewport = target instanceof Node && currentViewport.contains(target);
+      if (targetInsideViewport) {
+        handleCanvasWheel(event);
+        return;
+      }
+
+      const rect = currentViewport.getBoundingClientRect();
       const eventInsideViewport = event.clientX >= rect.left
         && event.clientX <= rect.right
         && event.clientY >= rect.top
         && event.clientY <= rect.bottom;
-      const isRootTarget = target === document.body || target === document.documentElement;
 
-      if (!targetInsideViewport && !(isRootTarget && (eventInsideViewport || pointerInsideViewport))) {
+      if (eventInsideViewport) {
+        handleCanvasWheel(event);
         return;
       }
 
-      handleCanvasWheel(event);
+      if (event.clientX === 0 && event.clientY === 0) {
+        const pointer = pointerRef.current;
+        if (!pointer) return;
+        const pointerInsideViewport = pointer.clientX >= rect.left
+          && pointer.clientX <= rect.right
+          && pointer.clientY >= rect.top
+          && pointer.clientY <= rect.bottom;
+        if (!pointerInsideViewport) return;
+        handleCanvasWheel(event);
+      }
     };
 
-    window.addEventListener('wheel', listener, { passive: false, capture: true });
+    viewport.addEventListener('wheel', viewportListener, { passive: false, capture: true });
+    window.addEventListener('wheel', windowFallbackListener, { passive: false, capture: true });
     return () => {
-      window.removeEventListener('wheel', listener, { capture: true });
+      viewport.removeEventListener('wheel', viewportListener, { capture: true });
+      window.removeEventListener('wheel', windowFallbackListener, { capture: true });
     };
   }, [handleCanvasWheel]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code === 'Space') {
+        spacePanRef.current = true;
+      }
+    };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space') {
+        spacePanRef.current = false;
+      }
+    };
+    const handleBlur = () => {
+      spacePanRef.current = false;
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
 
   const handleZoomOut = useCallback(() => {
     const anchor = pickViewportCenterAnchor();
@@ -2377,9 +2419,13 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   }, []);
 
   const handleViewportPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 && event.button !== 1) return;
     const target = event.target as HTMLElement | null;
-    if (target?.closest('[data-slot-card]')) return;
+    const isInteractive = Boolean(target?.closest('button, input, textarea, select, [role="button"], [contenteditable="true"]'));
+    const isOverSlotCard = Boolean(target?.closest('[data-slot-card]'));
+    const allowPanByModifier = event.button === 1 || event.altKey || spacePanRef.current;
+    if (isInteractive && !allowPanByModifier) return;
+    if (isOverSlotCard && !allowPanByModifier) return;
 
     const viewport = viewportRef.current;
     if (!viewport) return;
