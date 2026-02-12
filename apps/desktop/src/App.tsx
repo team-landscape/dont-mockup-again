@@ -224,8 +224,8 @@ const SLOT_CANVAS_WIDTH = 24000;
 const SLOT_CANVAS_HEIGHT = 16000;
 const SLOT_CANVAS_CARD_WIDTH = 540;
 const SLOT_CANVAS_CARD_HEIGHT = 760;
-const SLOT_CANVAS_GAP_X = 48;
-const SLOT_CANVAS_GAP_Y = 56;
+const SLOT_CANVAS_GAP_X = 28;
+const SLOT_CANVAS_GAP_Y = 36;
 const SLOT_CANVAS_DEFAULT_COLS = 3;
 const SLOT_CANVAS_BASE_X = 9600;
 const SLOT_CANVAS_BASE_Y = 880;
@@ -947,15 +947,11 @@ export function App() {
       titleValue: doc.copy.keys[fieldKey(slot.id, 'title')]?.[selectedLocale] || '',
       subtitleValue: doc.copy.keys[fieldKey(slot.id, 'subtitle')]?.[selectedLocale] || '',
       renderedPreviewUrl: slotPreviewUrls[slot.id],
-      sourceImageUrl: slotSourceUrls[slot.id],
-      previewPath: slotPreviewPaths[slot.id] || `${selectedPlatform}/${selectedDevice}/${selectedLocale}/${slot.id}.png`
+      sourceImageUrl: slotSourceUrls[slot.id]
     }))
   ), [
     doc.copy.keys,
-    selectedDevice,
     selectedLocale,
-    selectedPlatform,
-    slotPreviewPaths,
     slotPreviewUrls,
     slotSourceUrls,
     slots
@@ -1358,7 +1354,6 @@ export function App() {
                 template={doc.template.main}
                 device={selectedDeviceSpec}
                 onSelect={handleSelectSlot}
-                onChooseImage={openSlotImagePicker}
                 onReorder={reorderSlotByDrag}
               />
 
@@ -1417,7 +1412,7 @@ export function App() {
 
               {isXlLayout ? (
                 <div className="pointer-events-none fixed right-3 top-3 z-30 w-[460px]">
-                  <div className="pointer-events-auto rounded-xl border bg-card/95 p-3 shadow-2xl backdrop-blur">
+                  <div data-native-wheel className="pointer-events-auto rounded-xl border bg-card/95 p-3 shadow-2xl backdrop-blur">
                     <ScrollArea className="h-[calc(100vh-8rem)] pr-2">
                       {renderSelectedInspector()}
                     </ScrollArea>
@@ -1425,7 +1420,7 @@ export function App() {
                 </div>
               ) : (
                 <div className="pointer-events-none fixed inset-x-3 bottom-3 z-30">
-                  <div className="pointer-events-auto rounded-xl border bg-card/95 p-3 shadow-2xl backdrop-blur">
+                  <div data-native-wheel className="pointer-events-auto rounded-xl border bg-card/95 p-3 shadow-2xl backdrop-blur">
                     <ScrollArea className="h-[42vh] pr-2">
                       {renderSelectedInspector()}
                     </ScrollArea>
@@ -1981,7 +1976,6 @@ interface CanvasSlotItem {
   subtitleValue: string;
   renderedPreviewUrl?: string;
   sourceImageUrl?: string;
-  previewPath: string;
 }
 
 interface InfiniteSlotCanvasProps {
@@ -1993,7 +1987,6 @@ interface InfiniteSlotCanvasProps {
   template: TemplateMain;
   device: Device;
   onSelect: (slotId: string) => void;
-  onChooseImage: (slotId: string) => void;
   onReorder: (slotId: string, targetIndex: number) => void;
 }
 
@@ -2006,7 +1999,6 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   template,
   device,
   onSelect,
-  onChooseImage,
   onReorder
 }: InfiniteSlotCanvasProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -2323,6 +2315,10 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
       if (!currentViewport) return;
 
       const target = event.target;
+      const targetElement = target instanceof Element ? target : null;
+      if (targetElement?.closest('[data-native-wheel]')) {
+        return;
+      }
       const targetInsideViewport = target instanceof Node && currentViewport.contains(target);
       if (targetInsideViewport) {
         handleCanvasWheel(event);
@@ -2675,7 +2671,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
               <div
                 key={item.slot.id}
                 data-slot-card
-                className="absolute w-[540px]"
+                className="absolute"
                 style={{ left: position.x, top: position.y }}
               >
                 <div className="mb-2 flex items-center justify-between rounded-md border bg-card/90 px-2 py-1 text-[11px] shadow-sm backdrop-blur">
@@ -2694,16 +2690,13 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
 
                 <SlotCard
                   slot={item.slot}
-                  selected={selectedSlot === item.slot.id}
                   titleValue={item.titleValue}
                   subtitleValue={item.subtitleValue}
                   renderedPreviewUrl={item.renderedPreviewUrl}
                   sourceImageUrl={item.sourceImageUrl}
-                  previewPath={item.previewPath}
                   template={template}
                   device={device}
                   onSelect={onSelect}
-                  onChooseImage={onChooseImage}
                 />
               </div>
             );
@@ -2729,88 +2722,51 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
 
 interface SlotCardProps {
   slot: Slot;
-  selected: boolean;
   titleValue: string;
   subtitleValue: string;
   renderedPreviewUrl?: string;
   sourceImageUrl?: string;
-  previewPath: string;
   template: TemplateMain;
   device: Device;
   onSelect: (slotId: string) => void;
-  onChooseImage: (slotId: string) => void;
 }
 
 const SlotCard = memo(function SlotCard({
   slot,
-  selected,
   titleValue,
   subtitleValue,
   renderedPreviewUrl,
   sourceImageUrl,
-  previewPath,
   template,
   device,
-  onSelect,
-  onChooseImage
+  onSelect
 }: SlotCardProps) {
   return (
-    <Card className={selected ? 'border-primary/60 ring-1 ring-ring' : 'border-dashed'}>
-      <CardHeader className="flex-row items-start justify-between space-y-0 pb-2">
-        <div>
-          <CardTitle className="text-base">{slot.id}</CardTitle>
-          <CardDescription>order {slot.order}</CardDescription>
-        </div>
-        <Button
-          size="sm"
-          variant={selected ? 'secondary' : 'outline'}
-          onClick={() => onSelect(slot.id)}
-        >
-          Select
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <button
-          className="grid min-h-[420px] w-full place-items-center rounded-md border bg-muted/30 p-3"
-          onClick={() => onSelect(slot.id)}
-          type="button"
-        >
-          <SlotRenderPreview
-            slotId={slot.id}
-            title={titleValue}
-            subtitle={subtitleValue}
-            renderedPreviewUrl={renderedPreviewUrl}
-            sourceImageUrl={sourceImageUrl}
-            template={template}
-            device={device}
-          />
-        </button>
-
-        <div className="space-y-1 rounded-md border bg-background/60 p-2">
-          <p className="truncate text-xs font-medium">{titleValue || '(title empty)'}</p>
-          <p className="truncate text-xs text-muted-foreground">{subtitleValue || '(subtitle empty)'}</p>
-        </div>
-
-        <p className="truncate text-[11px] text-muted-foreground">{previewPath}</p>
-
-        <Button size="sm" variant="outline" onClick={() => onChooseImage(slot.id)}>
-          Choose Image
-        </Button>
-      </CardContent>
-    </Card>
+    <button
+      className="block bg-transparent p-0"
+      onClick={() => onSelect(slot.id)}
+      type="button"
+    >
+      <SlotRenderPreview
+        slotId={slot.id}
+        title={titleValue}
+        subtitle={subtitleValue}
+        renderedPreviewUrl={renderedPreviewUrl}
+        sourceImageUrl={sourceImageUrl}
+        template={template}
+        device={device}
+      />
+    </button>
   );
 }, (prev, next) => (
   prev.slot === next.slot
-  && prev.selected === next.selected
   && prev.titleValue === next.titleValue
   && prev.subtitleValue === next.subtitleValue
   && prev.renderedPreviewUrl === next.renderedPreviewUrl
   && prev.sourceImageUrl === next.sourceImageUrl
-  && prev.previewPath === next.previewPath
   && prev.template === next.template
   && prev.device === next.device
   && prev.onSelect === next.onSelect
-  && prev.onChooseImage === next.onChooseImage
 ));
 
 interface SlotRenderPreviewProps {
@@ -2995,7 +2951,7 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
         <img
           src={renderedPreviewUrl}
           alt={`${slotId} preview`}
-          className="max-h-[400px] w-auto max-w-full rounded-md border"
+          className="max-h-[760px] w-auto max-w-full"
         />
       );
     }
@@ -3121,7 +3077,7 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
   return (
     <canvas
       ref={canvasRef}
-      className="max-h-[400px] w-auto max-w-full rounded-md border"
+      className="max-h-[760px] w-auto max-w-full"
       role="img"
       aria-label={`${slotId} live preview`}
     />
