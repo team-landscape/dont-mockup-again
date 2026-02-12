@@ -2498,6 +2498,8 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     };
     panRef.current = null;
     cancelFocusAnimation();
+    // Keep selection ref in sync to avoid post-drag auto-centering jump.
+    selectedSlotRef.current = slotId;
 
     onSelect(slotId);
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -2632,10 +2634,10 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    if (dragRef.current) return;
 
     const previous = selectedSlotRef.current;
     selectedSlotRef.current = selectedSlot;
+    if (dragRef.current) return;
     if (previous === selectedSlot) return;
 
     const position = positions[selectedSlot];
