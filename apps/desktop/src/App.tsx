@@ -491,7 +491,6 @@ export function App() {
   const [slotPreviewUrls, setSlotPreviewUrls] = useState<Record<string, string>>({});
   const [slotPreviewPaths, setSlotPreviewPaths] = useState<Record<string, string>>({});
   const [slotSourceUrls, setSlotSourceUrls] = useState<Record<string, string>>({});
-  const [slotCanvasPositions, setSlotCanvasPositions] = useState<Record<string, SlotCanvasPosition>>({});
   const [availableFonts, setAvailableFonts] = useState<string[]>(defaultSystemFonts);
   const [issues, setIssues] = useState<ValidateIssue[]>([]);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(() => {
@@ -919,48 +918,26 @@ export function App() {
     && doc.project.platforms.length > 0
     && doc.project.devices.length > 0;
 
-  useEffect(() => {
-    setSlotCanvasPositions((current) => {
-      const next: Record<string, SlotCanvasPosition> = {};
-      let changed = Object.keys(current).length !== slots.length;
-      const occupied = new Set<string>();
-
-      for (const [index, slot] of slots.entries()) {
-        const existing = current[slot.id];
-        if (existing) {
-          next[slot.id] = existing;
-          occupied.add(`${existing.x}:${existing.y}`);
-          continue;
-        }
-
-        let candidate = defaultSlotCanvasPosition(index);
-        while (occupied.has(`${candidate.x}:${candidate.y}`)) {
-          candidate = {
-            x: candidate.x + SLOT_CANVAS_CARD_WIDTH + SLOT_CANVAS_GAP_X,
-            y: candidate.y
-          };
-        }
-
-        next[slot.id] = candidate;
-        occupied.add(`${candidate.x}:${candidate.y}`);
-        changed = true;
-      }
-
-      return changed ? next : current;
+  const slotCanvasPositions = useMemo<Record<string, SlotCanvasPosition>>(() => {
+    const next: Record<string, SlotCanvasPosition> = {};
+    slots.forEach((slot, index) => {
+      next[slot.id] = defaultSlotCanvasPosition(index);
     });
+    return next;
   }, [slots]);
 
-  const updateSlotCanvasPosition = useCallback((slotId: string, nextPosition: SlotCanvasPosition) => {
-    setSlotCanvasPositions((current) => {
-      const existing = current[slotId];
-      if (existing && existing.x === nextPosition.x && existing.y === nextPosition.y) {
-        return current;
-      }
+  const reorderSlotByDrag = useCallback((slotId: string, targetIndex: number) => {
+    updateDoc((next) => {
+      const ordered = [...next.project.slots].sort((a, b) => a.order - b.order);
+      const fromIndex = ordered.findIndex((slot) => slot.id === slotId);
+      if (fromIndex < 0) return;
 
-      return {
-        ...current,
-        [slotId]: nextPosition
-      };
+      const clampedTargetIndex = Math.max(0, Math.min(ordered.length - 1, targetIndex));
+      if (clampedTargetIndex === fromIndex) return;
+
+      const [moved] = ordered.splice(fromIndex, 1);
+      ordered.splice(clampedTargetIndex, 0, moved);
+      next.project.slots = reorderSlots(ordered);
     });
   }, []);
 
@@ -1382,7 +1359,7 @@ export function App() {
                 device={selectedDeviceSpec}
                 onSelect={handleSelectSlot}
                 onChooseImage={openSlotImagePicker}
-                onPositionChange={updateSlotCanvasPosition}
+                onReorder={reorderSlotByDrag}
               />
 
               <div className="pointer-events-none fixed left-3 top-[13.5rem] z-30 w-[min(560px,calc(100%-1.5rem))] lg:left-[15.5rem] lg:top-3 lg:w-[min(560px,calc(100%-17.5rem))] xl:w-[540px]">
@@ -2017,7 +1994,7 @@ interface InfiniteSlotCanvasProps {
   device: Device;
   onSelect: (slotId: string) => void;
   onChooseImage: (slotId: string) => void;
-  onPositionChange: (slotId: string, nextPosition: SlotCanvasPosition) => void;
+  onReorder: (slotId: string, targetIndex: number) => void;
 }
 
 const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
@@ -2030,7 +2007,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   device,
   onSelect,
   onChooseImage,
-  onPositionChange
+  onReorder
 }: InfiniteSlotCanvasProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const selectedSlotRef = useRef(selectedSlot);
@@ -2043,13 +2020,8 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   const dragRef = useRef<{
     slotId: string;
     pointerId: number;
-    startClientX: number;
-    startClientY: number;
-    originX: number;
-    originY: number;
+    lastTargetIndex: number;
   } | null>(null);
-  const dragPendingPositionRef = useRef<{ slotId: string; position: SlotCanvasPosition } | null>(null);
-  const dragMoveFrameRef = useRef<number | null>(null);
   const panRef = useRef<{
     pointerId: number;
     startClientX: number;
@@ -2485,17 +2457,13 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
 
   const handleDragPointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>, slotId: string) => {
     if (event.button !== 0) return;
-
-    const origin = positions[slotId];
-    if (!origin) return;
+    const slotIndex = items.findIndex((item) => item.slot.id === slotId);
+    if (slotIndex < 0) return;
 
     dragRef.current = {
       slotId,
       pointerId: event.pointerId,
-      startClientX: event.clientX,
-      startClientY: event.clientY,
-      originX: origin.x,
-      originY: origin.y
+      lastTargetIndex: slotIndex
     };
     panRef.current = null;
     cancelFocusAnimation();
@@ -2507,44 +2475,46 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     event.currentTarget.setPointerCapture(event.pointerId);
     event.stopPropagation();
     event.preventDefault();
-  }, [cancelFocusAnimation, onSelect, positions]);
-
-  const flushDragMove = useCallback(() => {
-    dragMoveFrameRef.current = null;
-    const pending = dragPendingPositionRef.current;
-    if (!pending) return;
-    onPositionChange(pending.slotId, pending.position);
-  }, [onPositionChange]);
+  }, [cancelFocusAnimation, items, onSelect]);
 
   const handleDragPointerMove = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
     const state = dragRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
 
-    const currentZoom = zoomRef.current;
-    const nextX = state.originX + ((event.clientX - state.startClientX) / currentZoom);
-    const nextY = state.originY + ((event.clientY - state.startClientY) / currentZoom);
-    const boundedX = Math.max(0, Math.min(SLOT_CANVAS_WIDTH - SLOT_CANVAS_CARD_WIDTH, nextX));
-    const boundedY = Math.max(0, Math.min(SLOT_CANVAS_HEIGHT - SLOT_CANVAS_CARD_HEIGHT, nextY));
-    dragPendingPositionRef.current = { slotId: state.slotId, position: { x: boundedX, y: boundedY } };
-    if (dragMoveFrameRef.current == null) {
-      dragMoveFrameRef.current = window.requestAnimationFrame(flushDragMove);
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const rect = viewport.getBoundingClientRect();
+    const pointX = event.clientX - rect.left;
+    const pointY = event.clientY - rect.top;
+    const worldX = (viewportOffsetRef.current.x + pointX) / zoomRef.current;
+    const worldY = (viewportOffsetRef.current.y + pointY) / zoomRef.current;
+
+    let targetIndex = state.lastTargetIndex;
+    let minDistance = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < items.length; index += 1) {
+      const position = defaultSlotCanvasPosition(index);
+      const centerX = position.x + SLOT_CANVAS_CARD_WIDTH / 2;
+      const centerY = position.y + SLOT_CANVAS_CARD_HEIGHT / 2;
+      const distance = ((worldX - centerX) ** 2) + ((worldY - centerY) ** 2);
+      if (distance < minDistance) {
+        minDistance = distance;
+        targetIndex = index;
+      }
     }
+
+    if (targetIndex !== state.lastTargetIndex) {
+      state.lastTargetIndex = targetIndex;
+      onReorder(state.slotId, targetIndex);
+    }
+
     event.stopPropagation();
     event.preventDefault();
-  }, [flushDragMove]);
+  }, [items, onReorder]);
 
   const handleDragPointerEnd = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
     const state = dragRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
-
-    if (dragMoveFrameRef.current != null) {
-      window.cancelAnimationFrame(dragMoveFrameRef.current);
-      dragMoveFrameRef.current = null;
-    }
-    if (dragPendingPositionRef.current && dragPendingPositionRef.current.slotId === state.slotId) {
-      onPositionChange(state.slotId, dragPendingPositionRef.current.position);
-    }
-    dragPendingPositionRef.current = null;
 
     dragRef.current = null;
     if (selectedSlot === state.slotId) {
@@ -2555,13 +2525,10 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     }
     event.stopPropagation();
     event.preventDefault();
-  }, [onPositionChange, selectedSlot]);
+  }, [selectedSlot]);
 
   useEffect(() => {
     return () => {
-      if (dragMoveFrameRef.current != null) {
-        window.cancelAnimationFrame(dragMoveFrameRef.current);
-      }
       if (focusAnimationFrameRef.current != null) {
         window.cancelAnimationFrame(focusAnimationFrameRef.current);
       }
