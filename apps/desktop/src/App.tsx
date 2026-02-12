@@ -231,7 +231,7 @@ const SLOT_CANVAS_BASE_X = 9600;
 const SLOT_CANVAS_BASE_Y = 880;
 const SLOT_CANVAS_MIN_ZOOM = 0.45;
 const SLOT_CANVAS_MAX_ZOOM = 2.4;
-const PINCH_ZOOM_ACCELERATION = 1.18;
+const PINCH_ZOOM_ACCELERATION = 1.35;
 
 async function runPipeline(command: string, args: string[]) {
   return invokeCommand<string>('run_pipeline', { command, args });
