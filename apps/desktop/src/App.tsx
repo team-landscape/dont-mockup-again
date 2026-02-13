@@ -204,11 +204,11 @@ interface SlotCanvasPosition {
   y: number;
 }
 
-const steps: Array<{ id: StepId; title: string; description: string }> = [
-  { id: 'screens', title: 'Screens', description: '미리보기 + 슬롯 + 템플릿 편집 Composer' },
-  { id: 'localization', title: 'Localization', description: 'Local LLM CLI 설정 + copy 편집' },
-  { id: 'preview', title: 'Preview / Validate', description: '렌더/검증/프리뷰' },
-  { id: 'export', title: 'Export', description: 'dist/zip export' }
+const steps: Array<{ id: StepId; title: string }> = [
+  { id: 'screens', title: 'Screens' },
+  { id: 'localization', title: 'Localization' },
+  { id: 'preview', title: 'Preview / Validate' },
+  { id: 'export', title: 'Export' }
 ];
 
 const devicePresets: Array<{ label: string; value: Device }> = [
@@ -2272,7 +2272,6 @@ export function App() {
                       </span>
                       <div className="min-w-0">
                         <p className="truncate text-xs font-medium">{step.title}</p>
-                        <p className="truncate text-[11px] text-muted-foreground">{step.description}</p>
                       </div>
                     </div>
                   );
