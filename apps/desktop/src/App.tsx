@@ -1852,6 +1852,22 @@ export function App() {
     });
   }, [selectedSlot, selectedSlotData, updateTemplateMain]);
 
+  const moveTemplateElement = useCallback((elementId: string, x: number, y: number) => {
+    updateTemplateElement(elementId, (current) => {
+      const nextX = Math.round(x);
+      const nextY = Math.round(y);
+      if (current.x === nextX && current.y === nextY) {
+        return current;
+      }
+
+      return {
+        ...current,
+        x: nextX,
+        y: nextY
+      };
+    });
+  }, [updateTemplateElement]);
+
   const addTemplateElement = useCallback((kind: TemplateElementKind) => {
     let createdId = '';
 
@@ -2607,6 +2623,9 @@ export function App() {
                   onSelect={handleSelectSlot}
                   onReorder={reorderSlotByDrag}
                   onRename={renameSlot}
+                  selectedTemplateElementId={selectedTemplateElementId}
+                  onSelectTemplateElement={setSelectedTemplateElementId}
+                  onMoveTemplateElement={moveTemplateElement}
                 />
               )}
               inspectorNode={renderSelectedInspector()}
@@ -3207,6 +3226,9 @@ interface InfiniteSlotCanvasProps {
   onSelect: (slotId: string) => void;
   onReorder: (slotId: string, targetIndex: number) => void;
   onRename: (slotId: string, nextName: string) => void;
+  selectedTemplateElementId: string;
+  onSelectTemplateElement: (elementId: string) => void;
+  onMoveTemplateElement: (elementId: string, x: number, y: number) => void;
 }
 
 const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
@@ -3221,7 +3243,10 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   device,
   onSelect,
   onReorder,
-  onRename
+  onRename,
+  selectedTemplateElementId,
+  onSelectTemplateElement,
+  onMoveTemplateElement
 }: InfiniteSlotCanvasProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const selectedSlotRef = useRef(selectedSlot);
@@ -4121,6 +4146,10 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
                     templateImageUrls={templateImageUrls}
                     device={device}
                     onSelect={onSelect}
+                    editable={isSelected}
+                    selectedElementId={selectedTemplateElementId}
+                    onSelectElement={onSelectTemplateElement}
+                    onMoveElement={onMoveTemplateElement}
                   />
                 </div>
               </div>
@@ -4155,6 +4184,10 @@ interface SlotCardProps {
   templateImageUrls: Record<string, string>;
   device: Device;
   onSelect: (slotId: string) => void;
+  editable: boolean;
+  selectedElementId: string;
+  onSelectElement: (elementId: string) => void;
+  onMoveElement: (elementId: string, x: number, y: number) => void;
 }
 
 const SlotCard = memo(function SlotCard({
@@ -4166,7 +4199,11 @@ const SlotCard = memo(function SlotCard({
   template,
   templateImageUrls,
   device,
-  onSelect
+  onSelect,
+  editable,
+  selectedElementId,
+  onSelectElement,
+  onMoveElement
 }: SlotCardProps) {
   return (
     <button
@@ -4183,6 +4220,10 @@ const SlotCard = memo(function SlotCard({
         template={template}
         templateImageUrls={templateImageUrls}
         device={device}
+        editable={editable}
+        selectedElementId={selectedElementId}
+        onSelectElement={onSelectElement}
+        onMoveElement={onMoveElement}
       />
     </button>
   );
@@ -4196,6 +4237,10 @@ const SlotCard = memo(function SlotCard({
   && prev.templateImageUrls === next.templateImageUrls
   && prev.device === next.device
   && prev.onSelect === next.onSelect
+  && prev.editable === next.editable
+  && prev.selectedElementId === next.selectedElementId
+  && prev.onSelectElement === next.onSelectElement
+  && prev.onMoveElement === next.onMoveElement
 ));
 
 interface SlotRenderPreviewProps {
@@ -4207,6 +4252,10 @@ interface SlotRenderPreviewProps {
   template: TemplateMain;
   templateImageUrls: Record<string, string>;
   device: Device;
+  editable?: boolean;
+  selectedElementId?: string;
+  onSelectElement?: (elementId: string) => void;
+  onMoveElement?: (elementId: string, x: number, y: number) => void;
 }
 
 const previewImageCache = new Map<string, Promise<HTMLImageElement>>();
@@ -4378,9 +4427,103 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
   sourceImageUrl,
   template,
   templateImageUrls,
-  device
+  device,
+  editable = false,
+  selectedElementId,
+  onSelectElement,
+  onMoveElement
 }: SlotRenderPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const layerDragRef = useRef<{
+    pointerId: number;
+    elementId: string;
+    startClientX: number;
+    startClientY: number;
+    originX: number;
+    originY: number;
+    elementW: number;
+    elementH: number;
+    scaleX: number;
+    scaleY: number;
+  } | null>(null);
+  const width = Math.max(1, device.width || 1290);
+  const height = Math.max(1, device.height || 2796);
+  const previewSize = useMemo(
+    () => getSlotPreviewCanvasSize(device),
+    [device.height, device.width]
+  );
+  const editableLayers = useMemo(
+    () => [...template.elements]
+      .filter((item) => item.visible !== false)
+      .sort((a, b) => a.z - b.z),
+    [template.elements]
+  );
+
+  const handleLayerPointerDown = useCallback((
+    event: ReactPointerEvent<HTMLDivElement>,
+    layer: TemplateElement
+  ) => {
+    if (!editable || !onMoveElement || !onSelectElement) return;
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+
+    const rect = overlay.getBoundingClientRect();
+    const scaleX = rect.width > 0 ? rect.width / width : 1;
+    const scaleY = rect.height > 0 ? rect.height / height : 1;
+
+    onSelectElement(layer.id);
+    layerDragRef.current = {
+      pointerId: event.pointerId,
+      elementId: layer.id,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      originX: layer.x,
+      originY: layer.y,
+      elementW: layer.w,
+      elementH: layer.h,
+      scaleX,
+      scaleY
+    };
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.stopPropagation();
+    event.preventDefault();
+  }, [editable, height, onMoveElement, onSelectElement, width]);
+
+  const handleLayerPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = layerDragRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+    if (!onMoveElement) return;
+
+    const nextX = clampNumber(
+      state.originX + ((event.clientX - state.startClientX) / Math.max(0.001, state.scaleX)),
+      0,
+      Math.max(0, width - state.elementW)
+    );
+    const nextY = clampNumber(
+      state.originY + ((event.clientY - state.startClientY) / Math.max(0.001, state.scaleY)),
+      0,
+      Math.max(0, height - state.elementH)
+    );
+
+    onMoveElement(state.elementId, nextX, nextY);
+
+    event.stopPropagation();
+    event.preventDefault();
+  }, [height, onMoveElement, width]);
+
+  const handleLayerPointerEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = layerDragRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+
+    layerDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    event.stopPropagation();
+    event.preventDefault();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -4389,9 +4532,6 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      const width = Math.max(1, device.width || 1290);
-      const height = Math.max(1, device.height || 2796);
-      const previewSize = getSlotPreviewCanvasSize(device);
       const renderScale = previewSize.renderScale;
       const canvasWidth = previewSize.width;
       const canvasHeight = previewSize.height;
@@ -4530,14 +4670,65 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
     return () => {
       cancelled = true;
     };
-  }, [device.height, device.width, renderedPreviewUrl, sourceImageUrl, subtitle, template, templateImageUrls, title]);
+  }, [height, previewSize.height, previewSize.renderScale, previewSize.width, renderedPreviewUrl, sourceImageUrl, subtitle, template, templateImageUrls, title, width]);
+
+  useEffect(() => {
+    return () => {
+      layerDragRef.current = null;
+    };
+  }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="max-h-[760px] w-auto max-w-full"
-      role="img"
-      aria-label={`${slotId} live preview`}
-    />
+    <div
+      ref={overlayRef}
+      className="relative w-full"
+      style={{ maxWidth: `${previewSize.width}px`, aspectRatio: `${previewSize.width} / ${previewSize.height}` }}
+    >
+      <canvas
+        ref={canvasRef}
+        className="h-full w-full"
+        role="img"
+        aria-label={`${slotId} live preview`}
+      />
+
+      {editable ? (
+        <div className="pointer-events-none absolute inset-0">
+          {editableLayers.map((layer) => {
+            const isSelectedLayer = selectedElementId === layer.id;
+            return (
+              <div
+                key={layer.id}
+                className={`pointer-events-auto absolute cursor-move rounded-md border ${
+                  isSelectedLayer
+                    ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(14,165,233,0.45)]'
+                    : layer.kind === 'text'
+                      ? 'border-amber-300/90 bg-amber-500/10'
+                      : 'border-cyan-300/90 bg-cyan-500/10'
+                }`}
+                style={{
+                  left: `${(layer.x / width) * 100}%`,
+                  top: `${(layer.y / height) * 100}%`,
+                  width: `${(layer.w / width) * 100}%`,
+                  height: `${(layer.h / height) * 100}%`
+                }}
+                onPointerDown={(event) => handleLayerPointerDown(event, layer)}
+                onPointerMove={handleLayerPointerMove}
+                onPointerUp={handleLayerPointerEnd}
+                onPointerCancel={handleLayerPointerEnd}
+              >
+                <div className={`pointer-events-none absolute left-1 top-1 rounded px-1 py-0.5 text-[9px] font-medium ${
+                  isSelectedLayer
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background/90 text-foreground'
+                }`}
+                >
+                  {layer.name}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
 });
