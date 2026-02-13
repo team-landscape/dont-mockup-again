@@ -36,25 +36,6 @@ async function copyRenderedAssets(renderDir, outputDir) {
   }
 }
 
-async function writeMetadata(projectDoc, outputDir) {
-  const copyMap = projectDoc.copy?.keys || {};
-  const locales = projectDoc.project?.locales || [];
-  const platforms = projectDoc.project?.platforms || [];
-
-  for (const platform of platforms) {
-    for (const locale of locales) {
-      const dir = path.join(outputDir, 'metadata', platform, locale);
-      await fs.mkdir(dir, { recursive: true });
-
-      for (const [key, localeMap] of Object.entries(copyMap)) {
-        const value = localeMap[locale] || '';
-        const fileSafe = key.replaceAll('.', '_');
-        await fs.writeFile(path.join(dir, `${fileSafe}.txt`), value);
-      }
-    }
-  }
-}
-
 function escapeCsvField(value) {
   const raw = String(value ?? '');
   if (/[",\n\r]/.test(raw)) {
@@ -184,7 +165,6 @@ export async function exportProject(projectPath, options = {}) {
 
   await fs.mkdir(outputDir, { recursive: true });
   await copyRenderedAssets(renderDir, outputDir);
-  await writeMetadata(doc, outputDir);
   const metadataCsvPath = metadataCsvEnabled ? await writeMetadataCsv(doc, outputDir) : null;
 
   if (fastlaneLayout) {
