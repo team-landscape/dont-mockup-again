@@ -273,7 +273,6 @@ const SLOT_CANVAS_HEIGHT = 16000;
 const SLOT_CANVAS_PREVIEW_MAX_HEIGHT = 720;
 const SLOT_CANVAS_CARD_CHROME_HEIGHT = 40;
 const SLOT_CANVAS_GAP_X = 8;
-const SLOT_CANVAS_GAP_Y = 8;
 const SLOT_CANVAS_BASE_X = 9600;
 const SLOT_CANVAS_BASE_Y = 880;
 const SLOT_CANVAS_MIN_ZOOM = 0.45;
@@ -841,7 +840,7 @@ function resolveNextSlotIdentity(slots: Slot[]) {
   return { slotId, slotNumber };
 }
 
-function defaultSlotCanvasPosition(index: number, cardWidth: number, cardHeight: number): SlotCanvasPosition {
+function defaultSlotCanvasPosition(index: number, cardWidth: number): SlotCanvasPosition {
   return {
     x: SLOT_CANVAS_BASE_X + index * (cardWidth + SLOT_CANVAS_GAP_X),
     y: SLOT_CANVAS_BASE_Y
@@ -1421,7 +1420,7 @@ export function App() {
   const slotCanvasPositions = useMemo<Record<string, SlotCanvasPosition>>(() => {
     const next: Record<string, SlotCanvasPosition> = {};
     slots.forEach((slot, index) => {
-      next[slot.id] = defaultSlotCanvasPosition(index, slotCanvasCardSize.width, slotCanvasCardSize.height);
+      next[slot.id] = defaultSlotCanvasPosition(index, slotCanvasCardSize.width);
     });
     return next;
   }, [slotCanvasCardSize.height, slotCanvasCardSize.width, slots]);
@@ -3022,7 +3021,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     let maxY = Number.NEGATIVE_INFINITY;
 
     for (const [index, item] of items.entries()) {
-      const position = positions[item.slot.id] || defaultSlotCanvasPosition(index, cardWidth, cardHeight);
+      const position = positions[item.slot.id] || defaultSlotCanvasPosition(index, cardWidth);
       minX = Math.min(minX, position.x);
       minY = Math.min(minY, position.y);
       maxX = Math.max(maxX, position.x + cardWidth);
@@ -3174,7 +3173,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     let minDistance = Number.POSITIVE_INFINITY;
 
     for (let index = 0; index < items.length; index += 1) {
-      const position = defaultSlotCanvasPosition(index, cardWidth, cardHeight);
+      const position = defaultSlotCanvasPosition(index, cardWidth);
       const centerX = position.x + cardWidth / 2;
       const centerY = position.y + cardHeight / 2;
       const distance = ((dragCenterX - centerX) ** 2) + ((dragCenterY - centerY) ** 2);
@@ -3425,7 +3424,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     if (event.detail > 1) return;
     const slotIndex = items.findIndex((item) => item.slot.id === slotId);
     if (slotIndex < 0) return;
-    const basePosition = positions[slotId] || defaultSlotCanvasPosition(slotIndex, cardWidth, cardHeight);
+    const basePosition = positions[slotId] || defaultSlotCanvasPosition(slotIndex, cardWidth);
     const worldPoint = toWorldPoint(event.clientX, event.clientY);
     if (!worldPoint) return;
 
@@ -3449,7 +3448,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     event.currentTarget.setPointerCapture(event.pointerId);
     event.stopPropagation();
     event.preventDefault();
-  }, [cancelFocusAnimation, cancelScheduledDragPreview, cardHeight, cardWidth, commitDragPreview, editingSlotId, items, onSelect, positions, toWorldPoint]);
+  }, [cancelFocusAnimation, cancelScheduledDragPreview, cardWidth, commitDragPreview, editingSlotId, items, onSelect, positions, toWorldPoint]);
 
   const handleDragPointerMove = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
     const state = dragRef.current;
@@ -3647,7 +3646,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
       <div ref={boardTransformRef} className="absolute left-0 top-0" style={boardTransformStyle}>
         <div className="relative" style={boardContentStyle}>
           {items.map((item, index) => {
-            const position = positions[item.slot.id] || defaultSlotCanvasPosition(index, cardWidth, cardHeight);
+            const position = positions[item.slot.id] || defaultSlotCanvasPosition(index, cardWidth);
             const dragState = dragRef.current;
             const isDragging = dragPreview?.slotId === item.slot.id;
             const isSelected = selectedSlot === item.slot.id;
@@ -3672,7 +3671,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
               }
 
               if (previewIndex !== index) {
-                const previewPosition = defaultSlotCanvasPosition(previewIndex, cardWidth, cardHeight);
+                const previewPosition = defaultSlotCanvasPosition(previewIndex, cardWidth);
                 displacedOffsetX = previewPosition.x - position.x;
                 displacedOffsetY = previewPosition.y - position.y;
               }
