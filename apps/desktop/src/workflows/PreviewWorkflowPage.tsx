@@ -1,5 +1,12 @@
 import type { ReactNode } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '../components/ui/select';
 
 interface SelectOption {
   value: string;
@@ -7,6 +14,9 @@ interface SelectOption {
 }
 
 interface PreviewWorkflowPageProps {
+  deviceOptions: SelectOption[];
+  selectedDevice: string;
+  onSelectDevice: (value: string) => void;
   localeOptions: SelectOption[];
   slotOptions: SelectOption[];
   previewPath: string;
@@ -14,6 +24,9 @@ interface PreviewWorkflowPageProps {
 }
 
 export function PreviewWorkflowPage({
+  deviceOptions,
+  selectedDevice,
+  onSelectDevice,
   localeOptions,
   slotOptions,
   previewPath,
@@ -27,6 +40,21 @@ export function PreviewWorkflowPage({
           <CardDescription className="truncate">{previewPath || 'No image loaded'}</CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-3 max-w-[320px]">
+            <Select value={selectedDevice} onValueChange={onSelectDevice}>
+              <SelectTrigger>
+                <SelectValue placeholder="Device" />
+              </SelectTrigger>
+              <SelectContent>
+                {deviceOptions.map((device) => (
+                  <SelectItem key={device.value} value={device.value}>
+                    {device.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="space-y-3">
             {localeOptions.map((locale) => (
               <div key={locale.value} className="rounded-lg border bg-muted/20 p-3">

@@ -3118,6 +3118,9 @@ export function App() {
 
           {activeStep === 'preview' ? (
             <PreviewWorkflowPage
+              deviceOptions={doc.project.devices.map((device) => ({ value: device.id, label: device.id }))}
+              selectedDevice={selectedDevice}
+              onSelectDevice={setSelectedDevice}
               localeOptions={doc.project.locales.map((locale) => ({ value: locale, label: locale }))}
               slotOptions={doc.project.slots.map((slot) => ({ value: slot.id, label: slot.name }))}
               previewPath={previewPath}
