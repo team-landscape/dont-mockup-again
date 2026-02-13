@@ -345,6 +345,14 @@ async function pickOutputDir() {
   return invokeCommand<string | null>('pick_output_dir', {});
 }
 
+async function pickProjectFile() {
+  return invokeCommand<string | null>('pick_project_file', {});
+}
+
+async function pickProjectSavePath(defaultFileName: string) {
+  return invokeCommand<string | null>('pick_project_save_path', { defaultFileName });
+}
+
 function browserFileToBase64(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -1172,7 +1180,6 @@ export function App() {
     }
     return normalized;
   }, [defaultExportDir, homeDir]);
-  const hasProjectPath = projectPath.trim().length > 0;
 
   const previewRenderDir = useMemo(() => 'dist-render', []);
 
@@ -1431,25 +1438,6 @@ export function App() {
       });
   }, []);
 
-  useEffect(() => {
-    if (!isTauriRuntime() || !hasProjectPath) {
-      return;
-    }
-
-    readTextFile(projectPath)
-      .then((text) => {
-        const parsed = extractJson(text);
-        if (!parsed) return;
-
-        const normalized = normalizeProject(parsed);
-        setDoc(normalized);
-        setOutputDir(resolveOutputDir(normalized.pipelines.export.outputDir));
-      })
-      .catch(() => {
-        // A missing project file is expected on first launch.
-      });
-  }, [hasProjectPath, projectPath, resolveOutputDir]);
-
   function updateDoc(mutator: (next: StoreShotDoc) => void) {
     setDoc((current) => {
       const next = clone(current);
@@ -1493,25 +1481,29 @@ export function App() {
       setProjectError('Load is available only in desktop runtime.');
       return;
     }
-    if (!hasProjectPath) {
-      setProjectError('Project path is not ready yet. Try again in a moment.');
-      return;
-    }
 
     try {
+      const pickedPath = await pickProjectFile();
+      if (!pickedPath || !pickedPath.trim()) {
+        setProjectStatus('Load cancelled.');
+        setProjectError('');
+        return;
+      }
+
       await runWithBusy(async () => {
-        const text = await readTextFile(projectPath);
+        const text = await readTextFile(pickedPath);
         const parsed = extractJson(text);
         const normalized = normalizeProject(parsed);
         setDoc(normalized);
         setOutputDir(resolveOutputDir(normalized.pipelines.export.outputDir));
+        setProjectPath(pickedPath);
       }, {
         action: 'load-project',
         title: 'Loading Project',
         detail: 'Reading project file...'
       });
       setProjectError('');
-      setProjectStatus(`Loaded ${projectPath}`);
+      setProjectStatus(`Loaded ${pickedPath}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setProjectError(message);
@@ -1523,12 +1515,19 @@ export function App() {
       setProjectError('Save is available only in desktop runtime.');
       return;
     }
-    if (!hasProjectPath) {
-      setProjectError('Project path is not ready yet. Try again in a moment.');
-      return;
-    }
 
     try {
+      let targetPath = projectPath.trim();
+      if (!targetPath) {
+        const pickedPath = await pickProjectSavePath(DEFAULT_PROJECT_FILE_NAME);
+        if (!pickedPath || !pickedPath.trim()) {
+          setProjectStatus('Save cancelled.');
+          setProjectError('');
+          return;
+        }
+        targetPath = pickedPath;
+      }
+
       await runWithBusy(async () => {
         const next = clone(doc);
         next.project.slots = reorderSlots(next.project.slots);
@@ -1538,14 +1537,15 @@ export function App() {
         next.pipelines.localization.sourceLocale = next.project.locales.includes(sourceLocale)
           ? sourceLocale
           : (next.project.locales[0] || 'en-US');
-        await writeTextFile(projectPath, JSON.stringify(next, null, 2));
+        await writeTextFile(targetPath, JSON.stringify(next, null, 2));
+        setProjectPath(targetPath);
       }, {
         action: 'save-project',
         title: 'Saving Project',
         detail: 'Writing project changes...'
       });
       setProjectError('');
-      setProjectStatus(`Saved ${projectPath}`);
+      setProjectStatus(`Saved ${targetPath}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setProjectError(message);
@@ -1557,8 +1557,9 @@ export function App() {
     setDoc(fresh);
     setOutputDir(resolveOutputDir(fresh.pipelines.export.outputDir));
     setIssues([]);
+    setProjectPath('');
     setProjectError('');
-    setProjectStatus('Started a new project in memory. Save to persist changes.');
+    setProjectStatus('Started a new project (unsaved). Use Save to choose a file.');
   }
 
   function togglePlatform(platform: Platform, checked: boolean) {
@@ -1689,7 +1690,7 @@ export function App() {
 
   const persistProjectSnapshot = useCallback(async (options?: { syncTemplateMain?: boolean }) => {
     if (!projectPath.trim()) {
-      throw new Error('Project path is not ready yet.');
+      throw new Error('No project file selected. Save project first.');
     }
 
     const next = clone(doc);
@@ -3100,10 +3101,10 @@ export function App() {
               </CardHeader>
               <CardContent className="grid gap-2 pt-0">
                 <p className="truncate text-[11px] text-muted-foreground" title={projectPath || ''}>
-                  {projectPath || 'Project path: preparing...'}
+                  {projectPath || 'Project path: unsaved project'}
                 </p>
-                <Button size="sm" disabled={isBusy || !hasProjectPath} variant="outline" onClick={handleLoadProject}><FolderDown className="mr-1 h-3.5 w-3.5" />Load</Button>
-                <Button size="sm" disabled={isBusy || !hasProjectPath} variant="outline" onClick={handleSaveProject}><Save className="mr-1 h-3.5 w-3.5" />Save</Button>
+                <Button size="sm" disabled={isBusy} variant="outline" onClick={handleLoadProject}><FolderDown className="mr-1 h-3.5 w-3.5" />Load</Button>
+                <Button size="sm" disabled={isBusy} variant="outline" onClick={handleSaveProject}><Save className="mr-1 h-3.5 w-3.5" />Save</Button>
                 <Button size="sm" disabled={isBusy} onClick={handleCreateNewProject}><FolderUp className="mr-1 h-3.5 w-3.5" />New</Button>
                 <Button size="sm" variant="secondary" onClick={handleOpenOnboarding}>Setup</Button>
                 {projectStatus ? (

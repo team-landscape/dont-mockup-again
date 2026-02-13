@@ -302,6 +302,28 @@ fn pick_output_dir() -> Option<String> {
 }
 
 #[tauri::command]
+fn pick_project_file() -> Option<String> {
+    rfd::FileDialog::new()
+        .add_filter("Store Metadata Studio Project", &["json"])
+        .pick_file()
+        .map(|path| path.to_string_lossy().replace('\\', "/"))
+}
+
+#[tauri::command]
+fn pick_project_save_path(default_file_name: Option<String>) -> Option<String> {
+    let file_name = default_file_name
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "project.storeshot.json".to_string());
+
+    rfd::FileDialog::new()
+        .add_filter("Store Metadata Studio Project", &["json"])
+        .set_file_name(&file_name)
+        .save_file()
+        .map(|path| path.to_string_lossy().replace('\\', "/"))
+}
+
+#[tauri::command]
 fn list_system_fonts() -> Result<Vec<String>, String> {
     Ok(collect_system_fonts().unwrap_or_else(|_| fallback_font_list()))
 }
@@ -329,6 +351,8 @@ fn main() {
             write_file_base64,
             get_default_export_dir,
             pick_output_dir,
+            pick_project_file,
+            pick_project_save_path,
             list_system_fonts
         ])
         .run(tauri::generate_context!())
