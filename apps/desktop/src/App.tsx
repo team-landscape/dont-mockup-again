@@ -20,7 +20,7 @@ import { useBusyRunner } from './hooks/useBusyRunner';
 import { useExportAction } from './hooks/useExportAction';
 import { useProjectFileActions } from './hooks/useProjectFileActions';
 import { useProjectImageUploadHandlers } from './hooks/useProjectImageUploadHandlers';
-import { parseJsonOrNull } from './lib/json-utils';
+import { usePipelineActions } from './hooks/usePipelineActions';
 import { resolveOutputDir as resolveOutputDirPath } from './lib/output-dir';
 import { loadPreviewMatrixFromDir, loadSlotPreviewMapFromDir } from './lib/preview-file-loaders';
 import {
@@ -34,8 +34,6 @@ import {
   isTauriRuntime,
   listSystemFonts,
   pickOutputDir,
-  readTextFile,
-  runPipeline,
   writeTextFile
 } from './lib/desktop-runtime';
 import {
@@ -430,26 +428,6 @@ export function App() {
     setExportError
   });
 
-  async function handleRunLocalization() {
-    await runWithBusy(async ({ setDetail }) => {
-      setDetail('Saving project config...');
-      await persistProjectSnapshot();
-
-      setDetail('Running localization pipeline...');
-      await runPipeline('localize', [projectPath, '--write']);
-
-      setDetail('Reloading localized copy...');
-      const text = await readTextFile(projectPath);
-      const parsed = parseJsonOrNull(text);
-      const normalized = normalizeProject(parsed);
-      setDoc(normalized);
-    }, {
-      action: 'localize',
-      title: 'Localization Processing',
-      detail: 'Preparing localization run...'
-    });
-  }
-
   async function loadSlotPreviewMap() {
     const result = await loadSlotPreviewMapFromDir({
       slots: doc.project.slots,
@@ -491,35 +469,16 @@ export function App() {
     }
   }
 
-  async function handleRender() {
-    await runWithBusy(async ({ setDetail }) => {
-      setDetail('Saving project config...');
-      await persistProjectSnapshot();
-      setDetail('Rendering preview images...');
-      await runPipeline('render', [projectPath, previewRenderDir]);
-      await loadSlotPreviewMap();
-      await loadPreviewMatrix();
-    }, {
-      action: 'render',
-      title: 'Rendering',
-      detail: 'Generating preview images...'
-    });
-  }
-
-  async function handleValidate() {
-    await runWithBusy(async ({ setDetail }) => {
-      setDetail('Saving project config...');
-      await persistProjectSnapshot();
-      setDetail('Checking project rules...');
-      const output = await runPipeline('validate', [projectPath]);
-      const parsed = parseJsonOrNull(output) as { issues?: ValidateIssue[] } | null;
-      setIssues(parsed?.issues || []);
-    }, {
-      action: 'validate',
-      title: 'Validation',
-      detail: 'Checking project rules...'
-    });
-  }
+  const { handleRunLocalization, handleRender, handleValidate, handleRefreshPreview } = usePipelineActions({
+    projectPath,
+    previewRenderDir,
+    runWithBusy,
+    persistProjectSnapshot,
+    loadSlotPreviewMap,
+    loadPreviewMatrix,
+    setDoc,
+    setIssues
+  });
 
   const handlePickOutputDir = useCallback(async () => {
     if (!isTauriRuntime()) {
@@ -535,17 +494,6 @@ export function App() {
       // Keep output path editing resilient if folder picker fails.
     }
   }, []);
-
-  async function handleRefreshPreview() {
-    await runWithBusy(async () => {
-      await loadSlotPreviewMap();
-      await loadPreviewMatrix();
-    }, {
-      action: 'refresh-preview',
-      title: 'Refreshing Preview',
-      detail: 'Loading latest rendered images...'
-    });
-  }
 
   function handleOpenOnboarding() {
     setIsOnboardingOpen(true);
