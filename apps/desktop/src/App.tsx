@@ -96,7 +96,7 @@ interface TemplateTextElement extends TemplateElementBase {
 
 interface TemplateImageElement extends TemplateElementBase {
   kind: 'image';
-  source: 'slotImage' | 'customImage';
+  source: 'none' | 'slotImage' | 'customImage';
   imagePath: string;
   fit: 'cover' | 'contain';
   cornerRadius: number;
@@ -459,7 +459,7 @@ function createDefaultTemplateElements(main: Pick<TemplateMain, 'frame' | 'text'
       visible: true,
       opacity: 100,
       rotation: 0,
-      source: 'slotImage',
+      source: 'none',
       imagePath: '',
       fit: main.shotPlacement.fit,
       cornerRadius: main.shotPlacement.cornerRadius,
@@ -585,7 +585,9 @@ function normalizeTemplateElements(raw: unknown, defaults: TemplateElement[]): T
       const normalizedImage: TemplateImageElement = {
         ...base,
         kind: 'image',
-        source: source.source === 'customImage' ? 'customImage' : 'slotImage',
+        source: source.source === 'slotImage' || source.source === 'customImage' || source.source === 'none'
+          ? source.source
+          : 'none',
         imagePath: typeof source.imagePath === 'string' ? source.imagePath : '',
         fit: source.fit === 'contain' ? 'contain' : 'cover',
         cornerRadius: Math.max(0, asNumber(source.cornerRadius, 0)),
@@ -1934,7 +1936,7 @@ export function App() {
         visible: true,
         opacity: 100,
         rotation: 0,
-        source: 'slotImage',
+        source: 'none',
         imagePath: '',
         fit: 'cover',
         cornerRadius: 48,
@@ -2202,13 +2204,14 @@ export function App() {
                     current.kind === 'image'
                       ? {
                         ...current,
-                        source: value as 'slotImage' | 'customImage'
+                        source: value as 'none' | 'slotImage' | 'customImage'
                       }
                       : current
                   ))}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Choose source (required)</SelectItem>
                     <SelectItem value="slotImage">Selected slot image</SelectItem>
                     <SelectItem value="customImage">Custom image</SelectItem>
                   </SelectContent>
@@ -2227,9 +2230,13 @@ export function App() {
                       Choose Image
                     </Button>
                   </>
-                ) : (
+                ) : imageElement.source === 'slotImage' ? (
                   <p className="truncate rounded-md border bg-muted/60 p-2 text-xs">
                     {selectedSlotData?.sourceImagePath || 'No slot image selected'}
+                  </p>
+                ) : (
+                  <p className="rounded-md border border-dashed bg-muted/40 p-2 text-xs text-muted-foreground">
+                    Source is required. Choose `Selected slot image` or `Custom image`.
                   </p>
                 )}
               </div>
@@ -4852,10 +4859,10 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
           ? (
             templateImageUrls[slotTemplateImageKey(slotId, activeLayer.id)]
             || templateImageUrls[globalTemplateImageKey(activeLayer.id)]
-            || sourceImageUrl
-            || renderedPreviewUrl
           )
-          : (sourceImageUrl || renderedPreviewUrl);
+          : activeLayer.source === 'slotImage'
+            ? sourceImageUrl
+            : '';
 
         if (imageSource) {
           try {
@@ -4892,7 +4899,12 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
           context.font = `${Math.max(20, Math.round(width * 0.024))}px "SF Pro", sans-serif`;
           context.textAlign = 'center';
           context.textBaseline = 'middle';
-          context.fillText('Select image', activeLayer.x + activeLayer.w / 2, activeLayer.y + activeLayer.h / 2);
+          const missingMessage = activeLayer.source === 'none'
+            ? 'Select source'
+            : activeLayer.source === 'customImage'
+              ? 'Select custom image'
+              : 'Select slot image';
+          context.fillText(missingMessage, activeLayer.x + activeLayer.w / 2, activeLayer.y + activeLayer.h / 2);
           context.restore();
         }
 
