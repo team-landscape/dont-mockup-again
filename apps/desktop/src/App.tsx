@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition, type CSSProperties, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition, type CSSProperties, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react';
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import { ArrowDown, ArrowUp, ChevronDown, FolderDown, FolderUp, Plus, RefreshCcw, Save, Trash2 } from 'lucide-react';
 
@@ -868,6 +868,7 @@ export function App() {
   const templateImageTargetRef = useRef<string | null>(null);
   const slotSourceEntriesRef = useRef<Array<{ id: string; sourceImagePath: string }>>([]);
   const [, startSlotTransition] = useTransition();
+  const [, startTemplateTransition] = useTransition();
 
   const renderDir = useMemo(() => `${outputDir}-render`, [outputDir]);
 
@@ -904,6 +905,7 @@ export function App() {
   );
 
   const llmConfig = doc.pipelines.localization.llmCli || clone(defaultLlmConfig);
+  const deferredTemplateMain = useDeferredValue(doc.template.main);
   const templateElements = useMemo(
     () => [...doc.template.main.elements].sort((a, b) => a.z - b.z),
     [doc.template.main.elements]
@@ -1430,16 +1432,16 @@ export function App() {
       renderedPreviewUrl: slotPreviewUrls[slot.id],
       sourceImageUrl: slotSourceUrls[slot.id],
       template: {
-        ...doc.template.main,
+        ...deferredTemplateMain,
         background: {
-          ...doc.template.main.background,
-          ...(doc.template.main.slotBackgrounds[slot.id] || {})
+          ...deferredTemplateMain.background,
+          ...(deferredTemplateMain.slotBackgrounds[slot.id] || {})
         }
       }
     }))
   ), [
     doc.copy.keys,
-    doc.template.main,
+    deferredTemplateMain,
     selectedLocale,
     slotPreviewUrls,
     slotSourceUrls,
@@ -1480,19 +1482,21 @@ export function App() {
   }, [selectedLocale, selectedSubtitleKey, updateCopyByKey]);
 
   const updateTemplateMain = useCallback((mutator: (main: TemplateMain) => void) => {
-    setDoc((current) => {
-      const nextMain = clone(current.template.main);
-      mutator(nextMain);
+    startTemplateTransition(() => {
+      setDoc((current) => {
+        const nextMain = clone(current.template.main);
+        mutator(nextMain);
 
-      return {
-        ...current,
-        template: {
-          ...current.template,
-          main: syncTemplateLegacyFields(nextMain)
-        }
-      };
+        return {
+          ...current,
+          template: {
+            ...current.template,
+            main: syncTemplateLegacyFields(nextMain)
+          }
+        };
+      });
     });
-  }, []);
+  }, [startTemplateTransition]);
 
   const updateTemplateBackground = useCallback((patch: Partial<TemplateMain['background']>) => {
     updateTemplateMain((main) => {
