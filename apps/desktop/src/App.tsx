@@ -1,4 +1,5 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition, type CSSProperties, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react';
+import { flushSync } from 'react-dom';
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import { ArrowDown, ArrowUp, ChevronDown, FolderDown, FolderUp, Loader2, Plus, Save, Trash2 } from 'lucide-react';
 
@@ -1159,10 +1160,12 @@ export function App() {
     const updateTitle = (value: string) => setBusyTitle(value);
     const updateDetail = (value: string) => setBusyDetail(value);
 
-    setBusyAction(options.action || '');
-    setBusyTitle(options.title || 'Processing');
-    setBusyDetail(options.detail || 'Please wait...');
-    setIsBusy(true);
+    flushSync(() => {
+      setBusyAction(options.action || '');
+      setBusyTitle(options.title || 'Processing');
+      setBusyDetail(options.detail || 'Please wait...');
+      setIsBusy(true);
+    });
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     if (typeof window !== 'undefined') {
       await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
@@ -2318,8 +2321,8 @@ export function App() {
             <LocalizationWorkflowPage
               sourceLocale={doc.pipelines.localization.sourceLocale || doc.project.locales[0] || 'en-US'}
               isBusy={isBusy}
-              isRunningLocalization={isBusy && busyAction === 'localize'}
-              localizationBusyLabel={isBusy && busyAction === 'localize' ? busyDetail : ''}
+              isRunningLocalization={isBusy}
+              localizationBusyLabel={isBusy ? busyDetail : ''}
               llmConfig={llmConfig}
               slots={slots.map((slot) => ({ id: slot.id, name: slot.name }))}
               locales={doc.project.locales}
