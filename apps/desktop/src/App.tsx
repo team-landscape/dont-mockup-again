@@ -305,6 +305,8 @@ const SLOT_CANVAS_BASE_Y = 880;
 const SLOT_CANVAS_MIN_ZOOM = 0.45;
 const SLOT_CANVAS_MAX_ZOOM = 2.4;
 const PINCH_ZOOM_ACCELERATION = 1.35;
+const TEMPLATE_REFERENCE_WIDTH = 1290;
+const TEMPLATE_REFERENCE_HEIGHT = 2796;
 
 async function runPipeline(command: string, args: string[]) {
   return invokeCommand<string>('run_pipeline', { command, args });
@@ -488,6 +490,58 @@ function resolveTextLayerWithinSlot(layer: TemplateTextElement, slotWidth: numbe
     widthPercent: nextWidthPercent,
     x: nextX,
     w: nextWidth
+  };
+}
+
+function resolveImageLayerForPreview(
+  layer: TemplateImageElement,
+  slotWidth: number,
+  slotHeight: number
+): TemplateImageElement {
+  const safeSlotWidth = Math.max(1, slotWidth);
+  const safeSlotHeight = Math.max(1, slotHeight);
+  if (
+    safeSlotWidth === TEMPLATE_REFERENCE_WIDTH
+    && safeSlotHeight === TEMPLATE_REFERENCE_HEIGHT
+  ) {
+    return layer;
+  }
+
+  const scaleX = safeSlotWidth / TEMPLATE_REFERENCE_WIDTH;
+  const scaleY = safeSlotHeight / TEMPLATE_REFERENCE_HEIGHT;
+  const scale = Math.max(0.0001, Math.min(scaleX, scaleY));
+  const scaledWidth = Math.max(1, Math.round(layer.w * scaleX));
+  const scaledHeight = Math.max(1, Math.round(layer.h * scaleY));
+  const scaledX = clampNumber(Math.round(layer.x * scaleX), 0, Math.max(0, safeSlotWidth - scaledWidth));
+  const scaledY = clampNumber(Math.round(layer.y * scaleY), 0, Math.max(0, safeSlotHeight - scaledHeight));
+  const scaledCornerRadius = Math.max(0, Math.round(layer.cornerRadius * scale));
+  const scaledFrameInset = Math.max(0, Math.round(layer.frameInset * scale));
+  const scaledFrameRadius = Math.max(0, Math.round(layer.frameRadius * scale));
+  const scaledFrameWidth = Math.max(1, Math.round(layer.frameWidth * scale));
+
+  if (
+    layer.x === scaledX
+    && layer.y === scaledY
+    && layer.w === scaledWidth
+    && layer.h === scaledHeight
+    && layer.cornerRadius === scaledCornerRadius
+    && layer.frameInset === scaledFrameInset
+    && layer.frameRadius === scaledFrameRadius
+    && layer.frameWidth === scaledFrameWidth
+  ) {
+    return layer;
+  }
+
+  return {
+    ...layer,
+    x: scaledX,
+    y: scaledY,
+    w: scaledWidth,
+    h: scaledHeight,
+    cornerRadius: scaledCornerRadius,
+    frameInset: scaledFrameInset,
+    frameRadius: scaledFrameRadius,
+    frameWidth: scaledFrameWidth
   };
 }
 
@@ -2117,6 +2171,7 @@ export function App() {
             template={template}
             templateImageUrls={templateImageUrls}
             device={selectedDeviceSpec}
+            scaleImageToDevice
           />
         </div>
       </button>
@@ -4718,6 +4773,7 @@ interface SlotRenderPreviewProps {
   template: TemplateMain;
   templateImageUrls: Record<string, string>;
   device: Device;
+  scaleImageToDevice?: boolean;
   editable?: boolean;
   selectedElementId?: string;
   onSelectElement?: (elementId: string) => void;
@@ -4878,8 +4934,19 @@ function resolvePreviewLayer(
   layer: TemplateElement,
   title: string,
   subtitle: string,
-  slotWidth: number
+  slotWidth: number,
+  slotHeight: number,
+  options?: {
+    scaleImageToDevice?: boolean;
+  }
 ): TemplateElement {
+  if (layer.kind === 'image') {
+    if (!options?.scaleImageToDevice) {
+      return layer;
+    }
+    return resolveImageLayerForPreview(layer, slotWidth, slotHeight);
+  }
+
   if (layer.kind !== 'text') {
     return layer;
   }
@@ -4987,7 +5054,9 @@ async function renderTemplatePreviewBase64(params: {
   const visibleLayers = [...template.elements]
     .filter((item) => item.visible !== false)
     .sort((a, b) => a.z - b.z);
-  const previewLayers = visibleLayers.map((layer) => resolvePreviewLayer(context, layer, title, subtitle, width));
+  const previewLayers = visibleLayers.map((layer) => resolvePreviewLayer(context, layer, title, subtitle, width, height, {
+    scaleImageToDevice: true
+  }));
 
   context.setTransform(1, 0, 0, 1, 0, 0);
   context.clearRect(0, 0, width, height);
@@ -5118,6 +5187,7 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
   template,
   templateImageUrls,
   device,
+  scaleImageToDevice = false,
   editable = false,
   selectedElementId,
   onSelectElement,
@@ -5167,8 +5237,8 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
       return editableLayers;
     }
 
-    return editableLayers.map((layer) => resolvePreviewLayer(context, layer, title, subtitle, width));
-  }, [editableLayers, subtitle, title, width]);
+    return editableLayers.map((layer) => resolvePreviewLayer(context, layer, title, subtitle, width, height, { scaleImageToDevice }));
+  }, [editableLayers, height, scaleImageToDevice, subtitle, title, width]);
 
   const handleLayerPointerDown = useCallback((
     event: ReactPointerEvent<HTMLDivElement>,
