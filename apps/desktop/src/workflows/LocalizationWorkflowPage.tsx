@@ -22,6 +22,13 @@ function LabeledField({ label, children }: LabeledFieldProps) {
   );
 }
 
+const appMetadataFields = [
+  { key: 'app.title', label: 'Title', multiline: false },
+  { key: 'app.subtitle', label: 'Subtitle', multiline: false },
+  { key: 'app.description', label: 'Description', multiline: true },
+  { key: 'app.patchNote', label: 'Patch Note', multiline: true }
+] as const;
+
 interface LlmConfigValue {
   command: string;
   timeoutSec: number;
@@ -99,6 +106,13 @@ export function LocalizationWorkflowPage({
             </div>
 
             <div className="rounded-md border p-3">
+              <p className="mb-1 text-sm font-medium">Localized App Metadata</p>
+              <p className="text-xs text-muted-foreground">
+                App title/subtitle/description/patch note values in this editor are included in localization runs.
+              </p>
+            </div>
+
+            <div className="rounded-md border p-3">
               <p className="mb-3 text-sm font-medium">Local LLM CLI Config</p>
               <div className="grid gap-3">
                 <LabeledField label="Command">
@@ -160,6 +174,35 @@ export function LocalizationWorkflowPage({
                     </div>
                   </div>
                 ))}
+
+                <div className="rounded-md border p-3">
+                  <p className="mb-2 text-xs font-semibold text-muted-foreground">APP METADATA</p>
+                  <div className="space-y-3">
+                    {appMetadataFields.map((field) => (
+                      <div key={field.key} className="space-y-2">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{field.label}</p>
+                        <div className="grid gap-2 md:grid-cols-2">
+                          {locales.map((locale) => (
+                            <LabeledField key={`${field.key}:${locale}`} label={locale}>
+                              {field.multiline ? (
+                                <Textarea
+                                  value={getCopyValue(field.key, locale)}
+                                  onChange={(event) => onCopyChange(field.key, locale, event.target.value)}
+                                  className="min-h-[100px]"
+                                />
+                              ) : (
+                                <Input
+                                  value={getCopyValue(field.key, locale)}
+                                  onChange={(event) => onCopyChange(field.key, locale, event.target.value)}
+                                />
+                              )}
+                            </LabeledField>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </ScrollArea>
           </CardContent>

@@ -725,6 +725,16 @@ function createDefaultProject(): StoreShotDoc {
     },
     copy: {
       keys: {
+        'app.title': { 'en-US': 'Focus Habit Tracker', 'ko-KR': '포커스 습관 트래커' },
+        'app.subtitle': { 'en-US': 'Build better routines daily', 'ko-KR': '매일 더 나은 루틴 만들기' },
+        'app.description': {
+          'en-US': 'Build routines with simple daily actions, progress insights, and reminders that keep your momentum going.',
+          'ko-KR': '간단한 일일 액션, 진행 지표, 리마인더로 루틴을 만들고 꾸준함을 이어가세요.'
+        },
+        'app.patchNote': {
+          'en-US': 'Bug fixes and performance improvements for a smoother onboarding and faster loading.',
+          'ko-KR': '온보딩 안정성과 로딩 속도를 개선하기 위한 버그 수정 및 성능 향상이 포함되었습니다.'
+        },
         'slot1.title': { 'en-US': 'Clean in 5 minutes', 'ko-KR': '하루 5분이면 충분해요' },
         'slot1.subtitle': { 'en-US': 'Stay on track daily', 'ko-KR': '매일 작게 시작해도 루틴이 됩니다' },
         'slot2.title': { 'en-US': 'Build better habits', 'ko-KR': '작은 습관으로 큰 변화를' },
