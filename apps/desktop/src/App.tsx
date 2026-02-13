@@ -1178,6 +1178,8 @@ export function App() {
   function addSlot() {
     updateDoc((next) => {
       const existingIds = new Set(next.project.slots.map((slot) => slot.id));
+      const orderedSlots = [...next.project.slots].sort((a, b) => a.order - b.order);
+      const referenceSlot = orderedSlots.find((slot) => slot.id === 'slot1') || orderedSlots[0];
       let nextNumber = next.project.slots.reduce((max, slot) => {
         const match = slot.id.match(/^slot(\d+)$/);
         if (!match) return max;
@@ -1196,14 +1198,22 @@ export function App() {
         id: nextId,
         name: `슬롯 ${nextNumber}`,
         order: nextIndex,
-        sourceImagePath: `examples/assets/source/shot${Math.min(3, nextNumber)}.png`
+        sourceImagePath: referenceSlot?.sourceImagePath || `examples/assets/source/shot${Math.min(3, nextNumber)}.png`
       };
 
+      const referenceTitleKey = referenceSlot ? fieldKey(referenceSlot.id, 'title') : '';
+      const referenceSubtitleKey = referenceSlot ? fieldKey(referenceSlot.id, 'subtitle') : '';
+      const referenceTitleCopy = referenceTitleKey ? next.copy.keys[referenceTitleKey] || {} : {};
+      const referenceSubtitleCopy = referenceSubtitleKey ? next.copy.keys[referenceSubtitleKey] || {} : {};
+      const referenceBackground = referenceSlot
+        ? (next.template.main.slotBackgrounds[referenceSlot.id] || next.template.main.background)
+        : next.template.main.background;
+
       next.project.slots.push(newSlot);
-      next.copy.keys[fieldKey(newSlot.id, 'title')] = {};
-      next.copy.keys[fieldKey(newSlot.id, 'subtitle')] = {};
+      next.copy.keys[fieldKey(newSlot.id, 'title')] = { ...referenceTitleCopy };
+      next.copy.keys[fieldKey(newSlot.id, 'subtitle')] = { ...referenceSubtitleCopy };
       next.template.main.slotBackgrounds[newSlot.id] = {
-        ...next.template.main.background
+        ...referenceBackground
       };
     });
   }
