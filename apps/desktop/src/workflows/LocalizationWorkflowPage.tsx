@@ -112,13 +112,6 @@ export function LocalizationWorkflowPage({
             </div>
 
             <div className="rounded-md border p-3">
-              <p className="mb-1 text-sm font-medium">Localized App Metadata</p>
-              <p className="text-xs text-muted-foreground">
-                App title/subtitle/description/patch note values in this editor are included in localization runs.
-              </p>
-            </div>
-
-            <div className="rounded-md border p-3">
               <p className="mb-3 text-sm font-medium">Local LLM CLI Config</p>
               <div className="grid gap-3">
                 <LabeledField label="Command">
