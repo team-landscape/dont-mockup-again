@@ -88,6 +88,7 @@ interface TemplateTextElement extends TemplateElementBase {
   weight: number;
   align: Align;
   autoSize: boolean;
+  widthPercent: number;
   color: string;
   backgroundColor: string;
   padding: number;
@@ -446,6 +447,28 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
+function clampTextWidthPercent(value: number) {
+  if (!Number.isFinite(value)) return 100;
+  return clampNumber(value, 1, 100);
+}
+
+function resolveTextWidthFromPercent(percent: number, slotWidth: number) {
+  const normalizedPercent = clampTextWidthPercent(percent);
+  return Math.max(1, Math.round((Math.max(1, slotWidth) * normalizedPercent) / 100));
+}
+
+function resolveTextLayerWithinSlot(layer: TemplateTextElement, slotWidth: number): TemplateTextElement {
+  const nextWidthPercent = clampTextWidthPercent(layer.widthPercent);
+  const nextWidth = resolveTextWidthFromPercent(nextWidthPercent, slotWidth);
+  const nextX = clampNumber(layer.x, 0, Math.max(0, Math.max(1, slotWidth) - nextWidth));
+  return {
+    ...layer,
+    widthPercent: nextWidthPercent,
+    x: nextX,
+    w: nextWidth
+  };
+}
+
 function createDefaultTemplateElements(main: Pick<TemplateMain, 'frame' | 'text' | 'shotPlacement'>): TemplateElement[] {
   return [
     {
@@ -475,7 +498,7 @@ function createDefaultTemplateElements(main: Pick<TemplateMain, 'frame' | 'text'
       id: 'text-title',
       name: 'Title',
       kind: 'text',
-      x: main.text.title.x,
+      x: 0,
       y: main.text.title.y,
       w: main.text.title.w,
       h: main.text.title.h,
@@ -491,6 +514,7 @@ function createDefaultTemplateElements(main: Pick<TemplateMain, 'frame' | 'text'
       weight: main.text.title.weight,
       align: main.text.title.align,
       autoSize: true,
+      widthPercent: 100,
       color: '#f9fafb',
       backgroundColor: 'transparent',
       padding: 0,
@@ -500,7 +524,7 @@ function createDefaultTemplateElements(main: Pick<TemplateMain, 'frame' | 'text'
       id: 'text-subtitle',
       name: 'Subtitle',
       kind: 'text',
-      x: main.text.subtitle.x,
+      x: 0,
       y: main.text.subtitle.y,
       w: main.text.subtitle.w,
       h: main.text.subtitle.h,
@@ -516,6 +540,7 @@ function createDefaultTemplateElements(main: Pick<TemplateMain, 'frame' | 'text'
       weight: main.text.subtitle.weight,
       align: main.text.subtitle.align,
       autoSize: true,
+      widthPercent: 100,
       color: '#f9fafb',
       backgroundColor: 'transparent',
       padding: 0,
@@ -574,6 +599,7 @@ function normalizeTemplateElements(raw: unknown, defaults: TemplateElement[]): T
           weight: Math.max(100, asNumber(source.weight, 600)),
           align,
           autoSize: typeof source.autoSize === 'boolean' ? source.autoSize : true,
+          widthPercent: clampTextWidthPercent(asNumber(source.widthPercent, 100)),
           color: typeof source.color === 'string' && source.color.trim() ? source.color : '#f9fafb',
           backgroundColor: typeof source.backgroundColor === 'string' && source.backgroundColor.trim()
             ? source.backgroundColor
@@ -679,8 +705,15 @@ function normalizeSlotElements(
   return next;
 }
 
-function syncTemplateLegacyFields(main: TemplateMain): TemplateMain {
-  const sortedElements = [...main.elements].sort((a, b) => a.z - b.z);
+function syncTemplateLegacyFields(main: TemplateMain, slotWidth = 1290): TemplateMain {
+  const resolvedElements = [...main.elements]
+    .sort((a, b) => a.z - b.z)
+    .map((item) => (
+      item.kind === 'text'
+        ? resolveTextLayerWithinSlot(item, slotWidth)
+        : item
+    ));
+  const sortedElements = resolvedElements;
   const firstImage = sortedElements.find((item): item is TemplateImageElement => item.kind === 'image');
   const titleLayer = sortedElements.find(
     (item): item is TemplateTextElement => item.kind === 'text' && item.textSource === 'title'
@@ -756,8 +789,8 @@ function createDefaultProject(): StoreShotDoc {
     slotBackgrounds: normalizeSlotBackgrounds(defaultSlots, {}, defaultBackground),
     frame: { type: 'simpleRounded', enabled: true, inset: 80, radius: 80 },
     text: {
-      title: { x: 80, y: 120, w: 1130, h: 220, font: 'SF Pro', size: 88, weight: 700, align: 'left' },
-      subtitle: { x: 80, y: 330, w: 1130, h: 160, font: 'SF Pro', size: 48, weight: 500, align: 'left' }
+      title: { x: 0, y: 120, w: 1290, h: 220, font: 'SF Pro', size: 88, weight: 700, align: 'left' },
+      subtitle: { x: 0, y: 330, w: 1290, h: 160, font: 'SF Pro', size: 48, weight: 500, align: 'left' }
     },
     shotPlacement: { x: 120, y: 560, w: 1050, h: 2200, fit: 'cover', cornerRadius: 60 }
   };
@@ -1828,6 +1861,7 @@ export function App() {
   }, [activeStep, previewMatrixLoadKey]);
 
   const updateTemplateMain = useCallback((mutator: (main: TemplateMain) => void) => {
+    const slotWidth = Math.max(1, selectedDeviceSpec.width || 1290);
     startTemplateTransition(() => {
       setDoc((current) => {
         const nextMain = clone(current.template.main);
@@ -1837,12 +1871,12 @@ export function App() {
           ...current,
           template: {
             ...current.template,
-            main: syncTemplateLegacyFields(nextMain)
+            main: syncTemplateLegacyFields(nextMain, slotWidth)
           }
         };
       });
     });
-  }, [startTemplateTransition]);
+  }, [selectedDeviceSpec.width, startTemplateTransition]);
 
   const updateTemplateBackground = useCallback((patch: Partial<TemplateMain['background']>) => {
     updateTemplateMain((main) => {
@@ -1868,9 +1902,13 @@ export function App() {
   }, [selectedSlot, selectedSlotData, updateTemplateMain]);
 
   const moveTemplateElement = useCallback((elementId: string, x: number, y: number) => {
+    const slotWidth = Math.max(1, selectedDeviceSpec.width || 1290);
     updateTemplateElement(elementId, (current) => {
-      const nextX = Math.round(x);
+      const nextXRaw = Math.round(x);
       const nextY = Math.round(y);
+      const nextX = current.kind === 'text'
+        ? clampNumber(nextXRaw, 0, Math.max(0, slotWidth - resolveTextWidthFromPercent(current.widthPercent, slotWidth)))
+        : nextXRaw;
       if (current.x === nextX && current.y === nextY) {
         return current;
       }
@@ -1881,7 +1919,7 @@ export function App() {
         y: nextY
       };
     });
-  }, [updateTemplateElement]);
+  }, [selectedDeviceSpec.width, updateTemplateElement]);
 
   const addTemplateElement = useCallback((kind: TemplateElementKind) => {
     let createdId = '';
@@ -1899,13 +1937,14 @@ export function App() {
 
       const topZ = slotElements.reduce((max, item) => Math.max(max, item.z), 0);
       if (kind === 'text') {
+        const slotWidth = Math.max(1, selectedDeviceSpec.width || 1290);
         const newTextElement: TemplateTextElement = {
           id: createdId,
           name: `Text ${nextNumber}`,
           kind: 'text',
-          x: 120,
+          x: 0,
           y: 120,
-          w: 900,
+          w: slotWidth,
           h: 200,
           z: topZ + 10,
           visible: true,
@@ -1919,6 +1958,7 @@ export function App() {
           weight: 700,
           align: 'left',
           autoSize: true,
+          widthPercent: 100,
           color: '#f9fafb',
           backgroundColor: 'transparent',
           padding: 0,
@@ -1959,7 +1999,7 @@ export function App() {
     if (createdId) {
       setSelectedTemplateElementId(createdId);
     }
-  }, [availableFonts, selectedSlot, selectedSlotData, updateTemplateMain]);
+  }, [availableFonts, selectedDeviceSpec.width, selectedSlot, selectedSlotData, updateTemplateMain]);
 
   const removeTemplateElement = useCallback((elementId: string) => {
     updateTemplateMain((main) => {
@@ -2426,7 +2466,17 @@ export function App() {
                 <NumberField
                   label="X"
                   value={selectedTemplateElement.x}
-                  onValueChange={(value) => updateTemplateElement(selectedTemplateElement.id, (current) => ({ ...current, x: value }))}
+                  onValueChange={(value) => updateTemplateElement(selectedTemplateElement.id, (current) => {
+                    if (current.kind === 'text') {
+                      const slotWidth = Math.max(1, selectedDeviceSpec.width || 1290);
+                      const textWidth = resolveTextWidthFromPercent(current.widthPercent, slotWidth);
+                      return {
+                        ...current,
+                        x: clampNumber(value, 0, Math.max(0, slotWidth - textWidth))
+                      };
+                    }
+                    return { ...current, x: value };
+                  })}
                 />
                 <NumberField
                   label="Y"
@@ -2434,10 +2484,22 @@ export function App() {
                   onValueChange={(value) => updateTemplateElement(selectedTemplateElement.id, (current) => ({ ...current, y: value }))}
                 />
                 <NumberField
-                  label="Width"
-                  value={selectedTemplateElement.w}
-                  disabled={selectedTemplateElement.kind === 'text' && selectedTemplateElement.autoSize}
-                  onValueChange={(value) => updateTemplateElement(selectedTemplateElement.id, (current) => ({ ...current, w: value }))}
+                  label={selectedTemplateElement.kind === 'text' ? 'Width (%)' : 'Width'}
+                  value={selectedTemplateElement.kind === 'text' ? selectedTemplateElement.widthPercent : selectedTemplateElement.w}
+                  onValueChange={(value) => updateTemplateElement(selectedTemplateElement.id, (current) => {
+                    if (current.kind === 'text') {
+                      const slotWidth = Math.max(1, selectedDeviceSpec.width || 1290);
+                      const widthPercent = clampTextWidthPercent(value);
+                      const textWidth = resolveTextWidthFromPercent(widthPercent, slotWidth);
+                      return {
+                        ...current,
+                        widthPercent,
+                        w: textWidth,
+                        x: clampNumber(current.x, 0, Math.max(0, slotWidth - textWidth))
+                      };
+                    }
+                    return { ...current, w: value };
+                  })}
                 />
                 <NumberField
                   label="Height"
@@ -2473,6 +2535,7 @@ export function App() {
     addTemplateElement,
     openTemplateImagePicker,
     removeTemplateElement,
+    selectedDeviceSpec.width,
     selectedElementFontOptions,
     selectedSlotBackground,
     selectedSlotData,
@@ -4434,12 +4497,6 @@ function getTextValueBySource(layer: TemplateTextElement, title: string, subtitl
   return layer.customText;
 }
 
-function splitTextLines(text: string) {
-  const normalized = String(text || '').replace(/\r/g, '');
-  const lines = normalized.split('\n');
-  return lines.length > 0 ? lines : [''];
-}
-
 function getTextLineHeightPx(layer: TemplateTextElement) {
   const ratio = Math.max(0.5, layer.lineHeight || 1.2);
   return Math.max(1, layer.size || 48) * ratio;
@@ -4455,21 +4512,16 @@ function resolveAutoTextSize(
   const family = layer.font || 'SF Pro';
   const padding = Math.max(0, layer.padding || 0);
   const lineHeightPx = getTextLineHeightPx(layer);
-  const lines = splitTextLines(text);
+  const contentWidth = Math.max(1, layer.w - padding * 2);
 
   context.save();
   context.font = `${weight} ${size}px "${family}", "Apple SD Gothic Neo", sans-serif`;
-  let maxLineWidth = 0;
-  for (const line of lines) {
-    maxLineWidth = Math.max(maxLineWidth, context.measureText(line).width);
-  }
+  const lines = wrapLines(context, text, contentWidth);
   context.restore();
 
-  const contentWidth = Math.max(1, Math.ceil(maxLineWidth));
   const contentHeight = Math.max(1, Math.ceil(lines.length * lineHeightPx));
 
   return {
-    width: Math.max(1, contentWidth + Math.ceil(padding * 2)),
     height: Math.max(1, contentHeight + Math.ceil(padding * 2))
   };
 }
@@ -4478,22 +4530,38 @@ function resolvePreviewLayer(
   context: CanvasRenderingContext2D,
   layer: TemplateElement,
   title: string,
-  subtitle: string
+  subtitle: string,
+  slotWidth: number
 ): TemplateElement {
-  if (layer.kind !== 'text' || !layer.autoSize) {
+  if (layer.kind !== 'text') {
     return layer;
   }
 
-  const text = getTextValueBySource(layer, title, subtitle);
-  const { width, height } = resolveAutoTextSize(context, layer, text);
+  const resolvedLayer = resolveTextLayerWithinSlot(layer, slotWidth);
+  if (!resolvedLayer.autoSize) {
+    if (
+      resolvedLayer.x === layer.x
+      && resolvedLayer.w === layer.w
+      && resolvedLayer.widthPercent === layer.widthPercent
+    ) {
+      return layer;
+    }
+    return resolvedLayer;
+  }
 
-  if (layer.w === width && layer.h === height) {
+  const text = getTextValueBySource(resolvedLayer, title, subtitle);
+  const { height } = resolveAutoTextSize(context, resolvedLayer, text);
+  if (
+    resolvedLayer.x === layer.x
+    && resolvedLayer.w === layer.w
+    && resolvedLayer.h === height
+    && resolvedLayer.widthPercent === layer.widthPercent
+  ) {
     return layer;
   }
 
   return {
-    ...layer,
-    w: width,
+    ...resolvedLayer,
     h: height
   };
 }
@@ -4603,8 +4671,8 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
       return editableLayers;
     }
 
-    return editableLayers.map((layer) => resolvePreviewLayer(context, layer, title, subtitle));
-  }, [editableLayers, subtitle, title]);
+    return editableLayers.map((layer) => resolvePreviewLayer(context, layer, title, subtitle, width));
+  }, [editableLayers, subtitle, title, width]);
 
   const handleLayerPointerDown = useCallback((
     event: ReactPointerEvent<HTMLDivElement>,
