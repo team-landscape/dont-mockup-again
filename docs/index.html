@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Store Metadata Studio | App Store Screenshot Automation</title>
+    <meta
+      name="description"
+      content="Store Metadata Studio is a macOS desktop workbench that automates App Store screenshot production across slots, locales, and devices."
+    />
+    <meta property="og:title" content="Store Metadata Studio" />
+    <meta property="og:description" content="Turn repetitive screenshot work into one automated pipeline." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://team-landscape.github.io/dont-mockup-again/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      :root {
+        --background: oklch(0.145 0 0);
+        --foreground: oklch(0.985 0 0);
+        --muted-foreground: oklch(0.708 0 0);
+        --primary: oklch(0.922 0 0);
+        --primary-foreground: oklch(0.205 0 0);
+        --border: oklch(1 0 0 / 10%);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      body {
+        font-family: "Avenir Next", "SF Pro Display", "Pretendard", "Apple SD Gothic Neo", sans-serif;
+        color: var(--foreground);
+        background:
+          radial-gradient(920px 420px at 88% -8%, oklch(0.29 0 0 / 0.35) 0%, transparent 60%),
+          var(--background);
+      }
+
+      .wrap {
+        min-height: 100vh;
+        max-width: 920px;
+        margin: 0 auto;
+        padding: clamp(1.1rem, 3vw, 2.2rem);
+        display: grid;
+        align-content: center;
+        gap: 1rem;
+      }
+
+      .brand {
+        margin: 0;
+        font-size: 0.86rem;
+        color: var(--muted-foreground);
+        letter-spacing: 0.02em;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(2rem, 6vw, 4rem);
+        line-height: 1.03;
+        letter-spacing: -0.04em;
+        max-width: 12ch;
+      }
+
+      .sub {
+        margin: 0;
+        color: var(--muted-foreground);
+        font-size: clamp(0.95rem, 1.8vw, 1.12rem);
+        max-width: 42ch;
+      }
+
+      .actions {
+        display: flex;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.72rem;
+        border: 1px solid var(--border);
+        padding: 0.62rem 1rem;
+        font-size: 0.84rem;
+        font-weight: 600;
+        text-decoration: none;
+        color: inherit;
+      }
+
+      .btn.primary {
+        background: var(--primary);
+        color: var(--primary-foreground);
+        border-color: transparent;
+      }
+
+      .btn.ghost {
+        background: transparent;
+      }
+
+      @media (max-width: 620px) {
+        h1 {
+          max-width: 100%;
+        }
+
+        .actions {
+          width: 100%;
+        }
+
+        .btn {
+          flex: 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap" aria-label="Landing">
+      <p class="brand">Store Metadata Studio · macOS</p>
+      <h1>Automate your App Store screenshots<br />in one pipeline.</h1>
+      <p class="sub">Manage slot, locale, and device combinations from render and validation to final export.</p>
+      <div class="actions">
+        <a class="btn primary" href="https://github.com/team-landscape/dont-mockup-again" target="_blank" rel="noreferrer">Get Started</a>
+        <a class="btn ghost" href="https://github.com/team-landscape/dont-mockup-again/releases" target="_blank" rel="noreferrer">Download Desktop App</a>
+      </div>
+    </main>
+  </body>
+</html>
