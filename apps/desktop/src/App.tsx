@@ -17,14 +17,9 @@ import { WorkflowSidebar } from './components/sidebar/WorkflowSidebar';
 import { useProjectImageAssets } from './hooks/useProjectImageAssets';
 import { useProjectBootstrapPaths } from './hooks/useProjectBootstrapPaths';
 import { useBusyRunner } from './hooks/useBusyRunner';
+import { useExportAction } from './hooks/useExportAction';
 import { useProjectFileActions } from './hooks/useProjectFileActions';
 import { useProjectImageUploadHandlers } from './hooks/useProjectImageUploadHandlers';
-import {
-  collectExpectedRenderSuffixes,
-  findMissingRenderedFiles,
-  renderExportImagesFromSnapshot
-} from './lib/export-preview-renderer';
-import { withTimeout } from './lib/async-utils';
 import { parseJsonOrNull } from './lib/json-utils';
 import { resolveOutputDir as resolveOutputDirPath } from './lib/output-dir';
 import { loadPreviewMatrixFromDir, loadSlotPreviewMapFromDir } from './lib/preview-file-loaders';
@@ -421,6 +416,19 @@ export function App() {
     setSavedProjectSignature(serializeProjectSignature(next));
     return next;
   }, [doc, outputDir, projectPath, resolveOutputDir, selectedDeviceSpec.width]);
+  const handleExport = useExportAction({
+    doc,
+    outputDir,
+    previewRenderDir,
+    projectPath,
+    templateImageUrls,
+    resolveOutputDir,
+    runWithBusy,
+    persistProjectSnapshot,
+    setOutputDir,
+    setExportStatus,
+    setExportError
+  });
 
   async function handleRunLocalization() {
     await runWithBusy(async ({ setDetail }) => {
@@ -511,76 +519,6 @@ export function App() {
       title: 'Validation',
       detail: 'Checking project rules...'
     });
-  }
-
-  async function handleExport() {
-    setExportStatus('');
-    setExportError('');
-
-    if (!isTauriRuntime()) {
-      setExportError('Export is available only in desktop runtime. Start with `npm --prefix apps/desktop run tauri:dev`.');
-      return;
-    }
-
-    try {
-      await runWithBusy(async ({ setDetail }) => {
-        const flags: string[] = [];
-        if (doc.pipelines.export.zip) flags.push('--zip');
-        if (doc.pipelines.export.metadataCsv) flags.push('--metadata-csv');
-        const resolvedOutputDir = resolveOutputDir(outputDir);
-        if (resolvedOutputDir !== outputDir) {
-          setOutputDir(resolvedOutputDir);
-        }
-
-        setDetail('Saving project config...');
-        const snapshot = await persistProjectSnapshot({ syncTemplateMain: false });
-        const expectedSuffixes = collectExpectedRenderSuffixes(snapshot);
-        if (expectedSuffixes.length === 0) {
-          throw new Error('No export targets found. Check slots/locales/devices/platforms.');
-        }
-
-        await renderExportImagesFromSnapshot({
-          snapshot,
-          targetDir: previewRenderDir,
-          templateImageUrls,
-          runWithTimeout: withTimeout,
-          onProgress: setDetail
-        });
-        setDetail('Verifying preview renders...');
-        const previewCheck = await findMissingRenderedFiles(previewRenderDir, expectedSuffixes);
-        if (previewCheck.missing.length > 0) {
-          throw new Error(`Preview render missing ${previewCheck.missing.length} file(s). Example: ${previewCheck.missing[0]}`);
-        }
-
-        setDetail('Exporting preview renders...');
-        const exportRaw = await runPipeline('export', [projectPath, previewRenderDir, resolvedOutputDir, ...flags]);
-        const exportParsed = parseJsonOrNull(exportRaw) as {
-          outputDir?: string;
-          zipPath?: string | null;
-          metadataCsvPath?: string | null;
-        } | null;
-        const outputPath = exportParsed?.outputDir || resolvedOutputDir;
-
-        setDetail('Verifying exported files...');
-        const exportCheck = await findMissingRenderedFiles(outputPath, expectedSuffixes);
-        if (exportCheck.missing.length > 0) {
-          throw new Error(`Export output missing ${exportCheck.missing.length} file(s). Example: ${exportCheck.missing[0]}`);
-        }
-
-        const extras = [
-          exportParsed?.zipPath ? `zip: ${exportParsed.zipPath}` : '',
-          exportParsed?.metadataCsvPath ? `csv: ${exportParsed.metadataCsvPath}` : ''
-        ].filter(Boolean).join(' | ');
-        setExportStatus(extras ? `Exported to ${outputPath} (${extras})` : `Exported to ${outputPath}`);
-      }, {
-        action: 'export',
-        title: 'Exporting',
-        detail: 'Preparing export...'
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setExportError(message);
-    }
   }
 
   const handlePickOutputDir = useCallback(async () => {
