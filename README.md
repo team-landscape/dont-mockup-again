@@ -61,13 +61,8 @@ Project config example (`pipelines.localization.llmCli`):
 
 ```json
 {
-  "command": "gemini-cli",
-  "argsTemplate": [
-    "translate",
-    "--in", "{INPUT}",
-    "--out", "{OUTPUT}",
-    "--to", "{LOCALE}"
-  ],
+  "command": "gemini",
+  "argsTemplate": [],
   "timeoutSec": 120,
   "promptVersion": "v1",
   "styleGuidePath": "style.md"
@@ -82,7 +77,9 @@ node --import tsx scripts/pipeline.js localize examples/sample.storeshot.json --
 
 Adapter behavior (both modes):
 
-- Sends translation payload JSON into CLI input file.
+- Sends translation payload JSON into CLI input (stdin).
+- For `gemini`/`gemini-cli`, automatically uses prompt mode and parses JSON output.
+- Supports file-placeholder args templates (`{INPUT}`, `{OUTPUT}`, `{LOCALE}`) for custom wrappers.
 - Reads JSON output and applies to `copy.keys`.
 - Validates placeholder preservation (`{app_name}`, `%@`, `{{count}}`).
 - Caches translations by hash of `(sourceText + locale + promptVersion)`.

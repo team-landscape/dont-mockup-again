@@ -5,6 +5,8 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { assertPlaceholdersPreserved } from './placeholders.ts';
 
+const LEGACY_FILE_ARGS_TEMPLATE = ['translate', '--in', '{INPUT}', '--out', '{OUTPUT}', '--to', '{LOCALE}'];
+
 async function loadCache(cachePath) {
   try {
     const raw = await fs.readFile(cachePath, 'utf8');
@@ -34,6 +36,81 @@ function formatArgs(argsTemplate, replacements) {
     }
     return value;
   });
+}
+
+function normalizeArgsTemplate(argsTemplate) {
+  return (argsTemplate || [])
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean);
+}
+
+function isLegacyFileArgsTemplate(argsTemplate) {
+  const normalized = normalizeArgsTemplate(argsTemplate);
+  if (normalized.length !== LEGACY_FILE_ARGS_TEMPLATE.length) {
+    return false;
+  }
+  return normalized.every((value, index) => value === LEGACY_FILE_ARGS_TEMPLATE[index]);
+}
+
+function isGeminiCommand(command) {
+  const commandName = path.basename(String(command || '')).toLowerCase();
+  return commandName === 'gemini' || commandName === 'gemini-cli';
+}
+
+function shouldUseGeminiPromptMode(command, argsTemplate) {
+  if (!isGeminiCommand(command)) {
+    return false;
+  }
+
+  const normalized = normalizeArgsTemplate(argsTemplate);
+  return normalized.length === 0 || isLegacyFileArgsTemplate(argsTemplate);
+}
+
+function buildGeminiPrompt(payload) {
+  return [
+    'You are a localization engine for app store screenshots.',
+    `Translate each entry from ${payload.sourceLocale} to ${payload.targetLocale}.`,
+    'Do not modify placeholders like {app_name}, %@, {{count}}.',
+    'Return strict JSON only with this shape: {"entries":{"key":"translated"}}.'
+  ].join(' ');
+}
+
+function tryParseJson(text) {
+  const raw = String(text || '').trim();
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const fenceStart = raw.indexOf('```');
+    if (fenceStart >= 0) {
+      const firstBrace = raw.indexOf('{', fenceStart);
+      const lastBrace = raw.lastIndexOf('}');
+      if (firstBrace >= 0 && lastBrace > firstBrace) {
+        const fencedCandidate = raw.slice(firstBrace, lastBrace + 1);
+        try {
+          return JSON.parse(fencedCandidate);
+        } catch {
+          // fall through to generic brace extraction
+        }
+      }
+    }
+
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start < 0 || end <= start) {
+      return null;
+    }
+
+    const candidate = raw.slice(start, end + 1);
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      return null;
+    }
+  }
 }
 
 async function runCli({ command, args, inputFilePath, timeoutSec, cwd }) {
@@ -102,26 +179,58 @@ async function runCliTranslation({
 
   await fs.writeFile(inputFilePath, JSON.stringify(payload, null, 2));
 
-  const args = formatArgs(argsTemplate, {
+  const formattedArgs = formatArgs(argsTemplate, {
     INPUT: inputFilePath,
     OUTPUT: outputFilePath,
-    LOCALE: payload.targetLocale
+    LOCALE: payload.targetLocale,
+    SOURCE_LOCALE: payload.sourceLocale,
+    TARGET_LOCALE: payload.targetLocale
   });
 
-  const result = await runCli({
-    command,
-    args,
-    inputFilePath,
-    timeoutSec,
-    cwd
-  });
+  const useGeminiPromptMode = shouldUseGeminiPromptMode(command, argsTemplate);
+  const args = useGeminiPromptMode
+    ? ['-p', buildGeminiPrompt(payload)]
+    : formattedArgs;
+
+  let result = null;
+  try {
+    result = await runCli({
+      command,
+      args,
+      inputFilePath,
+      timeoutSec,
+      cwd
+    });
+  } catch (error) {
+    const shouldRetryWithGeminiPrompt =
+      !useGeminiPromptMode &&
+      isGeminiCommand(command) &&
+      isLegacyFileArgsTemplate(argsTemplate) &&
+      String(error?.message || '').includes('Unknown arguments');
+
+    if (!shouldRetryWithGeminiPrompt) {
+      throw error;
+    }
+
+    result = await runCli({
+      command,
+      args: ['-p', buildGeminiPrompt(payload)],
+      inputFilePath,
+      timeoutSec,
+      cwd
+    });
+  }
 
   let translated = null;
   try {
     const output = await fs.readFile(outputFilePath, 'utf8');
-    translated = JSON.parse(output);
+    translated = tryParseJson(output);
   } catch {
-    translated = JSON.parse(result.stdout || '{}');
+    translated = null;
+  }
+
+  if (!translated) {
+    translated = tryParseJson(result?.stdout || '');
   }
 
   if (!translated.entries || typeof translated.entries !== 'object') {

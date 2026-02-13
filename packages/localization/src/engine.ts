@@ -124,8 +124,8 @@ export async function localizeProjectCopy(projectDoc, options = {}) {
   };
 
   const llmCliConfig = {
-    command: 'gemini-cli',
-    argsTemplate: ['translate', '--in', '{INPUT}', '--out', '{OUTPUT}', '--to', '{LOCALE}'],
+    command: 'gemini',
+    argsTemplate: [],
     timeoutSec: 120,
     promptVersion: 'v1',
     cachePath: '.storeshot/cache/translation-cache.json',
