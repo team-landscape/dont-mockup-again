@@ -274,7 +274,6 @@ const SLOT_CANVAS_PREVIEW_MAX_HEIGHT = 720;
 const SLOT_CANVAS_CARD_CHROME_HEIGHT = 40;
 const SLOT_CANVAS_GAP_X = 8;
 const SLOT_CANVAS_GAP_Y = 8;
-const SLOT_CANVAS_DEFAULT_COLS = 3;
 const SLOT_CANVAS_BASE_X = 9600;
 const SLOT_CANVAS_BASE_Y = 880;
 const SLOT_CANVAS_MIN_ZOOM = 0.45;
@@ -821,11 +820,9 @@ function reorderSlots(slots: Slot[]): Slot[] {
 }
 
 function defaultSlotCanvasPosition(index: number, cardWidth: number, cardHeight: number): SlotCanvasPosition {
-  const col = index % SLOT_CANVAS_DEFAULT_COLS;
-  const row = Math.floor(index / SLOT_CANVAS_DEFAULT_COLS);
   return {
-    x: SLOT_CANVAS_BASE_X + col * (cardWidth + SLOT_CANVAS_GAP_X),
-    y: SLOT_CANVAS_BASE_Y + row * (cardHeight + SLOT_CANVAS_GAP_Y)
+    x: SLOT_CANVAS_BASE_X + index * (cardWidth + SLOT_CANVAS_GAP_X),
+    y: SLOT_CANVAS_BASE_Y
   };
 }
 
