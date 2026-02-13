@@ -845,6 +845,15 @@ function defaultSlotCanvasPosition(index: number, cardWidth: number): SlotCanvas
   };
 }
 
+function resolveSlotCanvasPosition(
+  positions: Record<string, SlotCanvasPosition>,
+  slotId: string,
+  index: number,
+  cardWidth: number
+): SlotCanvasPosition {
+  return positions[slotId] || defaultSlotCanvasPosition(index, cardWidth);
+}
+
 function extractJson(raw: string): unknown {
   try {
     return JSON.parse(raw);
@@ -3019,7 +3028,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     let maxY = Number.NEGATIVE_INFINITY;
 
     for (const [index, item] of items.entries()) {
-      const position = positions[item.slot.id] || defaultSlotCanvasPosition(index, cardWidth);
+      const position = resolveSlotCanvasPosition(positions, item.slot.id, index, cardWidth);
       minX = Math.min(minX, position.x);
       minY = Math.min(minY, position.y);
       maxX = Math.max(maxX, position.x + cardWidth);
@@ -3422,7 +3431,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     if (event.detail > 1) return;
     const slotIndex = items.findIndex((item) => item.slot.id === slotId);
     if (slotIndex < 0) return;
-    const basePosition = positions[slotId] || defaultSlotCanvasPosition(slotIndex, cardWidth);
+    const basePosition = resolveSlotCanvasPosition(positions, slotId, slotIndex, cardWidth);
     const worldPoint = toWorldPoint(event.clientX, event.clientY);
     if (!worldPoint) return;
 
@@ -3644,7 +3653,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
       <div ref={boardTransformRef} className="absolute left-0 top-0" style={boardTransformStyle}>
         <div className="relative" style={boardContentStyle}>
           {items.map((item, index) => {
-            const position = positions[item.slot.id] || defaultSlotCanvasPosition(index, cardWidth);
+            const position = resolveSlotCanvasPosition(positions, item.slot.id, index, cardWidth);
             const dragState = dragRef.current;
             const isDragging = dragPreview?.slotId === item.slot.id;
             const isSelected = selectedSlot === item.slot.id;
