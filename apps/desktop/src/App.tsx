@@ -4952,7 +4952,7 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
               return (
                 <div
                   key={layer.id}
-                  className="pointer-events-auto absolute cursor-move rounded-md border border-primary bg-transparent shadow-[0_0_0_1px_rgba(14,165,233,0.45)]"
+                  className="pointer-events-auto absolute cursor-move border border-primary bg-transparent shadow-[0_0_0_1px_rgba(14,165,233,0.45)]"
                   style={{
                     left: `${(currentX / width) * 100}%`,
                     top: `${(currentY / height) * 100}%`,
