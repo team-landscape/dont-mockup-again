@@ -2424,6 +2424,7 @@ export function App() {
               previewPath={previewPath}
               previewDataUrl={previewDataUrl}
               previewMatrixDataUrls={previewMatrixUrls}
+              slotSourceDataUrls={slotSourceUrls}
               issues={issues}
               getCopyValue={(key, locale) => doc.copy.keys[key]?.[locale] || ''}
               onSelectDevice={setSelectedDevice}

@@ -49,6 +49,7 @@ interface PreviewWorkflowPageProps {
   previewPath: string;
   previewDataUrl?: string;
   previewMatrixDataUrls: Record<string, Record<string, string>>;
+  slotSourceDataUrls: Record<string, string>;
   issues: ValidateIssue[];
   getCopyValue: (key: string, locale: string) => string;
   onSelectDevice: (deviceId: string) => void;
@@ -71,6 +72,7 @@ export function PreviewWorkflowPage({
   previewPath,
   previewDataUrl,
   previewMatrixDataUrls,
+  slotSourceDataUrls,
   issues,
   getCopyValue,
   onSelectDevice,
@@ -166,19 +168,21 @@ export function PreviewWorkflowPage({
               </div>
 
               <div className="rounded-lg border p-3">
-                <p className="mb-2 text-sm font-medium">All Locales · All Slots</p>
-                <div className="overflow-x-auto">
-                  <div className="flex min-w-max gap-3 pb-1">
-                    {localeOptions.map((locale) => (
-                      <div key={locale.value} className="w-[280px] shrink-0 rounded-md border bg-muted/20 p-2">
-                        <p className="mb-2 text-xs font-semibold text-muted-foreground">{locale.label}</p>
-                        <div className="space-y-2">
+                <p className="mb-2 text-sm font-medium">All Locales · Slot Preview</p>
+                <div className="space-y-3">
+                  {localeOptions.map((locale) => (
+                    <div key={locale.value} className="rounded-md border bg-muted/20 p-2">
+                      <p className="mb-2 text-xs font-semibold text-muted-foreground">{locale.label}</p>
+                      <div className="overflow-x-auto">
+                        <div className="flex min-w-max gap-2 pb-1">
                           {slotOptions.map((slot) => {
-                            const imageUrl = previewMatrixDataUrls[locale.value]?.[slot.value];
+                            const renderedImageUrl = previewMatrixDataUrls[locale.value]?.[slot.value];
+                            const sourceImageUrl = slotSourceDataUrls[slot.value];
+                            const imageUrl = renderedImageUrl || sourceImageUrl;
                             const title = getCopyValue(`${slot.value}.title`, locale.value);
                             const subtitle = getCopyValue(`${slot.value}.subtitle`, locale.value);
                             return (
-                              <div key={`${locale.value}:${slot.value}`} className="rounded-md border bg-background p-2">
+                              <div key={`${locale.value}:${slot.value}`} className="w-[240px] shrink-0 rounded-md border bg-background p-2">
                                 <p className="mb-1 text-[11px] font-semibold text-muted-foreground">{slot.label}</p>
                                 {imageUrl ? (
                                   <img
@@ -188,7 +192,7 @@ export function PreviewWorkflowPage({
                                   />
                                 ) : (
                                   <div className="mb-2 grid h-[110px] place-items-center rounded-md border border-dashed text-xs text-muted-foreground">
-                                    No rendered image
+                                    No preview image
                                   </div>
                                 )}
                                 <p className="text-xs font-medium leading-tight">{title || '-'}</p>
@@ -198,8 +202,8 @@ export function PreviewWorkflowPage({
                           })}
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
