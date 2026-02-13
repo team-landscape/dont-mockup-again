@@ -15,6 +15,7 @@ import { TemplateInspectorSection } from './components/inspector/TemplateInspect
 import { OnboardingOverlay } from './components/onboarding/OnboardingOverlay';
 import { BusyOverlay } from './components/overlay/BusyOverlay';
 import { WorkflowSidebar } from './components/sidebar/WorkflowSidebar';
+import { useProjectImageAssets } from './hooks/useProjectImageAssets';
 import { useProjectImageUploadHandlers } from './hooks/useProjectImageUploadHandlers';
 import { resolveOutputDir as resolveOutputDirPath } from './lib/output-dir';
 import {
@@ -153,8 +154,6 @@ export function App() {
   const [slotPreviewPaths, setSlotPreviewPaths] = useState<Record<string, string>>({});
   const [previewMatrixUrls, setPreviewMatrixUrls] = useState<Record<string, Record<string, string>>>({});
   const [previewMatrixPaths, setPreviewMatrixPaths] = useState<Record<string, Record<string, string>>>({});
-  const [slotSourceUrls, setSlotSourceUrls] = useState<Record<string, string>>({});
-  const [templateImageUrls, setTemplateImageUrls] = useState<Record<string, string>>({});
   const [availableFonts, setAvailableFonts] = useState<string[]>(defaultSystemFonts);
   const [issues, setIssues] = useState<ValidateIssue[]>([]);
   const [exportStatus, setExportStatus] = useState('');
@@ -171,7 +170,6 @@ export function App() {
   const slotImageTargetRef = useRef<string | null>(null);
   const templateImageInputRef = useRef<HTMLInputElement>(null);
   const templateImageTargetRef = useRef<string | null>(null);
-  const slotSourceEntriesRef = useRef<Array<{ id: string; sourceImagePath: string }>>([]);
   const [, startSlotTransition] = useTransition();
   const [, startTemplateTransition] = useTransition();
 
@@ -237,29 +235,15 @@ export function App() {
     const merged = new Set([...availableFonts, selectedTemplateElement.font]);
     return [...merged].sort((a, b) => a.localeCompare(b));
   }, [availableFonts, selectedTemplateElement]);
-  const slotSourceLoadKey = useMemo(() => {
-    const entries = doc.project.slots.map((slot) => ({ id: slot.id, sourceImagePath: slot.sourceImagePath }));
-    slotSourceEntriesRef.current = entries;
-    return entries.map((entry) => `${entry.id}:${entry.sourceImagePath}`).join('|');
-  }, [doc.project.slots]);
-  const templateImageLoadKey = useMemo(() => {
-    const signatures: string[] = [];
-
-    for (const item of doc.template.main.elements) {
-      if (item.kind !== 'image') continue;
-      signatures.push(`*:${item.id}:${item.imagePath}`);
-    }
-
-    for (const [slotId, elements] of Object.entries(doc.template.main.slotElements)) {
-      for (const item of elements) {
-        if (item.kind !== 'image') continue;
-        signatures.push(`${slotId}:${item.id}:${item.imagePath}`);
-      }
-    }
-
-    signatures.sort();
-    return signatures.join('|');
-  }, [doc.template.main.elements, doc.template.main.slotElements]);
+  const {
+    slotSourceUrls,
+    setSlotSourceUrls,
+    templateImageUrls,
+    setTemplateImageUrls
+  } = useProjectImageAssets({
+    slots: doc.project.slots,
+    templateMain: doc.template.main
+  });
   const previewMatrixLoadKey = useMemo(
     () => [
       previewRenderDir,
@@ -340,88 +324,6 @@ export function App() {
         setAvailableFonts(defaultSystemFonts);
       });
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadSourceImages() {
-      if (!isTauriRuntime()) {
-        if (!cancelled) setSlotSourceUrls({});
-        return;
-      }
-
-      const next: Record<string, string> = {};
-      for (const slot of slotSourceEntriesRef.current) {
-        if (!slot.sourceImagePath) continue;
-
-        try {
-          const base64 = await readFileBase64(slot.sourceImagePath);
-          const mime = imageMimeTypeFromPath(slot.sourceImagePath);
-          next[slot.id] = `data:${mime};base64,${base64}`;
-        } catch {
-          // Missing source image is allowed while editing.
-        }
-      }
-
-      if (!cancelled) {
-        setSlotSourceUrls(next);
-      }
-    }
-
-    void loadSourceImages();
-    return () => {
-      cancelled = true;
-    };
-  }, [slotSourceLoadKey]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadTemplateImages() {
-      if (!isTauriRuntime()) {
-        if (!cancelled) setTemplateImageUrls({});
-        return;
-      }
-
-      const next: Record<string, string> = {};
-      const imageElements = doc.template.main.elements.filter((item): item is TemplateImageElement => item.kind === 'image');
-      for (const element of imageElements) {
-        if (!element.imagePath) continue;
-
-        try {
-          const base64 = await readFileBase64(element.imagePath);
-          const mime = imageMimeTypeFromPath(element.imagePath);
-          next[globalTemplateImageKey(element.id)] = `data:${mime};base64,${base64}`;
-        } catch {
-          // Missing custom image is allowed while editing.
-        }
-      }
-
-      for (const [slotId, elements] of Object.entries(doc.template.main.slotElements)) {
-        const slotImageElements = elements.filter((item): item is TemplateImageElement => item.kind === 'image');
-        for (const element of slotImageElements) {
-          if (!element.imagePath) continue;
-
-          try {
-            const base64 = await readFileBase64(element.imagePath);
-            const mime = imageMimeTypeFromPath(element.imagePath);
-            next[slotTemplateImageKey(slotId, element.id)] = `data:${mime};base64,${base64}`;
-          } catch {
-            // Missing custom image is allowed while editing.
-          }
-        }
-      }
-
-      if (!cancelled) {
-        setTemplateImageUrls(next);
-      }
-    }
-
-    void loadTemplateImages();
-    return () => {
-      cancelled = true;
-    };
-  }, [doc.template.main.elements, doc.template.main.slotElements, templateImageLoadKey]);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
