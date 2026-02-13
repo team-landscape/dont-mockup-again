@@ -6,7 +6,7 @@ import test from 'node:test';
 
 import { renderProject } from '../packages/renderer/src/index.ts';
 import { loadProject, layoutTextBox, validateCopyCoverage } from '../packages/core/src/index.ts';
-import { mergeByoyCopy, assertPlaceholdersPreserved } from '../packages/localization/src/index.ts';
+import { mergeByoyCopy, assertPlaceholdersPreserved, localizeProjectCopy } from '../packages/localization/src/index.ts';
 import { exportProject } from '../packages/exporter/src/index.ts';
 
 const rootDir = path.resolve('.');
@@ -100,4 +100,19 @@ test('exporter creates zip output', async () => {
 
   assert.equal(await exists(outDir), true);
   assert.equal(await exists(result.zipPath), true);
+});
+
+test('localization engine maps legacy byoy mode to byok', async () => {
+  const project = await loadProject(sampleProjectPath);
+  const doc = JSON.parse(JSON.stringify(project.doc));
+  doc.project.locales = ['en-US'];
+  doc.pipelines = doc.pipelines || {};
+  doc.pipelines.localization = {
+    mode: 'byoy',
+    sourceLocale: 'en-US'
+  };
+
+  const result = await localizeProjectCopy(doc, { projectDir: path.dirname(sampleProjectPath) });
+  assert.equal(result.mode, 'byok');
+  assert.equal(result.skipped, true);
 });

@@ -6,7 +6,7 @@ Store screenshot automation tool for macOS desktop workflows.
 - Apply a main template with per `(device, locale)` overrides.
 - Render `(slot x locale x device)` PNG outputs.
 - Import translations from BYOY JSON.
-- Optionally run local LLM CLI for translation.
+- Run translation via BYOK (OpenAI-compatible API) or local LLM CLI.
 - Export folder layout + zip + optional fastlane layout.
 
 ## Repository Layout
@@ -14,7 +14,7 @@ Store screenshot automation tool for macOS desktop workflows.
 - `apps/desktop`: Tauri + React desktop shell
 - `packages/core`: project model, template merge, text layout, validation
 - `packages/renderer`: scene renderer (Playwright first, PNG fallback)
-- `packages/localization`: BYOY importer + LLM CLI adapter
+- `packages/localization`: BYOY importer + BYOK/LLM localization adapters
 - `packages/exporter`: dist/metadata/zip + fastlane-compatible layout
 - `packages/uploader`: local fastlane command wrapper
 - `examples`: sample project and assets
@@ -23,6 +23,7 @@ Store screenshot automation tool for macOS desktop workflows.
 
 ```bash
 node --import tsx scripts/generate-sample-assets.js
+node --import tsx scripts/pipeline.js localize examples/sample.storeshot.json --write
 node --import tsx scripts/pipeline.js render examples/sample.storeshot.json dist-render
 node --import tsx scripts/pipeline.js export examples/sample.storeshot.json dist-render dist --zip --fastlane
 ```
@@ -33,7 +34,28 @@ Or run one-shot:
 node --import tsx scripts/pipeline.js all examples/sample.storeshot.json dist
 ```
 
-## LLM CLI Adapter Example
+## Localization Modes
+
+`pipelines.localization.mode` supports:
+
+- `byok`: OpenAI-compatible API with user-provided key via env var
+- `llm-cli`: local command adapter (`gemini-cli`, `ollama` wrapper, custom scripts)
+
+BYOK example (`pipelines.localization.byok`):
+
+```json
+{
+  "baseUrl": "https://api.openai.com/v1",
+  "endpointPath": "/chat/completions",
+  "model": "gpt-4o-mini",
+  "apiKeyEnv": "OPENAI_API_KEY",
+  "timeoutSec": 120,
+  "promptVersion": "v1",
+  "styleGuidePath": "style.md"
+}
+```
+
+Local LLM CLI example (`pipelines.localization.llmCli`):
 
 Project config example (`pipelines.localization.llmCli`):
 
@@ -47,15 +69,21 @@ Project config example (`pipelines.localization.llmCli`):
     "--to", "{LOCALE}"
   ],
   "timeoutSec": 120,
-  "glossaryPath": "glossary.csv",
+  "promptVersion": "v1",
   "styleGuidePath": "style.md"
 }
 ```
 
-Adapter behavior:
+Run localization:
+
+```bash
+node --import tsx scripts/pipeline.js localize examples/sample.storeshot.json --write
+```
+
+Adapter behavior (both modes):
 
 - Sends translation payload JSON into CLI input file.
-- Reads JSON output from output file (or stdout fallback).
+- Reads JSON output and applies to `copy.keys`.
 - Validates placeholder preservation (`{app_name}`, `%@`, `{{count}}`).
 - Caches translations by hash of `(sourceText + locale + promptVersion)`.
 

@@ -62,7 +62,32 @@
   },
   "pipelines": {
     "localization": {
-      "mode": "byoy"
+      "mode": "byok",
+      "sourceLocale": "en-US",
+      "byok": {
+        "baseUrl": "https://api.openai.com/v1",
+        "endpointPath": "/chat/completions",
+        "model": "gpt-4o-mini",
+        "apiKeyEnv": "OPENAI_API_KEY",
+        "timeoutSec": 120,
+        "promptVersion": "v1",
+        "styleGuidePath": "style.md"
+      },
+      "llmCli": {
+        "command": "gemini-cli",
+        "argsTemplate": [
+          "translate",
+          "--in",
+          "{INPUT}",
+          "--out",
+          "{OUTPUT}",
+          "--to",
+          "{LOCALE}"
+        ],
+        "timeoutSec": 120,
+        "promptVersion": "v1",
+        "styleGuidePath": "style.md"
+      }
     },
     "export": {
       "outputDir": "dist",

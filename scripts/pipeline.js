@@ -1,16 +1,34 @@
 import path from 'node:path';
 import { renderProject } from '../packages/renderer/src/index.ts';
-import { validateProject, loadProject } from '../packages/core/src/index.ts';
+import { validateProject, loadProject, saveProject } from '../packages/core/src/index.ts';
+import { localizeProjectCopy } from '../packages/localization/src/index.ts';
 import { exportProject } from '../packages/exporter/src/index.ts';
 import { uploadWithFastlane } from '../packages/uploader/src/index.ts';
 
 function usage() {
   console.log(`Usage:
   node scripts/pipeline.js render <projectPath> [renderDir]
+  node scripts/pipeline.js localize <projectPath> [--write] [--source=<locale>] [--targets=<locale1,locale2>]
   node scripts/pipeline.js validate <projectPath>
   node scripts/pipeline.js export <projectPath> <renderDir> [outputDir] [--zip] [--fastlane]
   node scripts/pipeline.js upload <exportDir> [iosLane] [androidLane]
   node scripts/pipeline.js all <projectPath> [workDir]`);
+}
+
+function parseValueFlag(flags, name) {
+  const prefix = `${name}=`;
+  const found = flags.find((flag) => flag.startsWith(prefix));
+  return found ? found.slice(prefix.length) : '';
+}
+
+function parseTargetLocales(raw) {
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 async function run() {
@@ -45,6 +63,32 @@ async function run() {
     const result = await validateProject(doc, { projectDir: dir });
     console.log(JSON.stringify({ action, ...result }, null, 2));
     process.exit(result.ok ? 0 : 2);
+    return;
+  }
+
+  if (action === 'localize') {
+    const [projectPath, ...flags] = rest;
+    if (!projectPath) {
+      usage();
+      process.exit(1);
+    }
+
+    const { doc, dir } = await loadProject(projectPath);
+    const sourceLocale = parseValueFlag(flags, '--source');
+    const targetLocales = parseTargetLocales(parseValueFlag(flags, '--targets'));
+    const write = flags.includes('--write');
+
+    const result = await localizeProjectCopy(doc, {
+      projectDir: dir,
+      sourceLocale: sourceLocale || undefined,
+      targetLocales: targetLocales.length > 0 ? targetLocales : undefined
+    });
+
+    if (write) {
+      await saveProject(projectPath, doc);
+    }
+
+    console.log(JSON.stringify({ action, write, ...result }, null, 2));
     return;
   }
 
