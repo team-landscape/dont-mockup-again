@@ -4,7 +4,6 @@ import { Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
-import { ScrollArea } from '../components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 
@@ -79,7 +78,7 @@ export function LocalizationWorkflowPage({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-[minmax(320px,380px)_minmax(0,1fr)]">
+      <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
         <Card>
           <CardHeader>
             <CardTitle>Localization Pipeline</CardTitle>
@@ -148,13 +147,13 @@ export function LocalizationWorkflowPage({
           </CardContent>
         </Card>
 
-        <Card className="min-h-[calc(100vh-220px)]">
+        <Card className="min-h-[calc(100vh-220px)] w-full min-w-0">
           <CardHeader>
             <CardTitle>Copy Editor</CardTitle>
             <CardDescription>{slots.length} slot(s) · {locales.length} locale(s)</CardDescription>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-[calc(100vh-320px)] w-full pr-2">
+            <div className="h-[calc(100vh-320px)] w-full overflow-auto pr-2">
               <div className="space-y-2 pb-2" style={{ minWidth: `${editorMinWidth}px` }}>
                 <div className="rounded-md border p-3">
                   <p className="mb-2 text-xs font-semibold text-muted-foreground">APP METADATA</p>
@@ -211,7 +210,7 @@ export function LocalizationWorkflowPage({
                   </div>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
           </CardContent>
         </Card>
       </div>
