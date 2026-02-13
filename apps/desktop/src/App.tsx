@@ -2225,7 +2225,7 @@ export function App() {
   }
 
   return (
-    <div className="grid min-h-screen w-full max-w-[1600px] gap-4 p-4 lg:p-6">
+    <div className="grid min-h-screen w-full max-w-none gap-4 p-4 lg:p-6">
       <input
         ref={templateImageInputRef}
         type="file"
