@@ -21,15 +21,9 @@ import { useExportAction } from './hooks/useExportAction';
 import { useProjectFileActions } from './hooks/useProjectFileActions';
 import { useProjectImageUploadHandlers } from './hooks/useProjectImageUploadHandlers';
 import { usePipelineActions } from './hooks/usePipelineActions';
+import { useProjectSlotActions } from './hooks/useProjectSlotActions';
 import { usePreviewLoaders } from './hooks/usePreviewLoaders';
 import { resolveOutputDir as resolveOutputDirPath } from './lib/output-dir';
-import {
-  applyAddSlot,
-  applyMoveSlot,
-  applyRemoveSlot,
-  applyToggleDevicePreset,
-  applyTogglePlatform
-} from './lib/slot-editor';
 import {
   isTauriRuntime,
   listSystemFonts,
@@ -38,7 +32,6 @@ import {
 } from './lib/desktop-runtime';
 import {
   type Device,
-  type LlmCliConfig,
   type Platform,
   type Slot,
   type SlotCanvasPosition,
@@ -141,6 +134,23 @@ export function App() {
     setIsBusy,
     setBusyTitle,
     setBusyDetail
+  });
+  const {
+    updateDoc,
+    togglePlatform,
+    toggleDevicePreset,
+    moveSlot,
+    addSlot,
+    removeSlot,
+    upsertLlmConfig,
+    renameSlot,
+    openSlotImagePicker
+  } = useProjectSlotActions({
+    setDoc,
+    setSelectedSlot,
+    slotImageInputRef,
+    slotImageTargetRef,
+    startSlotTransition
   });
 
   const { defaultExportDir, isProjectBaselineReady } = useProjectBootstrapPaths({
@@ -338,82 +348,6 @@ export function App() {
     setSavedProjectSignature(currentProjectSignature);
   }, [currentProjectSignature, isProjectBaselineReady, savedProjectSignature]);
 
-  function updateDoc(mutator: (next: StoreShotDoc) => void) {
-    setDoc((current) => {
-      const next = clone(current);
-      mutator(next);
-      return next;
-    });
-  }
-
-  function togglePlatform(platform: Platform, checked: boolean) {
-    updateDoc((next) => {
-      applyTogglePlatform(next, platform, checked);
-    });
-  }
-
-  function toggleDevicePreset(presetDevice: Device, checked: boolean) {
-    updateDoc((next) => {
-      applyToggleDevicePreset(next, presetDevice, checked);
-    });
-  }
-
-  function moveSlot(slotId: string, direction: -1 | 1) {
-    updateDoc((next) => {
-      applyMoveSlot(next, slotId, direction);
-    });
-  }
-
-  function openSlotImagePicker(slotId: string) {
-    slotImageTargetRef.current = slotId;
-    slotImageInputRef.current?.click();
-  }
-
-  function addSlot() {
-    let createdSlotId = '';
-
-    updateDoc((next) => {
-      createdSlotId = applyAddSlot(next);
-    });
-
-    if (createdSlotId) {
-      startSlotTransition(() => {
-        setSelectedSlot(createdSlotId);
-      });
-      openSlotImagePicker(createdSlotId);
-    }
-  }
-
-  function removeSlot(slotId: string) {
-    updateDoc((next) => {
-      applyRemoveSlot(next, slotId);
-    });
-  }
-
-  const renameSlot = useCallback((slotId: string, nextName: string) => {
-    const normalizedName = nextName.trim();
-    if (!normalizedName) return;
-
-    setDoc((current) => {
-      let changed = false;
-      const nextSlots = current.project.slots.map((slot) => {
-        if (slot.id !== slotId) return slot;
-        if (slot.name === normalizedName) return slot;
-        changed = true;
-        return { ...slot, name: normalizedName };
-      });
-
-      if (!changed) return current;
-      return {
-        ...current,
-        project: {
-          ...current.project,
-          slots: nextSlots
-        }
-      };
-    });
-  }, []);
-
   const persistProjectSnapshot = useCallback(async (options?: { syncTemplateMain?: boolean }) => {
     if (!projectPath.trim()) {
       throw new Error('No project file selected. Save project first.');
@@ -490,13 +424,6 @@ export function App() {
     }
 
     setIsOnboardingOpen(false);
-  }
-
-  function upsertLlmConfig(mutator: (cfg: LlmCliConfig) => void) {
-    updateDoc((next) => {
-      next.pipelines.localization.llmCli = next.pipelines.localization.llmCli || clone(defaultLlmConfig);
-      mutator(next.pipelines.localization.llmCli);
-    });
   }
 
   const slots = useMemo(
