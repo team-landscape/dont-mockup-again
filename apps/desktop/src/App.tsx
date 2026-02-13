@@ -4190,6 +4190,18 @@ interface SlotCardProps {
   onMoveElement: (elementId: string, x: number, y: number) => void;
 }
 
+function isSameTemplatePreviewState(prev: TemplateMain, next: TemplateMain) {
+  if (prev.elements !== next.elements) return false;
+
+  const prevBg = prev.background;
+  const nextBg = next.background;
+  return prevBg.type === nextBg.type
+    && prevBg.value === nextBg.value
+    && prevBg.from === nextBg.from
+    && prevBg.to === nextBg.to
+    && prevBg.direction === nextBg.direction;
+}
+
 const SlotCard = memo(function SlotCard({
   slot,
   titleValue,
@@ -4233,7 +4245,7 @@ const SlotCard = memo(function SlotCard({
   && prev.subtitleValue === next.subtitleValue
   && prev.renderedPreviewUrl === next.renderedPreviewUrl
   && prev.sourceImageUrl === next.sourceImageUrl
-  && prev.template === next.template
+  && isSameTemplatePreviewState(prev.template, next.template)
   && prev.templateImageUrls === next.templateImageUrls
   && prev.device === next.device
   && prev.onSelect === next.onSelect
