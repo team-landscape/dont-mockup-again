@@ -333,6 +333,10 @@ async function writeFileBase64(path: string, dataBase64: string) {
   return invokeCommand<void>('write_file_base64', { path, dataBase64 });
 }
 
+async function pickOutputDir() {
+  return invokeCommand<string | null>('pick_output_dir', {});
+}
+
 function browserFileToBase64(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -1624,6 +1628,21 @@ export function App() {
     });
   }
 
+  const handlePickOutputDir = useCallback(async () => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
+    try {
+      const picked = await pickOutputDir();
+      if (picked && picked.trim()) {
+        setOutputDir(picked);
+      }
+    } catch {
+      // Keep output path editing resilient if folder picker fails.
+    }
+  }, []);
+
   async function handleRefreshPreview() {
     await runWithBusy(async () => {
       await loadSlotPreviewMap();
@@ -2856,6 +2875,8 @@ export function App() {
               renderDir={renderDir}
               isBusy={isBusy}
               onOutputDirChange={setOutputDir}
+              onPickOutputDir={handlePickOutputDir}
+              canPickOutputDir={isTauriRuntime()}
               onZipEnabledChange={(checked) => updateDoc((next) => { next.pipelines.export.zip = checked; })}
               onExport={handleExport}
             />

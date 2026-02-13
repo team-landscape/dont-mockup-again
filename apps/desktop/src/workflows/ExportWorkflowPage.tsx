@@ -25,6 +25,8 @@ interface ExportWorkflowPageProps {
   renderDir: string;
   isBusy: boolean;
   onOutputDirChange: (value: string) => void;
+  onPickOutputDir: () => void;
+  canPickOutputDir: boolean;
   onZipEnabledChange: (checked: boolean) => void;
   onExport: () => void;
 }
@@ -35,6 +37,8 @@ export function ExportWorkflowPage({
   renderDir,
   isBusy,
   onOutputDirChange,
+  onPickOutputDir,
+  canPickOutputDir,
   onZipEnabledChange,
   onExport
 }: ExportWorkflowPageProps) {
@@ -48,7 +52,17 @@ export function ExportWorkflowPage({
           </CardHeader>
           <CardContent className="space-y-3">
             <LabeledField label="Output Dir">
-              <Input value={outputDir} onChange={(event) => onOutputDirChange(event.target.value)} />
+              <div className="flex gap-2">
+                <Input value={outputDir} onChange={(event) => onOutputDirChange(event.target.value)} />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isBusy || !canPickOutputDir}
+                  onClick={onPickOutputDir}
+                >
+                  Choose Folder
+                </Button>
+              </div>
             </LabeledField>
 
             <div className="flex items-center justify-between gap-3 rounded-md border p-2.5">

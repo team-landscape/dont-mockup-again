@@ -286,6 +286,13 @@ fn write_file_base64(path: String, data_base64: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn pick_output_dir() -> Option<String> {
+    rfd::FileDialog::new()
+        .pick_folder()
+        .map(|path| path.to_string_lossy().replace('\\', "/"))
+}
+
+#[tauri::command]
 fn list_system_fonts() -> Result<Vec<String>, String> {
     Ok(collect_system_fonts().unwrap_or_else(|_| fallback_font_list()))
 }
@@ -311,6 +318,7 @@ fn main() {
             list_png_files,
             read_file_base64,
             write_file_base64,
+            pick_output_dir,
             list_system_fonts
         ])
         .run(tauri::generate_context!())
