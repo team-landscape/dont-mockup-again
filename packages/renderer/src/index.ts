@@ -35,8 +35,8 @@ function buildScene(projectContext, job) {
   const titleBox = template.text?.title;
   const subtitleBox = template.text?.subtitle;
 
-  const titleLayout = layoutTextBox(copy.title, titleBox.w, titleBox.h, titleBox.size, { ellipsis: true });
-  const subtitleLayout = layoutTextBox(copy.subtitle, subtitleBox.w, subtitleBox.h, subtitleBox.size, { ellipsis: true });
+  const titleLayout = layoutTextBox(copy.title, titleBox.w, titleBox.h, titleBox.size, { ellipsis: false, overflow: true });
+  const subtitleLayout = layoutTextBox(copy.subtitle, subtitleBox.w, subtitleBox.h, subtitleBox.size, { ellipsis: false, overflow: true });
 
   return {
     width: job.device.width,

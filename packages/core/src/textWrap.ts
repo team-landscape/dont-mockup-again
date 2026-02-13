@@ -17,6 +17,7 @@ function tokenize(text) {
 
 export function layoutTextBox(text, boxWidth, boxHeight, fontSize, options = {}) {
   const lineHeightMultiplier = options.lineHeightMultiplier || DEFAULT_LINE_HEIGHT;
+  const overflow = options.overflow === true;
   const ellipsis = options.ellipsis !== false;
   const normalized = String(text || '').replace(/\s+/g, ' ').trim();
 
@@ -31,7 +32,8 @@ export function layoutTextBox(text, boxWidth, boxHeight, fontSize, options = {})
   }
 
   const maxCharsPerLine = Math.max(1, Math.floor(boxWidth / (fontSize * AVG_CHAR_WIDTH_RATIO)));
-  const maxLines = Math.max(1, Math.floor(boxHeight / (fontSize * lineHeightMultiplier)));
+  const boundedMaxLines = Math.max(1, Math.floor(boxHeight / (fontSize * lineHeightMultiplier)));
+  const maxLines = overflow ? Number.POSITIVE_INFINITY : boundedMaxLines;
 
   const { mode, tokens } = tokenize(normalized);
   const lines = [];
@@ -73,7 +75,7 @@ export function layoutTextBox(text, boxWidth, boxHeight, fontSize, options = {})
   let truncated = false;
   let visibleLines = lines;
 
-  if (lines.length > maxLines) {
+  if (!overflow && lines.length > maxLines) {
     truncated = true;
     visibleLines = lines.slice(0, maxLines);
   }
@@ -91,7 +93,7 @@ export function layoutTextBox(text, boxWidth, boxHeight, fontSize, options = {})
     lines: visibleLines,
     truncated,
     text: visibleLines.join('\n'),
-    maxLines,
+    maxLines: overflow ? visibleLines.length : boundedMaxLines,
     maxCharsPerLine
   };
 }

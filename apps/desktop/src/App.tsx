@@ -3903,60 +3903,57 @@ function drawCheckerPattern(
 function wrapLines(
   context: CanvasRenderingContext2D,
   text: string,
-  maxWidth: number,
-  maxLines: number
+  maxWidth: number
 ) {
   const paragraphs = String(text || '').replace(/\r/g, '').split('\n');
   const lines: string[] = [];
-  let truncated = false;
 
   for (const paragraph of paragraphs) {
     const words = paragraph.trim().split(/\s+/).filter(Boolean);
     if (words.length === 0) {
       lines.push('');
-      if (lines.length >= maxLines) {
-        truncated = true;
-        break;
-      }
       continue;
     }
 
     let current = words[0];
+    if (context.measureText(current).width > maxWidth) {
+      current = '';
+      for (const char of words[0]) {
+        const candidate = `${current}${char}`;
+        if (current && context.measureText(candidate).width > maxWidth) {
+          lines.push(current);
+          current = char;
+          continue;
+        }
+        current = candidate;
+      }
+    }
+
     for (let index = 1; index < words.length; index += 1) {
       const candidate = `${current} ${words[index]}`;
       if (context.measureText(candidate).width <= maxWidth) {
         current = candidate;
       } else {
         lines.push(current);
-        current = words[index];
-        if (lines.length >= maxLines) {
-          truncated = true;
-          break;
+        current = '';
+        for (const char of words[index]) {
+          const next = `${current}${char}`;
+          if (current && context.measureText(next).width > maxWidth) {
+            lines.push(current);
+            current = char;
+            continue;
+          }
+          current = next;
         }
       }
     }
 
-    if (!truncated) {
+    if (current) {
       lines.push(current);
-      if (lines.length >= maxLines) {
-        truncated = true;
-      }
     }
-
-    if (truncated) break;
   }
 
-  const fitted = lines.slice(0, maxLines);
-  if (truncated && fitted.length > 0) {
-    const lastIndex = fitted.length - 1;
-    let last = fitted[lastIndex];
-    while (last && context.measureText(`${last}…`).width > maxWidth) {
-      last = last.slice(0, -1);
-    }
-    fitted[lastIndex] = `${last}…`;
-  }
-
-  return fitted;
+  return lines;
 }
 
 function drawTextBlock(
@@ -3971,9 +3968,7 @@ function drawTextBlock(
   const contentX = layer.x + padding;
   const contentY = layer.y + padding;
   const contentWidth = Math.max(1, layer.w - padding * 2);
-  const contentHeight = Math.max(1, layer.h - padding * 2);
   const lineHeight = size * 1.2;
-  const maxLines = Math.max(1, Math.floor(contentHeight / lineHeight));
 
   if (layer.backgroundColor && layer.backgroundColor !== 'transparent') {
     context.save();
@@ -3984,10 +3979,6 @@ function drawTextBlock(
   }
 
   context.save();
-  context.beginPath();
-  context.rect(contentX, contentY, contentWidth, contentHeight);
-  context.clip();
-
   context.font = `${weight} ${size}px "${family}", "Apple SD Gothic Neo", sans-serif`;
   context.fillStyle = layer.color || '#f9fafb';
   context.textBaseline = 'top';
@@ -3997,10 +3988,9 @@ function drawTextBlock(
   context.shadowOffsetX = 0;
   context.shadowOffsetY = Math.max(1, Math.round(size * 0.05));
 
-  const lines = wrapLines(context, text, contentWidth, maxLines);
+  const lines = wrapLines(context, text, contentWidth);
   let y = contentY;
   for (const line of lines) {
-    if (y + lineHeight > contentY + contentHeight + 1) break;
     const x = layer.align === 'center'
       ? contentX + contentWidth / 2
       : layer.align === 'right'

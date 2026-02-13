@@ -36,7 +36,7 @@ function textStyle(box) {
     `font-weight:${box.weight || 600}`,
     `text-align:${box.align || 'left'}`,
     'line-height:1.2',
-    'overflow:hidden',
+    'overflow:visible',
     'white-space:pre-wrap',
     'word-break:break-word'
   ].join(';');
