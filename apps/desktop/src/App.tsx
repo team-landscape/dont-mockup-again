@@ -11,12 +11,14 @@ import { WorkflowSidebar } from './components/sidebar/WorkflowSidebar';
 import { useProjectImageAssets } from './hooks/useProjectImageAssets';
 import { useProjectBootstrapPaths } from './hooks/useProjectBootstrapPaths';
 import { useBusyRunner } from './hooks/useBusyRunner';
+import { useDesktopEnvironment } from './hooks/useDesktopEnvironment';
 import { useExportAction } from './hooks/useExportAction';
 import { useProjectFileActions } from './hooks/useProjectFileActions';
 import { useProjectImageUploadHandlers } from './hooks/useProjectImageUploadHandlers';
 import { usePersistProjectSnapshot } from './hooks/usePersistProjectSnapshot';
 import { usePipelineActions } from './hooks/usePipelineActions';
 import { useOnboardingActions } from './hooks/useOnboardingActions';
+import { useProjectSelectionSync } from './hooks/useProjectSelectionSync';
 import { useProjectSlotActions } from './hooks/useProjectSlotActions';
 import { useProjectWorkflowActions } from './hooks/useProjectWorkflowActions';
 import { usePreviewLoaders } from './hooks/usePreviewLoaders';
@@ -25,7 +27,6 @@ import { useTemplateEditorActions } from './hooks/useTemplateEditorActions';
 import { resolveOutputDir as resolveOutputDirPath } from './lib/output-dir';
 import {
   isTauriRuntime,
-  listSystemFonts,
   pickOutputDir
 } from './lib/desktop-runtime';
 import {
@@ -86,7 +87,6 @@ export function App() {
   const [slotPreviewPaths, setSlotPreviewPaths] = useState<Record<string, string>>({});
   const [previewMatrixUrls, setPreviewMatrixUrls] = useState<Record<string, Record<string, string>>>({});
   const [previewMatrixPaths, setPreviewMatrixPaths] = useState<Record<string, Record<string, string>>>({});
-  const [availableFonts, setAvailableFonts] = useState<string[]>(defaultSystemFonts);
   const [, setIssues] = useState<ValidateIssue[]>([]);
   const [exportStatus, setExportStatus] = useState('');
   const [exportError, setExportError] = useState('');
@@ -94,9 +94,9 @@ export function App() {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem(ONBOARDING_STORAGE_KEY) !== '1';
   });
-  const [isXlLayout, setIsXlLayout] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia(XL_MEDIA_QUERY).matches;
+  const { isXlLayout, availableFonts } = useDesktopEnvironment({
+    mediaQuery: XL_MEDIA_QUERY,
+    fallbackFonts: defaultSystemFonts
   });
   const slotImageInputRef = useRef<HTMLInputElement>(null);
   const slotImageTargetRef = useRef<string | null>(null);
@@ -268,60 +268,20 @@ export function App() {
     setActiveStep(steps[activeStepIndex + 1].id);
   }, [activeStepIndex]);
 
-  useEffect(() => {
-    if (!doc.project.locales.includes(selectedLocale)) {
-      setSelectedLocale(doc.project.locales[0] || 'en-US');
-    }
-
-    if (!doc.project.devices.some((device) => device.id === selectedDevice)) {
-      setSelectedDevice(doc.project.devices[0]?.id || 'ios_phone');
-    }
-
-    if (!doc.project.slots.some((slot) => slot.id === selectedSlot)) {
-      setSelectedSlot(doc.project.slots[0]?.id || 'slot1');
-    }
-  }, [doc.project.devices, doc.project.locales, doc.project.slots, selectedDevice, selectedLocale, selectedSlot]);
-
-  useEffect(() => {
-    if (templateElements.length === 0) {
-      setSelectedTemplateElementId('');
-      return;
-    }
-
-    if (!templateElements.some((item) => item.id === selectedTemplateElementId)) {
-      setSelectedTemplateElementId(templateElements[0].id);
-    }
-  }, [selectedTemplateElementId, templateElements]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const media = window.matchMedia(XL_MEDIA_QUERY);
-    const handleChange = (event: MediaQueryListEvent) => {
-      setIsXlLayout(event.matches);
-    };
-
-    setIsXlLayout(media.matches);
-    media.addEventListener('change', handleChange);
-    return () => media.removeEventListener('change', handleChange);
-  }, []);
-
-  useEffect(() => {
-    if (!isTauriRuntime()) {
-      setAvailableFonts(defaultSystemFonts);
-      return;
-    }
-
-    listSystemFonts()
-      .then((fonts) => {
-        if (fonts.length > 0) {
-          setAvailableFonts(fonts);
-        }
-      })
-      .catch(() => {
-        setAvailableFonts(defaultSystemFonts);
-      });
-  }, []);
+  useProjectSelectionSync({
+    locales: doc.project.locales,
+    devices: doc.project.devices,
+    slots: doc.project.slots,
+    selectedLocale,
+    selectedDevice,
+    selectedSlot,
+    setSelectedLocale,
+    setSelectedDevice,
+    setSelectedSlot,
+    templateElements,
+    selectedTemplateElementId,
+    setSelectedTemplateElementId
+  });
 
   useEffect(() => {
     if (!isProjectBaselineReady || savedProjectSignature !== null) {
@@ -510,10 +470,6 @@ export function App() {
     () => doc.project.locales.map((locale) => ({ value: locale, label: locale })),
     [doc.project.locales]
   );
-  const previewSlotOptions = useMemo(
-    () => doc.project.slots.map((slot) => ({ value: slot.id, label: slot.name })),
-    [doc.project.slots]
-  );
 
   return (
     <div className="grid min-h-screen w-full max-w-none gap-4 p-4 lg:p-6">
@@ -620,7 +576,7 @@ export function App() {
               selectedDevice={selectedDevice}
               onSelectDevice={setSelectedDevice}
               localeOptions={previewLocaleOptions}
-              slotOptions={previewSlotOptions}
+              slotOptions={slotOptions}
               previewPath={previewPath}
               renderSlotPreviewCard={renderPreviewSlotCard}
             />
