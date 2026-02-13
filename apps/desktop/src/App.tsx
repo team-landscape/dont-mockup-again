@@ -24,6 +24,7 @@ import { useProjectWorkflowActions } from './hooks/useProjectWorkflowActions';
 import { usePreviewLoaders } from './hooks/usePreviewLoaders';
 import { useScreenWorkflowState } from './hooks/useScreenWorkflowState';
 import { useTemplateEditorActions } from './hooks/useTemplateEditorActions';
+import { useWorkflowStepOptions } from './hooks/useWorkflowStepOptions';
 import { resolveOutputDir as resolveOutputDirPath } from './lib/output-dir';
 import {
   isTauriRuntime,
@@ -39,7 +40,6 @@ import {
   defaultLlmConfig,
   defaultSystemFonts,
   detectPlatformFromDeviceId,
-  fieldKey,
   localePresets,
   normalizeTemplateElementOrder,
   resolveTemplateElementsForSlot,
@@ -181,7 +181,7 @@ export function App() {
     setProjectStatus
   });
 
-  const previewRenderDir = useMemo(() => 'dist-render', []);
+  const previewRenderDir = 'dist-render';
 
   const activeStepIndex = useMemo(
     () => Math.max(steps.findIndex((item) => item.id === activeStep), 0),
@@ -452,24 +452,20 @@ export function App() {
       updateTemplateElement={updateTemplateElement}
     />
   );
-  const selectedSlotTitleValue = selectedSlotData
-    ? (doc.copy.keys[fieldKey(selectedSlotData.id, 'title')]?.[selectedLocale] || '')
-    : '';
-  const selectedSlotSubtitleValue = selectedSlotData
-    ? (doc.copy.keys[fieldKey(selectedSlotData.id, 'subtitle')]?.[selectedLocale] || '')
-    : '';
-  const deviceOptions = useMemo(
-    () => doc.project.devices.map((device) => ({ value: device.id, label: device.id })),
-    [doc.project.devices]
-  );
-  const slotOptions = useMemo(
-    () => slots.map((slot) => ({ value: slot.id, label: slot.name })),
-    [slots]
-  );
-  const previewLocaleOptions = useMemo(
-    () => doc.project.locales.map((locale) => ({ value: locale, label: locale })),
-    [doc.project.locales]
-  );
+  const {
+    deviceOptions,
+    slotOptions,
+    localeOptions: previewLocaleOptions,
+    selectedSlotTitleValue,
+    selectedSlotSubtitleValue
+  } = useWorkflowStepOptions({
+    devices: doc.project.devices,
+    locales: doc.project.locales,
+    slots,
+    selectedSlotData,
+    selectedLocale,
+    copyKeys: doc.copy.keys
+  });
 
   return (
     <div className="grid min-h-screen w-full max-w-none gap-4 p-4 lg:p-6">
