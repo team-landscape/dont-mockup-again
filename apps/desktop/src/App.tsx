@@ -20,6 +20,7 @@ import { useProjectImageUploadHandlers } from './hooks/useProjectImageUploadHand
 import { usePipelineActions } from './hooks/usePipelineActions';
 import { useOnboardingActions } from './hooks/useOnboardingActions';
 import { useProjectSlotActions } from './hooks/useProjectSlotActions';
+import { useProjectWorkflowActions } from './hooks/useProjectWorkflowActions';
 import { usePreviewLoaders } from './hooks/usePreviewLoaders';
 import { useScreenWorkflowState } from './hooks/useScreenWorkflowState';
 import { useTemplateEditorActions } from './hooks/useTemplateEditorActions';
@@ -127,6 +128,19 @@ export function App() {
     slotImageInputRef,
     slotImageTargetRef,
     startSlotTransition
+  });
+  const {
+    handleLocalizationLocalesChange,
+    handleSourceLocaleChange,
+    handleLlmCommandChange,
+    handleLlmTimeoutSecChange,
+    handleLlmPromptChange,
+    handleZipEnabledChange,
+    handleMetadataCsvEnabledChange,
+    handleOnboardingLocalesChange
+  } = useProjectWorkflowActions({
+    updateDoc,
+    upsertLlmConfig
   });
 
   const { defaultExportDir, isProjectBaselineReady } = useProjectBootstrapPaths({
@@ -371,6 +385,9 @@ export function App() {
       // Keep output path editing resilient if folder picker fails.
     }
   }, []);
+  const handleSaveProjectClick = useCallback(() => {
+    void handleSaveProject();
+  }, [handleSaveProject]);
 
   const {
     slots,
@@ -378,8 +395,14 @@ export function App() {
     selectedSlotBackground,
     slotCanvasCardSize,
     slotCanvasPositions,
+    isMoveUpDisabled,
+    isMoveDownDisabled,
     screenCanvasSlots,
     commitSelectedSlotName,
+    resetSelectedSlotNameDraft,
+    moveSelectedSlotUp,
+    moveSelectedSlotDown,
+    removeSelectedSlot,
     handleSelectSlot,
     reorderSlotByDrag,
     updateCopyByKey,
@@ -403,6 +426,8 @@ export function App() {
     setSelectedSlotNameDraft,
     startSlotTransition,
     renameSlot,
+    moveSlot,
+    removeSlot,
     updateDoc
   });
   const previewPath = previewMatrixPaths[selectedLocale]?.[selectedSlot] || slotPreviewPaths[selectedSlot] || '';
@@ -505,7 +530,7 @@ export function App() {
           isFirstStep={isFirstStep}
           isLastStep={isLastStep}
           onLoad={handleLoadProject}
-          onSave={() => handleSaveProject()}
+          onSave={handleSaveProjectClick}
           onNew={handleCreateNewProject}
           onSetup={handleOpenOnboarding}
           onPrev={goPrevStep}
@@ -541,30 +566,18 @@ export function App() {
                   selectedSlotNameDraft={selectedSlotNameDraft}
                   titleValue={selectedSlotData ? (doc.copy.keys[fieldKey(selectedSlotData.id, 'title')]?.[selectedLocale] || '') : ''}
                   subtitleValue={selectedSlotData ? (doc.copy.keys[fieldKey(selectedSlotData.id, 'subtitle')]?.[selectedLocale] || '') : ''}
-                  isMoveUpDisabled={slots[0]?.id === selectedSlotData?.id}
-                  isMoveDownDisabled={slots[slots.length - 1]?.id === selectedSlotData?.id}
+                  isMoveUpDisabled={isMoveUpDisabled}
+                  isMoveDownDisabled={isMoveDownDisabled}
                   templateInspectorNode={templateInspectorSection}
                   onSlotNameDraftChange={setSelectedSlotNameDraft}
                   onCommitSlotName={commitSelectedSlotName}
-                  onResetSlotNameDraft={() => {
-                    if (!selectedSlotData) return;
-                    setSelectedSlotNameDraft(selectedSlotData.name);
-                  }}
+                  onResetSlotNameDraft={resetSelectedSlotNameDraft}
                   onOpenSlotImagePicker={openSlotImagePicker}
                   onTitleChange={handleSelectedTitleChange}
                   onSubtitleChange={handleSelectedSubtitleChange}
-                  onMoveSlotUp={() => {
-                    if (!selectedSlotData) return;
-                    moveSlot(selectedSlotData.id, -1);
-                  }}
-                  onMoveSlotDown={() => {
-                    if (!selectedSlotData) return;
-                    moveSlot(selectedSlotData.id, 1);
-                  }}
-                  onRemoveSlot={() => {
-                    if (!selectedSlotData) return;
-                    removeSlot(selectedSlotData.id);
-                  }}
+                  onMoveSlotUp={moveSelectedSlotUp}
+                  onMoveSlotDown={moveSelectedSlotDown}
+                  onRemoveSlot={removeSelectedSlot}
                 />
               )}
               isXlLayout={isXlLayout}
@@ -592,19 +605,14 @@ export function App() {
                 <LocaleSelector
                   value={doc.project.locales}
                   options={localePresets}
-                  onChange={(locales) => updateDoc((next) => {
-                    if (locales.length === 0) return;
-                    next.project.locales = locales;
-                  })}
+                  onChange={handleLocalizationLocalesChange}
                 />
               )}
-              onSourceLocaleChange={(locale) => updateDoc((next) => {
-                next.pipelines.localization.sourceLocale = locale;
-              })}
+              onSourceLocaleChange={handleSourceLocaleChange}
               onRunLocalization={handleRunLocalization}
-              onLlmCommandChange={(value) => upsertLlmConfig((cfg) => { cfg.command = value; })}
-              onLlmTimeoutSecChange={(value) => upsertLlmConfig((cfg) => { cfg.timeoutSec = value; })}
-              onLlmPromptChange={(value) => upsertLlmConfig((cfg) => { cfg.prompt = value; })}
+              onLlmCommandChange={handleLlmCommandChange}
+              onLlmTimeoutSecChange={handleLlmTimeoutSecChange}
+              onLlmPromptChange={handleLlmPromptChange}
               getCopyValue={(key, locale) => doc.copy.keys[key]?.[locale] || ''}
               onCopyChange={updateCopyByKey}
             />
@@ -633,8 +641,8 @@ export function App() {
               onOutputDirChange={setOutputDir}
               onPickOutputDir={handlePickOutputDir}
               canPickOutputDir={isTauriRuntime()}
-              onZipEnabledChange={(checked) => updateDoc((next) => { next.pipelines.export.zip = checked; })}
-              onMetadataCsvEnabledChange={(checked) => updateDoc((next) => { next.pipelines.export.metadataCsv = checked; })}
+              onZipEnabledChange={handleZipEnabledChange}
+              onMetadataCsvEnabledChange={handleMetadataCsvEnabledChange}
               onExport={handleExport}
             />
           ) : null}
@@ -655,7 +663,7 @@ export function App() {
         platforms={doc.project.platforms}
         devices={doc.project.devices}
         ready={onboardingReady}
-        onLocalesChange={(locales) => updateDoc((next) => { next.project.locales = locales; })}
+        onLocalesChange={handleOnboardingLocalesChange}
         onPlatformToggle={togglePlatform}
         onDeviceToggle={toggleDevicePreset}
         onStart={handleCompleteOnboarding}

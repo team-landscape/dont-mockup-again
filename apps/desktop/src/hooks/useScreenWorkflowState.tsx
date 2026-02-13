@@ -40,6 +40,8 @@ interface UseScreenWorkflowStateArgs {
   setSelectedSlotNameDraft: Dispatch<SetStateAction<string>>;
   startSlotTransition: TransitionStartFunction;
   renameSlot: (slotId: string, nextName: string) => void;
+  moveSlot: (slotId: string, direction: -1 | 1) => void;
+  removeSlot: (slotId: string) => void;
   updateDoc: (mutator: (next: StoreShotDoc) => void) => void;
 }
 
@@ -60,6 +62,8 @@ export function useScreenWorkflowState({
   setSelectedSlotNameDraft,
   startSlotTransition,
   renameSlot,
+  moveSlot,
+  removeSlot,
   updateDoc
 }: UseScreenWorkflowStateArgs) {
   const slots = useMemo(
@@ -136,6 +140,29 @@ export function useScreenWorkflowState({
       next.project.slots = reorderSlots(ordered);
     });
   }, [updateDoc]);
+
+  const isMoveUpDisabled = slots[0]?.id === selectedSlotData?.id;
+  const isMoveDownDisabled = slots[slots.length - 1]?.id === selectedSlotData?.id;
+
+  const resetSelectedSlotNameDraft = useCallback(() => {
+    if (!selectedSlotData) return;
+    setSelectedSlotNameDraft(selectedSlotData.name);
+  }, [selectedSlotData, setSelectedSlotNameDraft]);
+
+  const moveSelectedSlotUp = useCallback(() => {
+    if (!selectedSlotData) return;
+    moveSlot(selectedSlotData.id, -1);
+  }, [moveSlot, selectedSlotData]);
+
+  const moveSelectedSlotDown = useCallback(() => {
+    if (!selectedSlotData) return;
+    moveSlot(selectedSlotData.id, 1);
+  }, [moveSlot, selectedSlotData]);
+
+  const removeSelectedSlot = useCallback(() => {
+    if (!selectedSlotData) return;
+    removeSlot(selectedSlotData.id);
+  }, [removeSlot, selectedSlotData]);
 
   const screenCanvasSlots = useMemo<CanvasSlotItem[]>(() => (
     slots.map((slot) => ({
@@ -260,8 +287,14 @@ export function useScreenWorkflowState({
     selectedSlotBackground,
     slotCanvasCardSize,
     slotCanvasPositions,
+    isMoveUpDisabled,
+    isMoveDownDisabled,
     screenCanvasSlots,
     commitSelectedSlotName,
+    resetSelectedSlotNameDraft,
+    moveSelectedSlotUp,
+    moveSelectedSlotDown,
+    removeSelectedSlot,
     handleSelectSlot,
     reorderSlotByDrag,
     updateCopyByKey,
