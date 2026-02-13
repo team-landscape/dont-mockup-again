@@ -54,13 +54,19 @@ jobs:
           APP_NAME="Store Metadata Studio.app"
           ARCHIVE_PATH="${BUNDLE_DIR}/Store-Metadata-Studio-${REF_SLUG}-macos-app.tar.gz"
           CHECKSUM_PATH="${ARCHIVE_PATH}.sha256"
+          LATEST_ARCHIVE_PATH="${BUNDLE_DIR}/dont-mockup-again-macos-latest.tar.gz"
+          LATEST_CHECKSUM_PATH="${LATEST_ARCHIVE_PATH}.sha256"
 
           test -d "${BUNDLE_DIR}/${APP_NAME}"
           tar -czf "${ARCHIVE_PATH}" -C "${BUNDLE_DIR}" "${APP_NAME}"
           shasum -a 256 "${ARCHIVE_PATH}" > "${CHECKSUM_PATH}"
+          cp "${ARCHIVE_PATH}" "${LATEST_ARCHIVE_PATH}"
+          shasum -a 256 "${LATEST_ARCHIVE_PATH}" > "${LATEST_CHECKSUM_PATH}"
 
           echo "ARCHIVE_PATH=${ARCHIVE_PATH}" >> "${GITHUB_ENV}"
           echo "CHECKSUM_PATH=${CHECKSUM_PATH}" >> "${GITHUB_ENV}"
+          echo "LATEST_ARCHIVE_PATH=${LATEST_ARCHIVE_PATH}" >> "${GITHUB_ENV}"
+          echo "LATEST_CHECKSUM_PATH=${LATEST_CHECKSUM_PATH}" >> "${GITHUB_ENV}"
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
@@ -69,6 +75,8 @@ jobs:
           path: |
             ${{ env.ARCHIVE_PATH }}
             ${{ env.CHECKSUM_PATH }}
+            ${{ env.LATEST_ARCHIVE_PATH }}
+            ${{ env.LATEST_CHECKSUM_PATH }}
           if-no-files-found: error
 
       - name: Publish GitHub Release
@@ -77,6 +85,9 @@ jobs:
         with:
           generate_release_notes: true
           fail_on_unmatched_files: true
+          overwrite_files: true
           files: |
             ${{ env.ARCHIVE_PATH }}
             ${{ env.CHECKSUM_PATH }}
+            ${{ env.LATEST_ARCHIVE_PATH }}
+            ${{ env.LATEST_CHECKSUM_PATH }}
