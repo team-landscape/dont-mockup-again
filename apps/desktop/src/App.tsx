@@ -1072,6 +1072,11 @@ export function App() {
       } else if (normalized.startsWith('~/')) {
         normalized = `${homeDir}/${normalized.slice(2)}`;
       }
+
+      const legacySuffix = '/유저/Store Metadata Studio';
+      if (normalized.endsWith(legacySuffix)) {
+        normalized = `${homeDir}/Store Metadata Studio`;
+      }
     }
     if (!normalized || normalized === 'dist') {
       return defaultExportDir || 'dist';
@@ -1742,26 +1747,33 @@ export function App() {
   }
 
   async function handleExport() {
-    await runWithBusy(async ({ setDetail }) => {
-      const flags: string[] = [];
-      if (doc.pipelines.export.zip) flags.push('--zip');
-      if (doc.pipelines.export.metadataCsv) flags.push('--metadata-csv');
-      const resolvedOutputDir = resolveOutputDir(outputDir);
-      if (resolvedOutputDir !== outputDir) {
-        setOutputDir(resolvedOutputDir);
-      }
+    try {
+      await runWithBusy(async ({ setDetail }) => {
+        const flags: string[] = [];
+        if (doc.pipelines.export.zip) flags.push('--zip');
+        if (doc.pipelines.export.metadataCsv) flags.push('--metadata-csv');
+        const resolvedOutputDir = resolveOutputDir(outputDir);
+        if (resolvedOutputDir !== outputDir) {
+          setOutputDir(resolvedOutputDir);
+        }
 
-      setDetail('Saving project config...');
-      const snapshot = await persistProjectSnapshot();
-      setDetail('Rendering images from Preview...');
-      await renderExportImagesFromPreview(snapshot, resolvedOutputDir);
-      setDetail('Creating output package...');
-      await runPipeline('export', [projectPath, resolvedOutputDir, resolvedOutputDir, ...flags]);
-    }, {
-      action: 'export',
-      title: 'Exporting',
-      detail: 'Preparing export...'
-    });
+        setDetail('Saving project config...');
+        const snapshot = await persistProjectSnapshot();
+        setDetail('Rendering images from Preview...');
+        await renderExportImagesFromPreview(snapshot, resolvedOutputDir);
+        setDetail('Creating output package...');
+        await runPipeline('export', [projectPath, resolvedOutputDir, resolvedOutputDir, ...flags]);
+      }, {
+        action: 'export',
+        title: 'Exporting',
+        detail: 'Preparing export...'
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (typeof window !== 'undefined') {
+        window.alert(`Export failed:\n${message}`);
+      }
+    }
   }
 
   const handlePickOutputDir = useCallback(async () => {
