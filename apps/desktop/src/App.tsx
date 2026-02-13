@@ -1,6 +1,6 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition, type CSSProperties, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react';
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
-import { ArrowDown, ArrowUp, ChevronDown, FolderDown, FolderUp, Plus, RefreshCcw, Save, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, FolderDown, FolderUp, Plus, Save, Trash2 } from 'lucide-react';
 
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
@@ -17,6 +17,10 @@ import {
 } from './components/ui/select';
 import { Switch } from './components/ui/switch';
 import { Textarea } from './components/ui/textarea';
+import { ExportWorkflowPage } from './workflows/ExportWorkflowPage';
+import { LocalizationWorkflowPage } from './workflows/LocalizationWorkflowPage';
+import { PreviewWorkflowPage } from './workflows/PreviewWorkflowPage';
+import { ScreensWorkflowPage } from './workflows/ScreensWorkflowPage';
 
 type StepId = 'screens' | 'localization' | 'preview' | 'export';
 type Platform = 'ios' | 'android';
@@ -2208,302 +2212,94 @@ export function App() {
 
         <div className={activeStep === 'screens' ? 'space-y-4' : 'space-y-4 pt-2 lg:pl-[250px]'}>
           {activeStep === 'screens' ? (
-            <div className="relative mt-0 h-[calc(100vh-2.5rem)] overflow-hidden rounded-xl border">
-              <InfiniteSlotCanvas
-                className="h-full w-full"
-                focusTrigger={screenFocusTrigger}
-                items={screenCanvasSlots}
-                positions={slotCanvasPositions}
-                cardWidth={slotCanvasCardSize.width}
-                cardHeight={slotCanvasCardSize.height}
-                selectedSlot={selectedSlot}
-                templateImageUrls={templateImageUrls}
-                device={selectedDeviceSpec}
-                onSelect={handleSelectSlot}
-                onReorder={reorderSlotByDrag}
-                onRename={renameSlot}
-              />
-
-              <div className="pointer-events-none fixed left-3 top-[13.5rem] z-30 w-[min(560px,calc(100%-1.5rem))] lg:left-[15.5rem] lg:top-3 lg:w-[min(560px,calc(100%-17.5rem))] xl:w-[540px]">
-                <Card className="pointer-events-auto bg-card/95 shadow-2xl backdrop-blur">
-                  <CardHeader className="gap-3 pb-2">
-                    <div className="space-y-2">
-                      <CardTitle>Screens Composer</CardTitle>
-                      <CardDescription>캔버스 위에서 슬롯을 배치하고 바로 편집합니다.</CardDescription>
-                      <div className="flex flex-wrap gap-2">
-                        <Badge variant="secondary">{selectedDevice}</Badge>
-                        <Badge variant="secondary">{selectedLocale}</Badge>
-                        <Badge variant="outline">{slots.length} slots</Badge>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" onClick={addSlot}><Plus className="mr-1 h-4 w-4" />Add Slot</Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="grid gap-3 pt-0 sm:grid-cols-3">
-                    <LabeledField label="Device">
-                      <Select value={selectedDevice} onValueChange={setSelectedDevice}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {doc.project.devices.map((device) => (
-                            <SelectItem key={device.id} value={device.id}>{device.id}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </LabeledField>
-
-                    <LabeledField label="Locale">
-                      <Select value={selectedLocale} onValueChange={setSelectedLocale}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {doc.project.locales.map((locale) => (
-                            <SelectItem key={locale} value={locale}>{locale}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </LabeledField>
-
-                    <LabeledField label="Selected Slot">
-                      <Select value={selectedSlot} onValueChange={handleSelectSlot}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {slots.map((slot) => (
-                            <SelectItem key={slot.id} value={slot.id}>{slot.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </LabeledField>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {isXlLayout ? (
-                <div className="pointer-events-none fixed right-3 top-3 z-30 w-[460px]">
-                  <div data-native-wheel className="pointer-events-auto rounded-xl border bg-card/95 p-3 shadow-2xl backdrop-blur">
-                    <ScrollArea className="h-[calc(100vh-8rem)] pr-2">
-                      {renderSelectedInspector()}
-                    </ScrollArea>
-                  </div>
-                </div>
-              ) : (
-                <div className="pointer-events-none fixed inset-x-3 bottom-3 z-30">
-                  <div data-native-wheel className="pointer-events-auto rounded-xl border bg-card/95 p-3 shadow-2xl backdrop-blur">
-                    <ScrollArea className="h-[42vh] pr-2">
-                      {renderSelectedInspector()}
-                    </ScrollArea>
-                  </div>
-                </div>
+            <ScreensWorkflowPage
+              canvasNode={(
+                <InfiniteSlotCanvas
+                  className="h-full w-full"
+                  focusTrigger={screenFocusTrigger}
+                  items={screenCanvasSlots}
+                  positions={slotCanvasPositions}
+                  cardWidth={slotCanvasCardSize.width}
+                  cardHeight={slotCanvasCardSize.height}
+                  selectedSlot={selectedSlot}
+                  templateImageUrls={templateImageUrls}
+                  device={selectedDeviceSpec}
+                  onSelect={handleSelectSlot}
+                  onReorder={reorderSlotByDrag}
+                  onRename={renameSlot}
+                />
               )}
-            </div>
+              inspectorNode={renderSelectedInspector()}
+              isXlLayout={isXlLayout}
+              selectedDevice={selectedDevice}
+              selectedLocale={selectedLocale}
+              selectedSlot={selectedSlot}
+              slotCount={slots.length}
+              deviceOptions={doc.project.devices.map((device) => ({ value: device.id, label: device.id }))}
+              localeOptions={doc.project.locales.map((locale) => ({ value: locale, label: locale }))}
+              slotOptions={slots.map((slot) => ({ value: slot.id, label: slot.name }))}
+              onSelectDevice={setSelectedDevice}
+              onSelectLocale={setSelectedLocale}
+              onSelectSlot={handleSelectSlot}
+              onAddSlot={addSlot}
+            />
           ) : null}
 
           {activeStep === 'localization' ? (
-            <div className="space-y-4">
-              <div className="grid gap-4 xl:grid-cols-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Localization Pipeline</CardTitle>
-                    <CardDescription>BYOY import 또는 LLM CLI 설정</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <LabeledField label="Mode">
-                      <Select
-                        value={doc.pipelines.localization.mode}
-                        onValueChange={(value) => updateDoc((next) => {
-                          next.pipelines.localization.mode = value as 'byoy' | 'llm-cli';
-                        })}
-                      >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="byoy">BYOY</SelectItem>
-                          <SelectItem value="llm-cli">LLM CLI</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </LabeledField>
-
-                    <LabeledField label="BYOY JSON Path">
-                      <Input value={byoyPath} onChange={(event) => setByoyPath(event.target.value)} />
-                    </LabeledField>
-                    <Button variant="outline" disabled={isBusy} onClick={handleImportByoy}>Import BYOY JSON</Button>
-
-                    <div className="rounded-md border p-3">
-                      <p className="mb-3 text-sm font-medium">LLM CLI Config</p>
-                      <div className="grid gap-3">
-                        <LabeledField label="Command">
-                          <Input value={llmConfig.command} onChange={(event) => upsertLlmConfig((cfg) => { cfg.command = event.target.value; })} />
-                        </LabeledField>
-                        <LabeledField label="Args Template (comma separated)">
-                          <Input
-                            value={llmConfig.argsTemplate.join(', ')}
-                            onChange={(event) => upsertLlmConfig((cfg) => {
-                              cfg.argsTemplate = event.target.value.split(',').map((item) => item.trim()).filter(Boolean);
-                            })}
-                          />
-                        </LabeledField>
-                        <NumberField
-                          label="Timeout Sec"
-                          value={llmConfig.timeoutSec}
-                          onValueChange={(value) => upsertLlmConfig((cfg) => { cfg.timeoutSec = value; })}
-                        />
-                        <LabeledField label="Glossary Path">
-                          <Input value={llmConfig.glossaryPath || ''} onChange={(event) => upsertLlmConfig((cfg) => { cfg.glossaryPath = event.target.value; })} />
-                        </LabeledField>
-                        <LabeledField label="Style Guide Path">
-                          <Input value={llmConfig.styleGuidePath || ''} onChange={(event) => upsertLlmConfig((cfg) => { cfg.styleGuidePath = event.target.value; })} />
-                        </LabeledField>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Copy Editor</CardTitle>
-                    <CardDescription>{doc.project.locales.length} locale(s)</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ScrollArea className="h-[520px] pr-2">
-                      <div className="space-y-2">
-                        {copyKeys.map((key) => (
-                          <div key={key} className="rounded-md border p-3">
-                            <p className="mb-2 text-xs font-semibold text-muted-foreground">{key}</p>
-                            <div className="grid gap-2 md:grid-cols-2">
-                              {doc.project.locales.map((locale) => (
-                                <LabeledField key={`${key}:${locale}`} label={locale}>
-                                  <Input
-                                    value={doc.copy.keys[key]?.[locale] || ''}
-                                    onChange={(event) => updateCopyByKey(key, locale, event.target.value)}
-                                  />
-                                </LabeledField>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
+            <LocalizationWorkflowPage
+              mode={doc.pipelines.localization.mode}
+              byoyPath={byoyPath}
+              isBusy={isBusy}
+              llmConfig={llmConfig}
+              copyKeys={copyKeys}
+              locales={doc.project.locales}
+              onModeChange={(mode) => updateDoc((next) => {
+                next.pipelines.localization.mode = mode;
+              })}
+              onByoyPathChange={setByoyPath}
+              onImportByoy={handleImportByoy}
+              onLlmCommandChange={(value) => upsertLlmConfig((cfg) => { cfg.command = value; })}
+              onLlmArgsTemplateChange={(value) => upsertLlmConfig((cfg) => { cfg.argsTemplate = value; })}
+              onLlmTimeoutSecChange={(value) => upsertLlmConfig((cfg) => { cfg.timeoutSec = value; })}
+              onLlmGlossaryPathChange={(value) => upsertLlmConfig((cfg) => { cfg.glossaryPath = value; })}
+              onLlmStyleGuidePathChange={(value) => upsertLlmConfig((cfg) => { cfg.styleGuidePath = value; })}
+              getCopyValue={(key, locale) => doc.copy.keys[key]?.[locale] || ''}
+              onCopyChange={updateCopyByKey}
+            />
           ) : null}
 
           {activeStep === 'preview' ? (
-            <div className="space-y-4">
-              <div className="grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Render Controls</CardTitle>
-                    <CardDescription>렌더/검증/프리뷰 로드</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <LabeledField label="Device">
-                      <Select value={selectedDevice} onValueChange={setSelectedDevice}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {doc.project.devices.map((device) => (
-                            <SelectItem key={device.id} value={device.id}>{device.id}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </LabeledField>
-
-                    <LabeledField label="Locale">
-                      <Select value={selectedLocale} onValueChange={setSelectedLocale}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {doc.project.locales.map((locale) => (
-                            <SelectItem key={locale} value={locale}>{locale}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </LabeledField>
-
-                    <LabeledField label="Slot">
-                      <Select value={selectedSlot} onValueChange={handleSelectSlot}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {doc.project.slots.map((slot) => (
-                            <SelectItem key={slot.id} value={slot.id}>{slot.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </LabeledField>
-
-                    <div className="flex flex-wrap gap-2">
-                      <Button disabled={isBusy} onClick={handleRender}>Render</Button>
-                      <Button disabled={isBusy} variant="outline" onClick={handleValidate}>Validate</Button>
-                      <Button disabled={isBusy} variant="secondary" onClick={handleRefreshPreview}><RefreshCcw className="mr-1 h-4 w-4" />Refresh</Button>
-                    </div>
-
-                    <p className="rounded-md border bg-muted/60 p-2 text-xs">{expectedPreviewPath}</p>
-
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Validation Issues</p>
-                      {issues.length === 0 ? (
-                        <Badge variant="secondary">No issues</Badge>
-                      ) : (
-                        <div className="grid gap-2">
-                          {issues.map((issue, index) => (
-                            <div key={`${issue.code}:${index}`} className="rounded-md border p-2">
-                              <Badge variant={issue.level === 'error' ? 'destructive' : 'outline'}>
-                                {issue.level.toUpperCase()} · {issue.code}
-                              </Badge>
-                              <p className="mt-1 text-xs text-muted-foreground">{issue.message}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Preview</CardTitle>
-                    <CardDescription className="truncate">{previewPath || 'No image loaded'}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid min-h-[560px] place-items-center rounded-lg border bg-muted/30 p-4">
-                      {previewDataUrl ? (
-                        <img src={previewDataUrl} alt="render preview" className="max-h-[72vh] w-auto max-w-full rounded-md border" />
-                      ) : (
-                        <p className="text-sm text-muted-foreground">Render 후 Refresh Preview를 눌러 주세요.</p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
+            <PreviewWorkflowPage
+              selectedDevice={selectedDevice}
+              selectedLocale={selectedLocale}
+              selectedSlot={selectedSlot}
+              deviceOptions={doc.project.devices.map((device) => ({ value: device.id, label: device.id }))}
+              localeOptions={doc.project.locales.map((locale) => ({ value: locale, label: locale }))}
+              slotOptions={doc.project.slots.map((slot) => ({ value: slot.id, label: slot.name }))}
+              isBusy={isBusy}
+              expectedPreviewPath={expectedPreviewPath}
+              previewPath={previewPath}
+              previewDataUrl={previewDataUrl}
+              issues={issues}
+              onSelectDevice={setSelectedDevice}
+              onSelectLocale={setSelectedLocale}
+              onSelectSlot={handleSelectSlot}
+              onRender={handleRender}
+              onValidate={handleValidate}
+              onRefreshPreview={handleRefreshPreview}
+            />
           ) : null}
 
           {activeStep === 'export' ? (
-            <div className="space-y-4">
-              <div className="grid gap-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Export</CardTitle>
-                    <CardDescription>dist/zip layout 생성</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <LabeledField label="Output Dir">
-                      <Input value={outputDir} onChange={(event) => setOutputDir(event.target.value)} />
-                    </LabeledField>
-
-                    <SwitchRow
-                      label="Create zip"
-                      checked={doc.pipelines.export.zip}
-                      onCheckedChange={(checked) => updateDoc((next) => { next.pipelines.export.zip = checked; })}
-                    />
-
-                    <div className="flex flex-wrap gap-2">
-                      <Button disabled={isBusy} onClick={handleExport}>Run Export</Button>
-                    </div>
-
-                    <p className="rounded-md border bg-muted/60 p-2 text-xs">Render Dir: {renderDir}</p>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
+            <ExportWorkflowPage
+              outputDir={outputDir}
+              zipEnabled={doc.pipelines.export.zip}
+              renderDir={renderDir}
+              isBusy={isBusy}
+              onOutputDirChange={setOutputDir}
+              onZipEnabledChange={(checked) => updateDoc((next) => { next.pipelines.export.zip = checked; })}
+              onExport={handleExport}
+            />
           ) : null}
 
         </div>
