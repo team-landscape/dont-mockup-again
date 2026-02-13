@@ -140,7 +140,23 @@ interface LlmCliConfig {
   command: string;
   argsTemplate: string[];
   timeoutSec: number;
-  glossaryPath?: string;
+  promptVersion: string;
+  cachePath?: string;
+  sourceLocale?: string;
+  targetLocales?: string[];
+  styleGuidePath?: string;
+}
+
+interface ByokConfig {
+  baseUrl: string;
+  endpointPath: string;
+  model: string;
+  apiKeyEnv: string;
+  timeoutSec: number;
+  promptVersion: string;
+  cachePath?: string;
+  sourceLocale?: string;
+  targetLocales?: string[];
   styleGuidePath?: string;
 }
 
@@ -164,7 +180,9 @@ interface StoreShotDoc {
   };
   pipelines: {
     localization: {
-      mode: 'byoy' | 'llm-cli';
+      mode: 'byok' | 'llm-cli';
+      sourceLocale?: string;
+      byok?: ByokConfig;
       llmCli?: LlmCliConfig;
     };
     export: {
@@ -195,7 +213,7 @@ interface SlotCanvasPosition {
 
 const steps: Array<{ id: StepId; title: string; description: string }> = [
   { id: 'screens', title: 'Screens', description: '미리보기 + 슬롯 + 템플릿 편집 Composer' },
-  { id: 'localization', title: 'Localization', description: 'BYOY import + LLM CLI 설정 + copy 편집' },
+  { id: 'localization', title: 'Localization', description: 'BYOK 또는 Local LLM CLI 설정 + copy 편집' },
   { id: 'preview', title: 'Preview / Validate', description: '렌더/검증/프리뷰' },
   { id: 'export', title: 'Export', description: 'dist/zip export' }
 ];
@@ -263,11 +281,21 @@ const defaultSystemFonts = [
   'Inter'
 ];
 
+const defaultByokConfig: ByokConfig = {
+  baseUrl: 'https://api.openai.com/v1',
+  endpointPath: '/chat/completions',
+  model: 'gpt-4o-mini',
+  apiKeyEnv: 'OPENAI_API_KEY',
+  timeoutSec: 120,
+  promptVersion: 'v1',
+  styleGuidePath: 'style.md'
+};
+
 const defaultLlmConfig: LlmCliConfig = {
   command: 'gemini-cli',
   argsTemplate: ['translate', '--in', '{INPUT}', '--out', '{OUTPUT}', '--to', '{LOCALE}'],
   timeoutSec: 120,
-  glossaryPath: 'glossary.csv',
+  promptVersion: 'v1',
   styleGuidePath: 'style.md'
 };
 const XL_MEDIA_QUERY = '(min-width: 1280px)';
@@ -718,7 +746,9 @@ function createDefaultProject(): StoreShotDoc {
     },
     pipelines: {
       localization: {
-        mode: 'byoy',
+        mode: 'byok',
+        sourceLocale: 'en-US',
+        byok: clone(defaultByokConfig),
         llmCli: clone(defaultLlmConfig)
       },
       export: {
@@ -777,6 +807,13 @@ function normalizeProject(raw: unknown): StoreShotDoc {
       })
     )
   });
+  const mergedLocales = doc.project?.locales || base.project.locales;
+  const rawLocalizationMode = doc.pipelines?.localization?.mode;
+  const normalizedLocalizationMode = rawLocalizationMode === 'llm-cli' ? 'llm-cli' : 'byok';
+  const sourceLocaleFromDoc = doc.pipelines?.localization?.sourceLocale || mergedLocales[0] || base.project.locales[0];
+  const normalizedSourceLocale = mergedLocales.includes(sourceLocaleFromDoc)
+    ? sourceLocaleFromDoc
+    : (mergedLocales[0] || base.project.locales[0]);
 
   return {
     ...base,
@@ -785,7 +822,7 @@ function normalizeProject(raw: unknown): StoreShotDoc {
       ...base.project,
       ...doc.project,
       platforms: (doc.project?.platforms || base.project.platforms) as Platform[],
-      locales: doc.project?.locales || base.project.locales,
+      locales: mergedLocales,
       devices: doc.project?.devices || base.project.devices,
       slots: normalizedSlots
     },
@@ -798,7 +835,9 @@ function normalizeProject(raw: unknown): StoreShotDoc {
     },
     pipelines: {
       localization: {
-        mode: doc.pipelines?.localization?.mode || base.pipelines.localization.mode,
+        mode: normalizedLocalizationMode,
+        sourceLocale: normalizedSourceLocale,
+        byok: { ...defaultByokConfig, ...doc.pipelines?.localization?.byok },
         llmCli: { ...defaultLlmConfig, ...doc.pipelines?.localization?.llmCli }
       },
       export: {
@@ -923,16 +962,12 @@ export function App() {
     return { id: selectedDevice, width: 1290, height: 2796, pixelRatio: 1, platform: selectedPlatform };
   }, [doc.project.devices, selectedDevice, selectedPlatform]);
 
-  const copyKeys = useMemo(() => {
-    const keys = doc.project.slots.flatMap((slot) => [fieldKey(slot.id, 'title'), fieldKey(slot.id, 'subtitle')]);
-    return [...new Set(keys)];
-  }, [doc.project.slots]);
-
   const expectedPreviewPath = useMemo(
     () => `${renderDir}/${selectedPlatform}/${selectedDevice}/${selectedLocale}/${selectedSlot}.png`,
     [renderDir, selectedPlatform, selectedDevice, selectedLocale, selectedSlot]
   );
 
+  const byokConfig = doc.pipelines.localization.byok || clone(defaultByokConfig);
   const llmConfig = doc.pipelines.localization.llmCli || clone(defaultLlmConfig);
   const deferredTemplateMain = useDeferredValue(doc.template.main);
   const templateElements = useMemo(
@@ -1154,6 +1189,10 @@ export function App() {
       next.project.slots = reorderSlots(next.project.slots);
       next.template.main = syncTemplateLegacyFields(next.template.main);
       next.pipelines.export.outputDir = outputDir;
+      const sourceLocale = next.pipelines.localization.sourceLocale || next.project.locales[0] || 'en-US';
+      next.pipelines.localization.sourceLocale = next.project.locales.includes(sourceLocale)
+        ? sourceLocale
+        : (next.project.locales[0] || 'en-US');
       await writeTextFile(projectPath, JSON.stringify(next, null, 2));
     });
   }
@@ -1292,6 +1331,27 @@ export function App() {
     });
   }
 
+  async function handleRunLocalization() {
+    await runWithBusy(async () => {
+      const next = clone(doc);
+      next.project.slots = reorderSlots(next.project.slots);
+      next.template.main = syncTemplateLegacyFields(next.template.main);
+      next.pipelines.export.outputDir = outputDir;
+      const sourceLocale = next.pipelines.localization.sourceLocale || next.project.locales[0] || 'en-US';
+      next.pipelines.localization.sourceLocale = next.project.locales.includes(sourceLocale)
+        ? sourceLocale
+        : (next.project.locales[0] || 'en-US');
+      await writeTextFile(projectPath, JSON.stringify(next, null, 2));
+
+      await runPipeline('localize', [projectPath, '--write']);
+
+      const text = await readTextFile(projectPath);
+      const parsed = extractJson(text);
+      const normalized = normalizeProject(parsed);
+      setDoc(normalized);
+    });
+  }
+
   async function loadSlotPreviewMap() {
     const sortedSlots = sortSlotsByOrder(doc.project.slots);
     const files = await listPngFiles(renderDir);
@@ -1371,6 +1431,13 @@ export function App() {
     }
 
     setIsOnboardingOpen(false);
+  }
+
+  function upsertByokConfig(mutator: (cfg: ByokConfig) => void) {
+    updateDoc((next) => {
+      next.pipelines.localization.byok = next.pipelines.localization.byok || clone(defaultByokConfig);
+      mutator(next.pipelines.localization.byok);
+    });
   }
 
   function upsertLlmConfig(mutator: (cfg: LlmCliConfig) => void) {
@@ -1713,19 +1780,13 @@ export function App() {
 
           <div className="grid gap-3 sm:grid-cols-2">
             <LabeledField label="Font">
-              <Select
+              <FontSelector
                 value={textElement.font}
-                onValueChange={(value) => updateTemplateElement(textElement.id, (current) => (
-                  current.kind === 'text' ? { ...current, font: value } : current
+                options={selectedElementFontOptions}
+                onChange={(value) => updateTemplateElement(textElement.id, (current) => (
+                  current.kind === 'text' && current.font !== value ? { ...current, font: value } : current
                 ))}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {selectedElementFontOptions.map((font) => (
-                    <SelectItem key={font} value={font}>{font}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </LabeledField>
             <NumberField
               label="Size"
@@ -2232,14 +2293,11 @@ export function App() {
               inspectorNode={renderSelectedInspector()}
               isXlLayout={isXlLayout}
               selectedDevice={selectedDevice}
-              selectedLocale={selectedLocale}
               selectedSlot={selectedSlot}
               slotCount={slots.length}
               deviceOptions={doc.project.devices.map((device) => ({ value: device.id, label: device.id }))}
-              localeOptions={doc.project.locales.map((locale) => ({ value: locale, label: locale }))}
               slotOptions={slots.map((slot) => ({ value: slot.id, label: slot.name }))}
               onSelectDevice={setSelectedDevice}
-              onSelectLocale={setSelectedLocale}
               onSelectSlot={handleSelectSlot}
               onAddSlot={addSlot}
             />
@@ -2248,20 +2306,43 @@ export function App() {
           {activeStep === 'localization' ? (
             <LocalizationWorkflowPage
               mode={doc.pipelines.localization.mode}
+              sourceLocale={doc.pipelines.localization.sourceLocale || doc.project.locales[0] || 'en-US'}
               byoyPath={byoyPath}
               isBusy={isBusy}
+              byokConfig={byokConfig}
               llmConfig={llmConfig}
-              copyKeys={copyKeys}
+              slots={slots.map((slot) => ({ id: slot.id, name: slot.name }))}
               locales={doc.project.locales}
+              localeManagerNode={(
+                <LocaleSelector
+                  value={doc.project.locales}
+                  options={localePresets}
+                  onChange={(locales) => updateDoc((next) => {
+                    if (locales.length === 0) return;
+                    next.project.locales = locales;
+                  })}
+                />
+              )}
               onModeChange={(mode) => updateDoc((next) => {
                 next.pipelines.localization.mode = mode;
               })}
+              onSourceLocaleChange={(locale) => updateDoc((next) => {
+                next.pipelines.localization.sourceLocale = locale;
+              })}
               onByoyPathChange={setByoyPath}
               onImportByoy={handleImportByoy}
+              onRunLocalization={handleRunLocalization}
+              onByokBaseUrlChange={(value) => upsertByokConfig((cfg) => { cfg.baseUrl = value; })}
+              onByokEndpointPathChange={(value) => upsertByokConfig((cfg) => { cfg.endpointPath = value; })}
+              onByokModelChange={(value) => upsertByokConfig((cfg) => { cfg.model = value; })}
+              onByokApiKeyEnvChange={(value) => upsertByokConfig((cfg) => { cfg.apiKeyEnv = value; })}
+              onByokPromptVersionChange={(value) => upsertByokConfig((cfg) => { cfg.promptVersion = value; })}
+              onByokTimeoutSecChange={(value) => upsertByokConfig((cfg) => { cfg.timeoutSec = value; })}
+              onByokStyleGuidePathChange={(value) => upsertByokConfig((cfg) => { cfg.styleGuidePath = value; })}
               onLlmCommandChange={(value) => upsertLlmConfig((cfg) => { cfg.command = value; })}
               onLlmArgsTemplateChange={(value) => upsertLlmConfig((cfg) => { cfg.argsTemplate = value; })}
               onLlmTimeoutSecChange={(value) => upsertLlmConfig((cfg) => { cfg.timeoutSec = value; })}
-              onLlmGlossaryPathChange={(value) => upsertLlmConfig((cfg) => { cfg.glossaryPath = value; })}
+              onLlmPromptVersionChange={(value) => upsertLlmConfig((cfg) => { cfg.promptVersion = value; })}
               onLlmStyleGuidePathChange={(value) => upsertLlmConfig((cfg) => { cfg.styleGuidePath = value; })}
               getCopyValue={(key, locale) => doc.copy.keys[key]?.[locale] || ''}
               onCopyChange={updateCopyByKey}
@@ -2477,6 +2558,12 @@ interface LocaleSelectorProps {
   onChange: (next: string[]) => void;
 }
 
+interface FontSelectorProps {
+  value: string;
+  options: string[];
+  onChange: (next: string) => void;
+}
+
 interface InspectorCopyFieldsProps {
   locale: string;
   titleValue: string;
@@ -2542,6 +2629,7 @@ const InspectorCopyFields = memo(function InspectorCopyFields({
 function LocaleSelector({ value, options, onChange }: LocaleSelectorProps) {
   const [search, setSearch] = useState('');
   const [customLocale, setCustomLocale] = useState('');
+  const detailsRef = useRef<HTMLDetailsElement>(null);
   const merged = useMemo(
     () => [...new Set([...options, ...value])].sort((a, b) => a.localeCompare(b)),
     [options, value]
@@ -2565,14 +2653,37 @@ function LocaleSelector({ value, options, onChange }: LocaleSelectorProps) {
     setCustomLocale('');
   }
 
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const details = detailsRef.current;
+      if (!details || !details.open) return;
+      if (event.target instanceof Node && details.contains(event.target)) return;
+      details.open = false;
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      const details = detailsRef.current;
+      if (!details || !details.open) return;
+      details.open = false;
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown, { capture: true });
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown, { capture: true });
+      window.removeEventListener('keydown', handleKeyDown, { capture: true });
+    };
+  }, []);
+
   return (
-    <details className="group relative">
+    <details ref={detailsRef} className="group relative">
       <summary className="flex h-9 cursor-pointer list-none items-center justify-between rounded-md border border-input bg-background px-3 text-sm">
         <span>{label}</span>
         <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
       </summary>
 
-      <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover p-2 shadow-md">
+      <div data-native-wheel className="absolute z-30 mt-1 w-full rounded-md border bg-popover p-2 shadow-md">
         <div className="mb-2 grid gap-2">
           <Input
             value={search}
@@ -2599,7 +2710,7 @@ function LocaleSelector({ value, options, onChange }: LocaleSelectorProps) {
           </div>
         </div>
 
-        <ScrollArea className="max-h-56 pr-2">
+        <ScrollArea className="h-56 pr-2">
           <div className="grid gap-1.5">
             {filtered.length === 0 ? (
               <p className="px-2 py-1 text-xs text-muted-foreground">No locale found.</p>
@@ -2632,6 +2743,138 @@ function LocaleSelector({ value, options, onChange }: LocaleSelectorProps) {
             })}
           </div>
         </ScrollArea>
+      </div>
+    </details>
+  );
+}
+
+function FontSelector({ value, options, onChange }: FontSelectorProps) {
+  const [search, setSearch] = useState('');
+  const [scrollTop, setScrollTop] = useState(0);
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const normalizedOptions = useMemo(
+    () => [...new Set(options.map((font) => font.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [options]
+  );
+  const filteredOptions = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const next = query
+      ? normalizedOptions.filter((font) => font.toLowerCase().includes(query))
+      : normalizedOptions;
+    return next;
+  }, [normalizedOptions, search]);
+
+  const rowHeight = 32;
+  const viewportHeight = 224;
+  const overscan = 6;
+  const totalCount = filteredOptions.length;
+  const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
+  const endIndex = Math.min(
+    totalCount,
+    startIndex + Math.ceil(viewportHeight / rowHeight) + (overscan * 2)
+  );
+  const virtualItems = filteredOptions.slice(startIndex, endIndex);
+  const topOffset = startIndex * rowHeight;
+  const totalHeight = totalCount * rowHeight;
+
+  useEffect(() => {
+    setScrollTop(0);
+    if (listRef.current) {
+      listRef.current.scrollTop = 0;
+    }
+  }, [search]);
+
+  useEffect(() => {
+    const details = detailsRef.current;
+    if (!details) return;
+
+    const handleToggle = () => {
+      if (!details.open) return;
+      const selectedIndex = filteredOptions.findIndex((font) => font === value);
+      if (selectedIndex < 0 || !listRef.current) return;
+      const targetScroll = Math.max(0, (selectedIndex * rowHeight) - Math.floor(viewportHeight / 2));
+      listRef.current.scrollTop = targetScroll;
+      setScrollTop(targetScroll);
+    };
+
+    details.addEventListener('toggle', handleToggle);
+    return () => details.removeEventListener('toggle', handleToggle);
+  }, [filteredOptions, value]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const details = detailsRef.current;
+      if (!details || !details.open) return;
+      if (event.target instanceof Node && details.contains(event.target)) return;
+      details.open = false;
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      const details = detailsRef.current;
+      if (!details || !details.open) return;
+      details.open = false;
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown, { capture: true });
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown, { capture: true });
+      window.removeEventListener('keydown', handleKeyDown, { capture: true });
+    };
+  }, []);
+
+  const label = value || 'Select font';
+
+  return (
+    <details ref={detailsRef} className="group relative">
+      <summary className="flex h-9 cursor-pointer list-none items-center justify-between rounded-md border border-input bg-background px-3 text-sm">
+        <span className="truncate">{label}</span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+      </summary>
+
+      <div data-native-wheel className="absolute z-30 mt-1 w-full rounded-md border bg-popover p-2 shadow-md">
+        <div className="mb-2">
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search fonts"
+            className="h-8"
+          />
+        </div>
+
+        <div
+          ref={listRef}
+          className="h-56 overflow-y-auto pr-1"
+          onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+        >
+          <div style={{ height: totalHeight }}>
+            {filteredOptions.length === 0 ? (
+              <p className="px-2 py-1 text-xs text-muted-foreground">No font found.</p>
+            ) : null}
+
+            <div style={{ transform: `translateY(${topOffset}px)` }}>
+              {virtualItems.map((font) => {
+                const selected = font === value;
+                return (
+                  <button
+                    key={font}
+                    type="button"
+                    className={`flex h-8 w-full items-center rounded-md px-2 text-left text-sm hover:bg-muted/60 ${selected ? 'bg-muted font-medium' : ''}`}
+                    onClick={() => {
+                      onChange(font);
+                      const details = detailsRef.current;
+                      if (details) details.open = false;
+                    }}
+                  >
+                    <span className="truncate">{font}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       </div>
     </details>
   );

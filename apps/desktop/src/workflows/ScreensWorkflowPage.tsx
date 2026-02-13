@@ -37,14 +37,11 @@ interface ScreensWorkflowPageProps {
   inspectorNode: ReactNode;
   isXlLayout: boolean;
   selectedDevice: string;
-  selectedLocale: string;
   selectedSlot: string;
   slotCount: number;
   deviceOptions: SelectOption[];
-  localeOptions: SelectOption[];
   slotOptions: SelectOption[];
   onSelectDevice: (deviceId: string) => void;
-  onSelectLocale: (locale: string) => void;
   onSelectSlot: (slotId: string) => void;
   onAddSlot: () => void;
 }
@@ -54,14 +51,11 @@ export function ScreensWorkflowPage({
   inspectorNode,
   isXlLayout,
   selectedDevice,
-  selectedLocale,
   selectedSlot,
   slotCount,
   deviceOptions,
-  localeOptions,
   slotOptions,
   onSelectDevice,
-  onSelectLocale,
   onSelectSlot,
   onAddSlot
 }: ScreensWorkflowPageProps) {
@@ -77,7 +71,6 @@ export function ScreensWorkflowPage({
               <CardDescription>캔버스 위에서 슬롯을 배치하고 바로 편집합니다.</CardDescription>
               <div className="flex flex-wrap gap-2">
                 <Badge variant="secondary">{selectedDevice}</Badge>
-                <Badge variant="secondary">{selectedLocale}</Badge>
                 <Badge variant="outline">{slotCount} slots</Badge>
               </div>
             </div>
@@ -85,24 +78,13 @@ export function ScreensWorkflowPage({
               <Button variant="outline" onClick={onAddSlot}><Plus className="mr-1 h-4 w-4" />Add Slot</Button>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-3 pt-0 sm:grid-cols-3">
+          <CardContent className="grid gap-3 pt-0 sm:grid-cols-2">
             <LabeledField label="Device">
               <Select value={selectedDevice} onValueChange={onSelectDevice}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {deviceOptions.map((device) => (
                     <SelectItem key={device.value} value={device.value}>{device.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </LabeledField>
-
-            <LabeledField label="Locale">
-              <Select value={selectedLocale} onValueChange={onSelectLocale}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {localeOptions.map((locale) => (
-                    <SelectItem key={locale.value} value={locale.value}>{locale.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
