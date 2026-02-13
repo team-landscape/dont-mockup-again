@@ -81,23 +81,6 @@ node --import tsx scripts/pipeline.js render examples/sample.storeshot.json dist
 node --import tsx scripts/pipeline.js export examples/sample.storeshot.json dist-render dist --zip --fastlane
 ```
 
-## Pipeline Command Reference
-
-`node --import tsx scripts/pipeline.js <action> ...`
-
-- `render <projectPath> [renderDir]`
-  - Renders PNG outputs from project definition
-- `localize <projectPath> [--write] [--source=<locale>] [--targets=<a,b,c>]`
-  - Runs localization for target locales
-- `validate <projectPath>`
-  - Validates project copy/layout requirements
-- `export <projectPath> <renderDir> [outputDir] [--zip] [--fastlane] [--metadata-csv]`
-  - Builds export structure and optional artifacts
-- `upload <exportDir> [iosLane] [androidLane]`
-  - Calls local fastlane lanes
-- `all <projectPath> [workDir]`
-  - Runs render + export sequence
-
 ## Localization Modes
 
 `pipelines.localization.mode` is normalized to `llm-cli` in current implementation.
