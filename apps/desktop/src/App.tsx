@@ -4564,15 +4564,36 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
 
     const finalX = dragLayerPosition?.elementId === state.elementId ? dragLayerPosition.x : state.originX;
     const finalY = dragLayerPosition?.elementId === state.elementId ? dragLayerPosition.y : state.originY;
-    if (
-      onMoveElement
-      && (Math.abs(finalX - state.originX) >= 0.01 || Math.abs(finalY - state.originY) >= 0.01)
-    ) {
-      onMoveElement(state.elementId, finalX, finalY);
+    const finalRoundedX = Math.round(finalX);
+    const finalRoundedY = Math.round(finalY);
+    const moved = Math.abs(finalRoundedX - state.originX) >= 0.01 || Math.abs(finalRoundedY - state.originY) >= 0.01;
+
+    if (moved) {
+      setDragLayerPosition((current) => {
+        if (current && current.elementId === state.elementId) {
+          return {
+            ...current,
+            x: finalRoundedX,
+            y: finalRoundedY
+          };
+        }
+
+        return {
+          elementId: state.elementId,
+          x: finalRoundedX,
+          y: finalRoundedY,
+          originX: state.originX,
+          originY: state.originY
+        };
+      });
+      if (onMoveElement) {
+        onMoveElement(state.elementId, finalRoundedX, finalRoundedY);
+      }
+    } else {
+      setDragLayerPosition(null);
     }
 
     layerDragRef.current = null;
-    setDragLayerPosition(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -4620,6 +4641,23 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
     event.stopPropagation();
     event.preventDefault();
   }, [selectLayerAtClientPoint]);
+
+  useEffect(() => {
+    if (!dragLayerPosition) return;
+    if (layerDragRef.current) return;
+
+    const layer = editableLayers.find((entry) => entry.id === dragLayerPosition.elementId);
+    if (!layer) {
+      setDragLayerPosition(null);
+      return;
+    }
+
+    const isSynced = Math.abs(layer.x - dragLayerPosition.x) < 0.01
+      && Math.abs(layer.y - dragLayerPosition.y) < 0.01;
+    if (isSynced) {
+      setDragLayerPosition(null);
+    }
+  }, [dragLayerPosition, editableLayers]);
 
   useEffect(() => {
     let cancelled = false;
