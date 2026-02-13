@@ -8,7 +8,7 @@ import { ExportWorkflowPage } from './workflows/ExportWorkflowPage';
 import { LocalizationWorkflowPage } from './workflows/LocalizationWorkflowPage';
 import { PreviewWorkflowPage } from './workflows/PreviewWorkflowPage';
 import { ScreensWorkflowPage } from './workflows/ScreensWorkflowPage';
-import { renderTemplatePreviewBase64, SlotRenderPreview } from './components/preview/SlotPreview';
+import { SlotRenderPreview } from './components/preview/SlotPreview';
 import { InfiniteSlotCanvas, type CanvasSlotItem } from './components/canvas/InfiniteSlotCanvas';
 import { SelectedScreenInspector } from './components/inspector/SelectedScreenInspector';
 import { TemplateInspectorSection } from './components/inspector/TemplateInspectorSection';
@@ -18,6 +18,11 @@ import { WorkflowSidebar } from './components/sidebar/WorkflowSidebar';
 import { useProjectImageAssets } from './hooks/useProjectImageAssets';
 import { useProjectBootstrapPaths } from './hooks/useProjectBootstrapPaths';
 import { useProjectImageUploadHandlers } from './hooks/useProjectImageUploadHandlers';
+import {
+  collectExpectedRenderSuffixes,
+  findMissingRenderedFiles,
+  renderExportImagesFromSnapshot
+} from './lib/export-preview-renderer';
 import { resolveOutputDir as resolveOutputDirPath } from './lib/output-dir';
 import {
   isTauriRuntime,
@@ -29,7 +34,6 @@ import {
   readFileBase64,
   readTextFile,
   runPipeline,
-  writeFileBase64,
   writeTextFile
 } from './lib/desktop-runtime';
 import {
@@ -54,13 +58,11 @@ import {
   defaultSlotCanvasPosition,
   defaultLlmConfig,
   defaultSystemFonts,
-  detectDevicePlatform,
   detectPlatformFromDeviceId,
   fieldKey,
   getParentDirectory,
   getSlotCanvasCardSize,
   getSlotPreviewCanvasSize,
-  globalTemplateImageKey,
   imageMimeTypeFromPath,
   localePresets,
   normalizeProject,
@@ -73,7 +75,6 @@ import {
   resolveTextLayerWithinSlot,
   serializeProjectSignature,
   sortSlotsByOrder,
-  slotTemplateImageKey,
   syncTemplateLegacyFields,
   TEMPLATE_REFERENCE_HEIGHT,
   TEMPLATE_REFERENCE_WIDTH
@@ -709,109 +710,6 @@ export function App() {
     return urlsByLocale;
   }
 
-  const renderExportImagesFromPreview = useCallback(async (
-    snapshot: StoreShotDoc,
-    targetDir: string,
-    onProgress?: (detail: string) => void
-  ) => {
-    const slots = sortSlotsByOrder(snapshot.project.slots || []);
-    const locales = snapshot.project.locales || [];
-    const platforms = snapshot.project.platforms || [];
-    const devices = snapshot.project.devices || [];
-    const templateMain = snapshot.template.main;
-    const imageUrls = { ...templateImageUrls };
-
-    const imageTargets: Array<{ key: string; path: string }> = [];
-    for (const element of templateMain.elements) {
-      if (element.kind !== 'image' || !element.imagePath) continue;
-      imageTargets.push({ key: globalTemplateImageKey(element.id), path: element.imagePath });
-    }
-    for (const [slotId, elements] of Object.entries(templateMain.slotElements || {})) {
-      for (const element of elements) {
-        if (element.kind !== 'image' || !element.imagePath) continue;
-        imageTargets.push({ key: slotTemplateImageKey(slotId, element.id), path: element.imagePath });
-      }
-    }
-
-    for (const target of imageTargets) {
-      if (imageUrls[target.key]) continue;
-      try {
-        const base64 = await readFileBase64(target.path);
-        const mime = imageMimeTypeFromPath(target.path);
-        imageUrls[target.key] = `data:${mime};base64,${base64}`;
-      } catch {
-        // Missing image path is allowed; renderer keeps placeholder.
-      }
-    }
-
-    const total = Math.max(1, devices.length * locales.length * slots.length);
-    let current = 0;
-
-    for (const device of devices) {
-      const platform = detectDevicePlatform(device, platforms);
-      if (platforms.length > 0 && !platforms.includes(platform)) continue;
-
-      for (const locale of locales) {
-        for (const slot of slots) {
-          current += 1;
-          onProgress?.(`Rendering preview images... (${current}/${total})`);
-
-          const title = snapshot.copy.keys[fieldKey(slot.id, 'title')]?.[locale] || '';
-          const subtitle = snapshot.copy.keys[fieldKey(slot.id, 'subtitle')]?.[locale] || '';
-          const template: TemplateMain = {
-            ...templateMain,
-            elements: resolveTemplateElementsForSlot(templateMain, slot.id),
-            background: {
-              ...templateMain.background,
-              ...(templateMain.slotBackgrounds[slot.id] || {})
-            }
-          };
-          const pngBase64 = await withTimeout(
-            renderTemplatePreviewBase64({
-              slotId: slot.id,
-              title,
-              subtitle,
-              template,
-              templateImageUrls: imageUrls,
-              device
-            }),
-            20000,
-            `preview render ${platform}/${device.id}/${locale}/${slot.id}`
-          );
-
-          const outPath = `${targetDir}/${platform}/${device.id}/${locale}/${slot.id}.png`;
-          await writeFileBase64(outPath, pngBase64);
-        }
-      }
-    }
-  }, [templateImageUrls]);
-
-  const collectExpectedRenderSuffixes = useCallback((snapshot: StoreShotDoc) => {
-    const suffixes: string[] = [];
-    const slots = sortSlotsByOrder(snapshot.project.slots || []);
-    const locales = snapshot.project.locales || [];
-    const platforms = snapshot.project.platforms || [];
-    const devices = snapshot.project.devices || [];
-
-    for (const device of devices) {
-      const platform = detectDevicePlatform(device, platforms);
-      if (platforms.length > 0 && !platforms.includes(platform)) continue;
-      for (const locale of locales) {
-        for (const slot of slots) {
-          suffixes.push(`${platform}/${device.id}/${locale}/${slot.id}.png`);
-        }
-      }
-    }
-
-    return suffixes;
-  }, []);
-
-  const findMissingRenderedFiles = useCallback(async (baseDir: string, expectedSuffixes: string[]) => {
-    const files = await listPngFiles(baseDir);
-    const missing = expectedSuffixes.filter((suffix) => !files.some((entry) => entry.endsWith(suffix)));
-    return { files, missing };
-  }, []);
-
   async function handleRender() {
     await runWithBusy(async ({ setDetail }) => {
       setDetail('Saving project config...');
@@ -868,7 +766,13 @@ export function App() {
           throw new Error('No export targets found. Check slots/locales/devices/platforms.');
         }
 
-        await renderExportImagesFromPreview(snapshot, previewRenderDir, setDetail);
+        await renderExportImagesFromSnapshot({
+          snapshot,
+          targetDir: previewRenderDir,
+          templateImageUrls,
+          runWithTimeout: withTimeout,
+          onProgress: setDetail
+        });
         setDetail('Verifying preview renders...');
         const previewCheck = await findMissingRenderedFiles(previewRenderDir, expectedSuffixes);
         if (previewCheck.missing.length > 0) {
