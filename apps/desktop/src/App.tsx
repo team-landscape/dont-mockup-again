@@ -1502,18 +1502,23 @@ export function App() {
     });
   }, []);
 
+  const persistProjectSnapshot = useCallback(async () => {
+    const next = clone(doc);
+    next.project.slots = reorderSlots(next.project.slots);
+    next.template.main = syncTemplateLegacyFields(next.template.main, Math.max(1, selectedDeviceSpec.width || 1290));
+    next.pipelines.export.outputDir = outputDir;
+    const sourceLocale = next.pipelines.localization.sourceLocale || next.project.locales[0] || 'en-US';
+    next.pipelines.localization.sourceLocale = next.project.locales.includes(sourceLocale)
+      ? sourceLocale
+      : (next.project.locales[0] || 'en-US');
+    await writeTextFile(projectPath, JSON.stringify(next, null, 2));
+    return next;
+  }, [doc, outputDir, projectPath, selectedDeviceSpec.width]);
+
   async function handleRunLocalization() {
     await runWithBusy(async ({ setDetail }) => {
       setDetail('Saving project config...');
-      const next = clone(doc);
-      next.project.slots = reorderSlots(next.project.slots);
-      next.template.main = syncTemplateLegacyFields(next.template.main);
-      next.pipelines.export.outputDir = outputDir;
-      const sourceLocale = next.pipelines.localization.sourceLocale || next.project.locales[0] || 'en-US';
-      next.pipelines.localization.sourceLocale = next.project.locales.includes(sourceLocale)
-        ? sourceLocale
-        : (next.project.locales[0] || 'en-US');
-      await writeTextFile(projectPath, JSON.stringify(next, null, 2));
+      await persistProjectSnapshot();
 
       setDetail('Running localization pipeline...');
       await runPipeline('localize', [projectPath, '--write']);
@@ -1592,7 +1597,10 @@ export function App() {
   }
 
   async function handleRender() {
-    await runWithBusy(async () => {
+    await runWithBusy(async ({ setDetail }) => {
+      setDetail('Saving project config...');
+      await persistProjectSnapshot();
+      setDetail('Rendering preview images...');
       await runPipeline('render', [projectPath, renderDir]);
       await loadSlotPreviewMap();
       await loadPreviewMatrix();
@@ -1604,7 +1612,10 @@ export function App() {
   }
 
   async function handleValidate() {
-    await runWithBusy(async () => {
+    await runWithBusy(async ({ setDetail }) => {
+      setDetail('Saving project config...');
+      await persistProjectSnapshot();
+      setDetail('Checking project rules...');
       const output = await runPipeline('validate', [projectPath]);
       const parsed = extractJson(output) as { issues?: ValidateIssue[] } | null;
       setIssues(parsed?.issues || []);
@@ -1620,6 +1631,7 @@ export function App() {
       const flags: string[] = [];
       if (doc.pipelines.export.zip) flags.push('--zip');
 
+      await persistProjectSnapshot();
       // Ensure export always uses fresh renders for the currently selected output folder.
       await runPipeline('render', [projectPath, renderDir]);
       await runPipeline('export', [projectPath, renderDir, outputDir, ...flags]);
