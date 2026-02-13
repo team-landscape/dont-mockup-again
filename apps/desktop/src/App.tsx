@@ -96,8 +96,9 @@ interface TemplateTextElement extends TemplateElementBase {
 
 interface TemplateImageElement extends TemplateElementBase {
   kind: 'image';
-  source: 'none' | 'slotImage' | 'customImage';
+  source: 'image' | 'color';
   imagePath: string;
+  fillColor: string;
   fit: 'cover' | 'contain';
   cornerRadius: number;
   deviceFrame: boolean;
@@ -459,8 +460,9 @@ function createDefaultTemplateElements(main: Pick<TemplateMain, 'frame' | 'text'
       visible: true,
       opacity: 100,
       rotation: 0,
-      source: 'none',
+      source: 'image',
       imagePath: '',
+      fillColor: '#111827',
       fit: main.shotPlacement.fit,
       cornerRadius: main.shotPlacement.cornerRadius,
       deviceFrame: main.frame.enabled,
@@ -585,10 +587,13 @@ function normalizeTemplateElements(raw: unknown, defaults: TemplateElement[]): T
       const normalizedImage: TemplateImageElement = {
         ...base,
         kind: 'image',
-        source: source.source === 'slotImage' || source.source === 'customImage' || source.source === 'none'
-          ? source.source
-          : 'none',
+        source: source.source === 'color'
+          ? 'color'
+          : source.source === 'image' || source.source === 'customImage' || source.source === 'slotImage' || source.source === 'none'
+            ? 'image'
+            : 'image',
         imagePath: typeof source.imagePath === 'string' ? source.imagePath : '',
+        fillColor: typeof source.fillColor === 'string' && source.fillColor.trim() ? source.fillColor : '#111827',
         fit: source.fit === 'contain' ? 'contain' : 'cover',
         cornerRadius: Math.max(0, asNumber(source.cornerRadius, 0)),
         deviceFrame: typeof source.deviceFrame === 'boolean' ? source.deviceFrame : false,
@@ -1936,8 +1941,9 @@ export function App() {
         visible: true,
         opacity: 100,
         rotation: 0,
-        source: 'none',
+        source: 'image',
         imagePath: '',
+        fillColor: '#111827',
         fit: 'cover',
         cornerRadius: 48,
         deviceFrame: false,
@@ -2047,7 +2053,7 @@ export function App() {
           current.kind === 'image'
             ? {
               ...current,
-              source: 'customImage',
+              source: 'image',
               imagePath: outputPath
             }
             : current
@@ -2196,7 +2202,7 @@ export function App() {
       selectedElementInspector = (
         <>
           <div className="grid gap-3 sm:grid-cols-2">
-            <LabeledField label="Source">
+            <LabeledField label="Mode">
               <div className="space-y-2">
                 <Select
                   value={imageElement.source}
@@ -2204,23 +2210,22 @@ export function App() {
                     current.kind === 'image'
                       ? {
                         ...current,
-                        source: value as 'none' | 'slotImage' | 'customImage'
+                        source: value as 'image' | 'color'
                       }
                       : current
                   ))}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Choose source (required)</SelectItem>
-                    <SelectItem value="slotImage">Selected slot image</SelectItem>
-                    <SelectItem value="customImage">Custom image</SelectItem>
+                    <SelectItem value="image">Image</SelectItem>
+                    <SelectItem value="color">Color fill</SelectItem>
                   </SelectContent>
                 </Select>
 
-                {imageElement.source === 'customImage' ? (
+                {imageElement.source === 'image' ? (
                   <>
-                    <p className="truncate rounded-md border bg-muted/60 p-2 text-xs">
-                      {imageElement.imagePath || 'No custom image selected'}
+                    <p className="rounded-md border bg-muted/60 p-2 text-xs">
+                      {imageElement.imagePath ? 'Image selected' : 'No image selected'}
                     </p>
                     <Button
                       size="sm"
@@ -2230,31 +2235,34 @@ export function App() {
                       Choose Image
                     </Button>
                   </>
-                ) : imageElement.source === 'slotImage' ? (
-                  <p className="truncate rounded-md border bg-muted/60 p-2 text-xs">
-                    {selectedSlotData?.sourceImagePath || 'No slot image selected'}
-                  </p>
                 ) : (
-                  <p className="rounded-md border border-dashed bg-muted/40 p-2 text-xs text-muted-foreground">
-                    Source is required. Choose `Selected slot image` or `Custom image`.
-                  </p>
+                  <ColorField
+                    label="Fill Color"
+                    value={imageElement.fillColor}
+                    fallbackColor="#111827"
+                    onValueChange={(value) => updateTemplateElement(imageElement.id, (current) => (
+                      current.kind === 'image' ? { ...current, fillColor: value } : current
+                    ))}
+                  />
                 )}
               </div>
             </LabeledField>
-            <LabeledField label="Fit">
-              <Select
-                value={imageElement.fit}
-                onValueChange={(value) => updateTemplateElement(imageElement.id, (current) => (
-                  current.kind === 'image' ? { ...current, fit: value as 'cover' | 'contain' } : current
-                ))}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cover">cover</SelectItem>
-                  <SelectItem value="contain">contain</SelectItem>
-                </SelectContent>
-              </Select>
-            </LabeledField>
+            {imageElement.source === 'image' ? (
+              <LabeledField label="Fit">
+                <Select
+                  value={imageElement.fit}
+                  onValueChange={(value) => updateTemplateElement(imageElement.id, (current) => (
+                    current.kind === 'image' ? { ...current, fit: value as 'cover' | 'contain' } : current
+                  ))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cover">cover</SelectItem>
+                    <SelectItem value="contain">contain</SelectItem>
+                  </SelectContent>
+                </Select>
+              </LabeledField>
+            ) : null}
             <NumberField
               label="Corner Radius"
               value={imageElement.cornerRadius}
@@ -4851,18 +4859,19 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
 
         context.save();
         drawRoundedRectPath(context, activeLayer.x, activeLayer.y, activeLayer.w, activeLayer.h, activeLayer.cornerRadius || 0);
-        context.fillStyle = 'rgba(15,23,42,0.7)';
+        context.fillStyle = activeLayer.source === 'color'
+          ? (activeLayer.fillColor || '#111827')
+          : 'rgba(15,23,42,0.7)';
         context.fill();
         context.restore();
 
-        const imageSource = activeLayer.source === 'customImage'
-          ? (
-            templateImageUrls[slotTemplateImageKey(slotId, activeLayer.id)]
-            || templateImageUrls[globalTemplateImageKey(activeLayer.id)]
-          )
-          : activeLayer.source === 'slotImage'
-            ? sourceImageUrl
-            : '';
+        if (activeLayer.source === 'color') {
+          context.restore();
+          continue;
+        }
+
+        const imageSource = templateImageUrls[slotTemplateImageKey(slotId, activeLayer.id)]
+          || templateImageUrls[globalTemplateImageKey(activeLayer.id)];
 
         if (imageSource) {
           try {
@@ -4899,11 +4908,7 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
           context.font = `${Math.max(20, Math.round(width * 0.024))}px "SF Pro", sans-serif`;
           context.textAlign = 'center';
           context.textBaseline = 'middle';
-          const missingMessage = activeLayer.source === 'none'
-            ? 'Select source'
-            : activeLayer.source === 'customImage'
-              ? 'Select custom image'
-              : 'Select slot image';
+          const missingMessage = 'Choose image';
           context.fillText(missingMessage, activeLayer.x + activeLayer.w / 2, activeLayer.y + activeLayer.h / 2);
           context.restore();
         }
