@@ -5105,7 +5105,9 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
                     left: `${(currentX / width) * 100}%`,
                     top: `${(currentY / height) * 100}%`,
                     width: `${(layer.w / width) * 100}%`,
-                    height: `${(layer.h / height) * 100}%`
+                    height: `${(layer.h / height) * 100}%`,
+                    transform: `rotate(${layer.rotation}deg)`,
+                    transformOrigin: 'center'
                   }}
                   onPointerDown={(event) => handleLayerPointerDown(event, layer)}
                   onPointerMove={handleLayerPointerMove}
