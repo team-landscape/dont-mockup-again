@@ -469,6 +469,13 @@ function resolveTextLayerWithinSlot(layer: TemplateTextElement, slotWidth: numbe
   };
 }
 
+function resolveHorizontalAlignedX(position: Align, slotWidth: number, elementWidth: number) {
+  const maxX = Math.max(0, Math.max(1, slotWidth) - Math.max(1, elementWidth));
+  if (position === 'left') return 0;
+  if (position === 'right') return maxX;
+  return Math.round(maxX / 2);
+}
+
 function createDefaultTemplateElements(main: Pick<TemplateMain, 'frame' | 'text' | 'shotPlacement'>): TemplateElement[] {
   return [
     {
@@ -2357,6 +2364,26 @@ export function App() {
       );
     }
 
+    const inspectorSlotWidth = Math.max(1, selectedDeviceSpec.width || 1290);
+    const leftAlignedX = selectedTemplateElement
+      ? resolveHorizontalAlignedX('left', inspectorSlotWidth, selectedTemplateElement.w)
+      : 0;
+    const centerAlignedX = selectedTemplateElement
+      ? resolveHorizontalAlignedX('center', inspectorSlotWidth, selectedTemplateElement.w)
+      : 0;
+    const rightAlignedX = selectedTemplateElement
+      ? resolveHorizontalAlignedX('right', inspectorSlotWidth, selectedTemplateElement.w)
+      : 0;
+    const horizontalAlignedState: Align | null = selectedTemplateElement
+      ? Math.abs(selectedTemplateElement.x - leftAlignedX) <= 1
+        ? 'left'
+        : Math.abs(selectedTemplateElement.x - centerAlignedX) <= 1
+          ? 'center'
+          : Math.abs(selectedTemplateElement.x - rightAlignedX) <= 1
+            ? 'right'
+            : null
+      : null;
+
     return (
       <>
         <Card className="border-dashed">
@@ -2460,6 +2487,41 @@ export function App() {
                     name: event.target.value
                   }))}
                 />
+              </LabeledField>
+
+              <LabeledField label="Horizontal Align">
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    size="sm"
+                    variant={horizontalAlignedState === 'left' ? 'secondary' : 'outline'}
+                    onClick={() => updateTemplateElement(selectedTemplateElement.id, (current) => ({
+                      ...current,
+                      x: resolveHorizontalAlignedX('left', inspectorSlotWidth, current.w)
+                    }))}
+                  >
+                    Left
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={horizontalAlignedState === 'center' ? 'secondary' : 'outline'}
+                    onClick={() => updateTemplateElement(selectedTemplateElement.id, (current) => ({
+                      ...current,
+                      x: resolveHorizontalAlignedX('center', inspectorSlotWidth, current.w)
+                    }))}
+                  >
+                    Center
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={horizontalAlignedState === 'right' ? 'secondary' : 'outline'}
+                    onClick={() => updateTemplateElement(selectedTemplateElement.id, (current) => ({
+                      ...current,
+                      x: resolveHorizontalAlignedX('right', inspectorSlotWidth, current.w)
+                    }))}
+                  >
+                    Right
+                  </Button>
+                </div>
               </LabeledField>
 
               <div className="grid gap-3 sm:grid-cols-2">
