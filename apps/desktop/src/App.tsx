@@ -2491,11 +2491,12 @@ export function App() {
                       const slotWidth = Math.max(1, selectedDeviceSpec.width || 1290);
                       const widthPercent = clampTextWidthPercent(value);
                       const textWidth = resolveTextWidthFromPercent(widthPercent, slotWidth);
+                      const centeredX = Math.round((slotWidth - textWidth) / 2);
                       return {
                         ...current,
                         widthPercent,
                         w: textWidth,
-                        x: clampNumber(current.x, 0, Math.max(0, slotWidth - textWidth))
+                        x: clampNumber(centeredX, 0, Math.max(0, slotWidth - textWidth))
                       };
                     }
                     return { ...current, w: value };
