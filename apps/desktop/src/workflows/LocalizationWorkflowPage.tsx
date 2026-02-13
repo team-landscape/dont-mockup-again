@@ -149,32 +149,6 @@ export function LocalizationWorkflowPage({
           <CardContent>
             <ScrollArea className="h-[calc(100vh-320px)] pr-2">
               <div className="space-y-2">
-                {slots.map((slot) => (
-                  <div key={slot.id} className="rounded-md border p-3">
-                    <p className="mb-2 text-xs font-semibold text-muted-foreground">{slot.name} ({slot.id})</p>
-                    <div className="space-y-3">
-                      {(['title', 'subtitle'] as const).map((field) => {
-                        const key = `${slot.id}.${field}`;
-                        return (
-                          <div key={key} className="space-y-2">
-                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{field}</p>
-                            <div className="grid gap-2 md:grid-cols-2">
-                              {locales.map((locale) => (
-                                <LabeledField key={`${key}:${locale}`} label={locale}>
-                                  <Input
-                                    value={getCopyValue(key, locale)}
-                                    onChange={(event) => onCopyChange(key, locale, event.target.value)}
-                                  />
-                                </LabeledField>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-
                 <div className="rounded-md border p-3">
                   <p className="mb-2 text-xs font-semibold text-muted-foreground">APP METADATA</p>
                   <div className="space-y-3">
@@ -203,6 +177,32 @@ export function LocalizationWorkflowPage({
                     ))}
                   </div>
                 </div>
+
+                {slots.map((slot) => (
+                  <div key={slot.id} className="rounded-md border p-3">
+                    <p className="mb-2 text-xs font-semibold text-muted-foreground">{slot.name} ({slot.id})</p>
+                    <div className="space-y-3">
+                      {(['title', 'subtitle'] as const).map((field) => {
+                        const key = `${slot.id}.${field}`;
+                        return (
+                          <div key={key} className="space-y-2">
+                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{field}</p>
+                            <div className="grid gap-2 md:grid-cols-2">
+                              {locales.map((locale) => (
+                                <LabeledField key={`${key}:${locale}`} label={locale}>
+                                  <Input
+                                    value={getCopyValue(key, locale)}
+                                    onChange={(event) => onCopyChange(key, locale, event.target.value)}
+                                  />
+                                </LabeledField>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </ScrollArea>
           </CardContent>
