@@ -1,12 +1,9 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
-import { LocaleSelector } from './components/form/InspectorControls';
 import { ExportWorkflowPage } from './workflows/ExportWorkflowPage';
-import { LocalizationWorkflowPage } from './workflows/LocalizationWorkflowPage';
+import { LocalizationStepPanel } from './workflows/LocalizationStepPanel';
 import { PreviewWorkflowPage } from './workflows/PreviewWorkflowPage';
-import { ScreensWorkflowPage } from './workflows/ScreensWorkflowPage';
-import { InfiniteSlotCanvas } from './components/canvas/InfiniteSlotCanvas';
-import { SelectedScreenInspector } from './components/inspector/SelectedScreenInspector';
+import { ScreensStepPanel } from './workflows/ScreensStepPanel';
 import { TemplateInspectorSection } from './components/inspector/TemplateInspectorSection';
 import { OnboardingOverlay } from './components/onboarding/OnboardingOverlay';
 import { BusyOverlay } from './components/overlay/BusyOverlay';
@@ -556,75 +553,57 @@ export function App() {
 
         <div className={activeStep === 'screens' ? 'space-y-4' : 'space-y-4 pt-2 lg:pl-[250px]'}>
           {activeStep === 'screens' ? (
-            <ScreensWorkflowPage
-              canvasNode={(
-                <InfiniteSlotCanvas
-                  className="h-full w-full"
-                  focusTrigger={screenFocusTrigger}
-                  items={screenCanvasSlots}
-                  positions={slotCanvasPositions}
-                  cardWidth={slotCanvasCardSize.width}
-                  cardHeight={slotCanvasCardSize.height}
-                  selectedSlot={selectedSlot}
-                  templateImageUrls={templateImageUrls}
-                  device={selectedDeviceSpec}
-                  onSelect={handleSelectSlot}
-                  onReorder={reorderSlotByDrag}
-                  onRename={renameSlot}
-                  selectedTemplateElementId={selectedTemplateElementId}
-                  onSelectTemplateElement={setSelectedTemplateElementId}
-                  onMoveTemplateElement={moveTemplateElement}
-                />
-              )}
-              inspectorNode={(
-                <SelectedScreenInspector
-                  selectedSlotData={selectedSlotData}
-                  selectedLocale={selectedLocale}
-                  selectedSlotNameDraft={selectedSlotNameDraft}
-                  titleValue={selectedSlotTitleValue}
-                  subtitleValue={selectedSlotSubtitleValue}
-                  isMoveUpDisabled={isMoveUpDisabled}
-                  isMoveDownDisabled={isMoveDownDisabled}
-                  templateInspectorNode={templateInspectorSection}
-                  onSlotNameDraftChange={setSelectedSlotNameDraft}
-                  onCommitSlotName={commitSelectedSlotName}
-                  onResetSlotNameDraft={resetSelectedSlotNameDraft}
-                  onOpenSlotImagePicker={openSlotImagePicker}
-                  onTitleChange={handleSelectedTitleChange}
-                  onSubtitleChange={handleSelectedSubtitleChange}
-                  onMoveSlotUp={moveSelectedSlotUp}
-                  onMoveSlotDown={moveSelectedSlotDown}
-                  onRemoveSlot={removeSelectedSlot}
-                />
-              )}
+            <ScreensStepPanel
+              screenFocusTrigger={screenFocusTrigger}
+              screenCanvasSlots={screenCanvasSlots}
+              slotCanvasPositions={slotCanvasPositions}
+              slotCanvasCardSize={slotCanvasCardSize}
+              selectedSlot={selectedSlot}
+              templateImageUrls={templateImageUrls}
+              selectedDeviceSpec={selectedDeviceSpec}
+              onSelectSlot={handleSelectSlot}
+              onReorderSlotByDrag={reorderSlotByDrag}
+              onRenameSlot={renameSlot}
+              selectedTemplateElementId={selectedTemplateElementId}
+              onSelectTemplateElement={setSelectedTemplateElementId}
+              onMoveTemplateElement={moveTemplateElement}
+              selectedSlotData={selectedSlotData}
+              selectedLocale={selectedLocale}
+              selectedSlotNameDraft={selectedSlotNameDraft}
+              selectedSlotTitleValue={selectedSlotTitleValue}
+              selectedSlotSubtitleValue={selectedSlotSubtitleValue}
+              isMoveUpDisabled={isMoveUpDisabled}
+              isMoveDownDisabled={isMoveDownDisabled}
+              templateInspectorNode={templateInspectorSection}
+              onSlotNameDraftChange={setSelectedSlotNameDraft}
+              onCommitSlotName={commitSelectedSlotName}
+              onResetSlotNameDraft={resetSelectedSlotNameDraft}
+              onOpenSlotImagePicker={openSlotImagePicker}
+              onTitleChange={handleSelectedTitleChange}
+              onSubtitleChange={handleSelectedSubtitleChange}
+              onMoveSlotUp={moveSelectedSlotUp}
+              onMoveSlotDown={moveSelectedSlotDown}
+              onRemoveSlot={removeSelectedSlot}
               isXlLayout={isXlLayout}
               selectedDevice={selectedDevice}
-              selectedSlot={selectedSlot}
-              slotCount={slots.length}
+              slots={slots}
               deviceOptions={deviceOptions}
               slotOptions={slotOptions}
               onSelectDevice={setSelectedDevice}
-              onSelectSlot={handleSelectSlot}
               onAddSlot={addSlot}
             />
           ) : null}
 
           {activeStep === 'localization' ? (
-            <LocalizationWorkflowPage
+            <LocalizationStepPanel
               sourceLocale={doc.pipelines.localization.sourceLocale || doc.project.locales[0] || 'en-US'}
               isBusy={isBusy}
-              isRunningLocalization={isBusy}
               localizationBusyLabel={isBusy ? busyDetail : ''}
               llmConfig={llmConfig}
-              slots={slots.map((slot) => ({ id: slot.id, name: slot.name }))}
+              slots={slots}
               locales={doc.project.locales}
-              localeManagerNode={(
-                <LocaleSelector
-                  value={doc.project.locales}
-                  options={localePresets}
-                  onChange={handleLocalizationLocalesChange}
-                />
-              )}
+              localeOptions={localePresets}
+              onLocalizationLocalesChange={handleLocalizationLocalesChange}
               onSourceLocaleChange={handleSourceLocaleChange}
               onRunLocalization={handleRunLocalization}
               onLlmCommandChange={handleLlmCommandChange}
