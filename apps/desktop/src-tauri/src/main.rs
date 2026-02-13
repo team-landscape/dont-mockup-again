@@ -52,6 +52,27 @@ fn resolve_project_path(input: &str) -> PathBuf {
     }
 }
 
+fn resolve_dialog_directory(preferred_dir: Option<String>) -> Option<PathBuf> {
+    let raw = preferred_dir?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let candidate = resolve_project_path(trimmed);
+    let directory = if candidate.is_file() {
+        candidate.parent()?.to_path_buf()
+    } else {
+        candidate
+    };
+
+    if directory.exists() && directory.is_dir() {
+        Some(directory)
+    } else {
+        None
+    }
+}
+
 fn collect_png_files(dir: &PathBuf, acc: &mut Vec<PathBuf>) -> Result<(), String> {
     let entries = fs::read_dir(dir).map_err(|error| format!("read_dir failed: {}", error))?;
     for entry in entries {
@@ -302,25 +323,29 @@ fn pick_output_dir() -> Option<String> {
 }
 
 #[tauri::command]
-fn pick_project_file() -> Option<String> {
-    rfd::FileDialog::new()
-        .add_filter("Store Metadata Studio Project", &["json"])
-        .pick_file()
-        .map(|path| path.to_string_lossy().replace('\\', "/"))
+fn pick_project_file(preferred_dir: Option<String>) -> Option<String> {
+    let mut dialog = rfd::FileDialog::new().add_filter("Store Metadata Studio Project", &["json"]);
+    if let Some(directory) = resolve_dialog_directory(preferred_dir) {
+        dialog = dialog.set_directory(directory);
+    }
+    dialog.pick_file().map(|path| path.to_string_lossy().replace('\\', "/"))
 }
 
 #[tauri::command]
-fn pick_project_save_path(default_file_name: Option<String>) -> Option<String> {
+fn pick_project_save_path(default_file_name: Option<String>, preferred_dir: Option<String>) -> Option<String> {
     let file_name = default_file_name
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "project.storeshot.json".to_string());
 
-    rfd::FileDialog::new()
+    let mut dialog = rfd::FileDialog::new()
         .add_filter("Store Metadata Studio Project", &["json"])
-        .set_file_name(&file_name)
-        .save_file()
-        .map(|path| path.to_string_lossy().replace('\\', "/"))
+        .set_file_name(&file_name);
+    if let Some(directory) = resolve_dialog_directory(preferred_dir) {
+        dialog = dialog.set_directory(directory);
+    }
+
+    dialog.save_file().map(|path| path.to_string_lossy().replace('\\', "/"))
 }
 
 #[tauri::command]

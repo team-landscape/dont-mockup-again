@@ -345,12 +345,12 @@ async function pickOutputDir() {
   return invokeCommand<string | null>('pick_output_dir', {});
 }
 
-async function pickProjectFile() {
-  return invokeCommand<string | null>('pick_project_file', {});
+async function pickProjectFile(preferredDir?: string) {
+  return invokeCommand<string | null>('pick_project_file', { preferredDir });
 }
 
-async function pickProjectSavePath(defaultFileName: string) {
-  return invokeCommand<string | null>('pick_project_save_path', { defaultFileName });
+async function pickProjectSavePath(defaultFileName: string, preferredDir?: string) {
+  return invokeCommand<string | null>('pick_project_save_path', { defaultFileName, preferredDir });
 }
 
 function browserFileToBase64(file: File) {
@@ -484,6 +484,14 @@ function appendPathSegment(base: string, segment: string) {
   const trimmedBase = base.trim();
   if (!trimmedBase) return segment;
   return trimmedBase.endsWith('/') ? `${trimmedBase}${segment}` : `${trimmedBase}/${segment}`;
+}
+
+function getParentDirectory(filePath: string) {
+  const normalized = filePath.trim().replace(/\\/g, '/');
+  if (!normalized) return '';
+  const separatorIndex = normalized.lastIndexOf('/');
+  if (separatorIndex <= 0) return '';
+  return normalized.slice(0, separatorIndex);
 }
 
 function clampTextWidthPercent(value: number) {
@@ -1483,7 +1491,8 @@ export function App() {
     }
 
     try {
-      const pickedPath = await pickProjectFile();
+      const preferredDir = getParentDirectory(projectPath) || defaultExportDir || undefined;
+      const pickedPath = await pickProjectFile(preferredDir);
       if (!pickedPath || !pickedPath.trim()) {
         setProjectStatus('Load cancelled.');
         setProjectError('');
@@ -1519,7 +1528,8 @@ export function App() {
     try {
       let targetPath = projectPath.trim();
       if (!targetPath) {
-        const pickedPath = await pickProjectSavePath(DEFAULT_PROJECT_FILE_NAME);
+        const preferredDir = defaultExportDir || undefined;
+        const pickedPath = await pickProjectSavePath(DEFAULT_PROJECT_FILE_NAME, preferredDir);
         if (!pickedPath || !pickedPath.trim()) {
           setProjectStatus('Save cancelled.');
           setProjectError('');
