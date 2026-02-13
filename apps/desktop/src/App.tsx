@@ -506,8 +506,7 @@ function resolveImageLayerForPreview(
   const scaledWidth = Math.max(1, Math.round(layer.w * scale));
   const scaledHeight = Math.max(1, Math.round(layer.h * scale));
   const scaledX = clampNumber(Math.round(layer.x * scale), 0, Math.max(0, safeSlotWidth - scaledWidth));
-  // Keep vertical spacing anchored to iOS template; shorter canvases crop from bottom.
-  const scaledY = Math.round(layer.y);
+  const scaledY = Math.round(layer.y * scale);
   const scaledCornerRadius = Math.max(0, Math.round(layer.cornerRadius * scale));
   const scaledFrameInset = Math.max(0, Math.round(layer.frameInset * scale));
   const scaledFrameRadius = Math.max(0, Math.round(layer.frameRadius * scale));
@@ -4939,6 +4938,12 @@ function resolveTextLayerForPreview(
   }
 
   const scale = Math.max(0.0001, safeSlotWidth / TEMPLATE_REFERENCE_WIDTH);
+  const scaledX = clampNumber(
+    Math.round(resolvedLayer.x * scale),
+    0,
+    Math.max(0, Math.max(1, safeSlotWidth) - resolvedLayer.w)
+  );
+  const scaledY = Math.round(resolvedLayer.y * scale);
   const scaledSize = Math.max(1, Math.round(resolvedLayer.size * scale));
   const scaledPadding = Math.max(0, Math.round(resolvedLayer.padding * scale));
   const scaledCornerRadius = Math.max(0, Math.round(resolvedLayer.cornerRadius * scale));
@@ -4947,7 +4952,9 @@ function resolveTextLayerForPreview(
     : Math.max(1, Math.round(resolvedLayer.h * scale));
 
   if (
-    resolvedLayer.size === scaledSize
+    resolvedLayer.x === scaledX
+    && resolvedLayer.y === scaledY
+    && resolvedLayer.size === scaledSize
     && resolvedLayer.padding === scaledPadding
     && resolvedLayer.cornerRadius === scaledCornerRadius
     && resolvedLayer.h === scaledHeight
@@ -4957,6 +4964,8 @@ function resolveTextLayerForPreview(
 
   return {
     ...resolvedLayer,
+    x: scaledX,
+    y: scaledY,
     size: scaledSize,
     padding: scaledPadding,
     cornerRadius: scaledCornerRadius,
@@ -4991,6 +5000,7 @@ function resolvePreviewLayer(
   if (!resolvedLayer.autoSize) {
     if (
       resolvedLayer.x === layer.x
+      && resolvedLayer.y === layer.y
       && resolvedLayer.w === layer.w
       && resolvedLayer.h === layer.h
       && resolvedLayer.widthPercent === layer.widthPercent
@@ -5007,6 +5017,7 @@ function resolvePreviewLayer(
   const { height } = resolveAutoTextSize(context, resolvedLayer, text);
   if (
     resolvedLayer.x === layer.x
+    && resolvedLayer.y === layer.y
     && resolvedLayer.w === layer.w
     && resolvedLayer.h === height
     && resolvedLayer.widthPercent === layer.widthPercent
