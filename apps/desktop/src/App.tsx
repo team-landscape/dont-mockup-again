@@ -24,6 +24,8 @@ import {
   findMissingRenderedFiles,
   renderExportImagesFromSnapshot
 } from './lib/export-preview-renderer';
+import { withTimeout } from './lib/async-utils';
+import { parseJsonOrNull } from './lib/json-utils';
 import { resolveOutputDir as resolveOutputDirPath } from './lib/output-dir';
 import { loadPreviewMatrixFromDir, loadSlotPreviewMapFromDir } from './lib/preview-file-loaders';
 import {
@@ -95,32 +97,6 @@ const steps: Array<{ id: StepId; title: string }> = [
 const XL_MEDIA_QUERY = '(min-width: 1280px)';
 const ONBOARDING_STORAGE_KEY = 'storeshot.desktop.onboarding.v1.completed';
 const DEFAULT_PROJECT_FILE_NAME = 'project.storeshot.json';
-
-function extractJson(raw: string): unknown {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        timer = setTimeout(() => {
-          reject(new Error(`${label} timed out after ${timeoutMs}ms`));
-        }, timeoutMs);
-      })
-    ]);
-  } finally {
-    if (timer) {
-      clearTimeout(timer);
-    }
-  }
-}
 
 export function App() {
   const [activeStep, setActiveStep] = useState<StepId>('screens');
@@ -507,7 +483,7 @@ export function App() {
 
       setDetail('Reloading localized copy...');
       const text = await readTextFile(projectPath);
-      const parsed = extractJson(text);
+      const parsed = parseJsonOrNull(text);
       const normalized = normalizeProject(parsed);
       setDoc(normalized);
     }, {
@@ -579,7 +555,7 @@ export function App() {
       await persistProjectSnapshot();
       setDetail('Checking project rules...');
       const output = await runPipeline('validate', [projectPath]);
-      const parsed = extractJson(output) as { issues?: ValidateIssue[] } | null;
+      const parsed = parseJsonOrNull(output) as { issues?: ValidateIssue[] } | null;
       setIssues(parsed?.issues || []);
     }, {
       action: 'validate',
@@ -629,7 +605,7 @@ export function App() {
 
         setDetail('Exporting preview renders...');
         const exportRaw = await runPipeline('export', [projectPath, previewRenderDir, resolvedOutputDir, ...flags]);
-        const exportParsed = extractJson(exportRaw) as {
+        const exportParsed = parseJsonOrNull(exportRaw) as {
           outputDir?: string;
           zipPath?: string | null;
           metadataCsvPath?: string | null;

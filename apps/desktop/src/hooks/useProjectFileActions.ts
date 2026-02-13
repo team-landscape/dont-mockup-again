@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 
 import { isTauriRuntime, pickProjectFile, pickProjectSavePath, readTextFile, writeTextFile } from '../lib/desktop-runtime';
+import { parseJsonOrNull } from '../lib/json-utils';
 import {
   type StoreShotDoc,
   TEMPLATE_REFERENCE_WIDTH,
@@ -28,14 +29,6 @@ interface UseProjectFileActionsArgs {
   setSavedProjectSignature: (value: string) => void;
   setProjectError: (value: string) => void;
   setProjectStatus: (value: string) => void;
-}
-
-function extractJson(raw: string): unknown {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
 }
 
 export function useProjectFileActions({
@@ -72,7 +65,7 @@ export function useProjectFileActions({
 
       await runWithBusy(async () => {
         const text = await readTextFile(pickedPath);
-        const parsed = extractJson(text);
+        const parsed = parseJsonOrNull(text);
         const normalized = normalizeProject(parsed);
         const resolvedLoadedOutputDir = resolveOutputDir(normalized.pipelines.export.outputDir);
         const loadedSnapshot = buildProjectSnapshotForPersistence(normalized, resolvedLoadedOutputDir, {
