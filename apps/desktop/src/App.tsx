@@ -2258,14 +2258,14 @@ export function App() {
                   return (
                     <div
                       key={step.id}
-                      className={`flex items-start gap-2 rounded-md border px-2 py-1.5 ${isCurrent
+                      className={`flex items-center gap-2 rounded-md border px-2 py-1.5 ${isCurrent
                           ? 'border-primary bg-primary/10'
                           : isCompleted
                             ? 'border-border bg-muted/40'
                             : 'border-border bg-background/60'
                         }`}
                     >
-                      <span className={`mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${isCurrent ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                      <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${isCurrent ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
                         }`}
                       >
                         {index + 1}
