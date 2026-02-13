@@ -288,7 +288,7 @@ fn write_file_base64(path: String, data_base64: String) -> Result<(), String> {
 #[tauri::command]
 fn get_default_export_dir(app: tauri::AppHandle) -> Option<String> {
     let home_dir = app.path().home_dir().ok()?;
-    let default_dir = home_dir.join("유저").join("Store Metadata Studio");
+    let default_dir = home_dir.join("Store Metadata Studio");
 
     fs::create_dir_all(&default_dir).ok()?;
     Some(default_dir.to_string_lossy().replace('\\', "/"))

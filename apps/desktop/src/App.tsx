@@ -1056,15 +1056,30 @@ export function App() {
   const [, startSlotTransition] = useTransition();
   const [, startTemplateTransition] = useTransition();
 
+  const homeDir = useMemo(() => {
+    const marker = '/Store Metadata Studio';
+    if (!defaultExportDir || !defaultExportDir.endsWith(marker)) {
+      return '';
+    }
+    return defaultExportDir.slice(0, -marker.length);
+  }, [defaultExportDir]);
+
   const resolveOutputDir = useCallback((value: string | undefined) => {
-    const normalized = typeof value === 'string' ? value.trim() : '';
+    let normalized = typeof value === 'string' ? value.trim() : '';
+    if (homeDir) {
+      if (normalized === '~') {
+        normalized = homeDir;
+      } else if (normalized.startsWith('~/')) {
+        normalized = `${homeDir}/${normalized.slice(2)}`;
+      }
+    }
     if (!normalized || normalized === 'dist') {
       return defaultExportDir || 'dist';
     }
     return normalized;
-  }, [defaultExportDir]);
+  }, [defaultExportDir, homeDir]);
 
-  const renderDir = useMemo(() => `${outputDir}-render`, [outputDir]);
+  const previewRenderDir = useMemo(() => 'dist-render', []);
 
   const activeStepIndex = useMemo(
     () => Math.max(steps.findIndex((item) => item.id === activeStep), 0),
@@ -1086,8 +1101,8 @@ export function App() {
   }, [doc.project.devices, selectedDevice, selectedPlatform]);
 
   const expectedPreviewPath = useMemo(
-    () => `${renderDir}/${selectedPlatform}/${selectedDevice}/${selectedLocale}/${selectedSlot}.png`,
-    [renderDir, selectedPlatform, selectedDevice, selectedLocale, selectedSlot]
+    () => `${previewRenderDir}/${selectedPlatform}/${selectedDevice}/${selectedLocale}/${selectedSlot}.png`,
+    [previewRenderDir, selectedPlatform, selectedDevice, selectedLocale, selectedSlot]
   );
 
   const llmConfig = doc.pipelines.localization.llmCli || clone(defaultLlmConfig);
@@ -1133,13 +1148,13 @@ export function App() {
   }, [doc.template.main.elements, doc.template.main.slotElements]);
   const previewMatrixLoadKey = useMemo(
     () => [
-      renderDir,
+      previewRenderDir,
       selectedPlatform,
       selectedDevice,
       doc.project.locales.join(','),
       doc.project.slots.map((slot) => slot.id).join(',')
     ].join('|'),
-    [doc.project.locales, doc.project.slots, renderDir, selectedDevice, selectedPlatform]
+    [doc.project.locales, doc.project.slots, previewRenderDir, selectedDevice, selectedPlatform]
   );
 
   useEffect(() => {
@@ -1393,7 +1408,7 @@ export function App() {
       const next = clone(doc);
       next.project.slots = reorderSlots(next.project.slots);
       next.template.main = syncTemplateLegacyFields(next.template.main);
-      next.pipelines.export.outputDir = outputDir;
+      next.pipelines.export.outputDir = resolveOutputDir(outputDir);
       const sourceLocale = next.pipelines.localization.sourceLocale || next.project.locales[0] || 'en-US';
       next.pipelines.localization.sourceLocale = next.project.locales.includes(sourceLocale)
         ? sourceLocale
@@ -1543,14 +1558,14 @@ export function App() {
     const next = clone(doc);
     next.project.slots = reorderSlots(next.project.slots);
     next.template.main = syncTemplateLegacyFields(next.template.main, Math.max(1, selectedDeviceSpec.width || 1290));
-    next.pipelines.export.outputDir = outputDir;
+    next.pipelines.export.outputDir = resolveOutputDir(outputDir);
     const sourceLocale = next.pipelines.localization.sourceLocale || next.project.locales[0] || 'en-US';
     next.pipelines.localization.sourceLocale = next.project.locales.includes(sourceLocale)
       ? sourceLocale
       : (next.project.locales[0] || 'en-US');
     await writeTextFile(projectPath, JSON.stringify(next, null, 2));
     return next;
-  }, [doc, outputDir, projectPath, selectedDeviceSpec.width]);
+  }, [doc, outputDir, projectPath, resolveOutputDir, selectedDeviceSpec.width]);
 
   async function handleRunLocalization() {
     await runWithBusy(async ({ setDetail }) => {
@@ -1574,7 +1589,7 @@ export function App() {
 
   async function loadSlotPreviewMap() {
     const sortedSlots = sortSlotsByOrder(doc.project.slots);
-    const files = await listPngFiles(renderDir);
+    const files = await listPngFiles(previewRenderDir);
     const urls: Record<string, string> = {};
     const paths: Record<string, string> = {};
 
@@ -1603,7 +1618,7 @@ export function App() {
     const locales = [...doc.project.locales];
     let files: string[] = [];
     try {
-      files = await listPngFiles(renderDir);
+      files = await listPngFiles(previewRenderDir);
     } catch {
       setPreviewMatrixUrls({});
       setPreviewMatrixPaths({});
@@ -1633,7 +1648,7 @@ export function App() {
     return urlsByLocale;
   }
 
-  const renderExportImagesFromPreview = useCallback(async (snapshot: StoreShotDoc) => {
+  const renderExportImagesFromPreview = useCallback(async (snapshot: StoreShotDoc, targetDir: string) => {
     const slots = sortSlotsByOrder(snapshot.project.slots || []);
     const locales = snapshot.project.locales || [];
     const platforms = snapshot.project.platforms || [];
@@ -1689,19 +1704,19 @@ export function App() {
             device
           });
 
-          const outPath = `${renderDir}/${platform}/${device.id}/${locale}/${slot.id}.png`;
+          const outPath = `${targetDir}/${platform}/${device.id}/${locale}/${slot.id}.png`;
           await writeFileBase64(outPath, pngBase64);
         }
       }
     }
-  }, [renderDir, templateImageUrls]);
+  }, [templateImageUrls]);
 
   async function handleRender() {
     await runWithBusy(async ({ setDetail }) => {
       setDetail('Saving project config...');
       await persistProjectSnapshot();
       setDetail('Rendering preview images...');
-      await runPipeline('render', [projectPath, renderDir]);
+      await runPipeline('render', [projectPath, previewRenderDir]);
       await loadSlotPreviewMap();
       await loadPreviewMatrix();
     }, {
@@ -1731,13 +1746,17 @@ export function App() {
       const flags: string[] = [];
       if (doc.pipelines.export.zip) flags.push('--zip');
       if (doc.pipelines.export.metadataCsv) flags.push('--metadata-csv');
+      const resolvedOutputDir = resolveOutputDir(outputDir);
+      if (resolvedOutputDir !== outputDir) {
+        setOutputDir(resolvedOutputDir);
+      }
 
       setDetail('Saving project config...');
       const snapshot = await persistProjectSnapshot();
       setDetail('Rendering images from Preview...');
-      await renderExportImagesFromPreview(snapshot);
+      await renderExportImagesFromPreview(snapshot, resolvedOutputDir);
       setDetail('Creating output package...');
-      await runPipeline('export', [projectPath, renderDir, outputDir, ...flags]);
+      await runPipeline('export', [projectPath, resolvedOutputDir, resolvedOutputDir, ...flags]);
     }, {
       action: 'export',
       title: 'Exporting',
@@ -2990,7 +3009,6 @@ export function App() {
               outputDir={outputDir}
               zipEnabled={doc.pipelines.export.zip}
               metadataCsvEnabled={doc.pipelines.export.metadataCsv}
-              renderDir={renderDir}
               isBusy={isBusy}
               onOutputDirChange={setOutputDir}
               onPickOutputDir={handlePickOutputDir}

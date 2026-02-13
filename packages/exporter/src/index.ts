@@ -23,6 +23,10 @@ async function listFilesRecursive(baseDir) {
 }
 
 async function copyRenderedAssets(renderDir, outputDir) {
+  if (path.resolve(renderDir) === path.resolve(outputDir)) {
+    return;
+  }
+
   const files = await listFilesRecursive(renderDir);
   for (const filePath of files) {
     const relative = path.relative(renderDir, filePath);

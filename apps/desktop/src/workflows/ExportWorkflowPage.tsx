@@ -23,7 +23,6 @@ interface ExportWorkflowPageProps {
   outputDir: string;
   zipEnabled: boolean;
   metadataCsvEnabled: boolean;
-  renderDir: string;
   isBusy: boolean;
   onOutputDirChange: (value: string) => void;
   onPickOutputDir: () => void;
@@ -37,7 +36,6 @@ export function ExportWorkflowPage({
   outputDir,
   zipEnabled,
   metadataCsvEnabled,
-  renderDir,
   isBusy,
   onOutputDirChange,
   onPickOutputDir,
@@ -86,8 +84,6 @@ export function ExportWorkflowPage({
             <div className="flex flex-wrap gap-2">
               <Button disabled={isBusy} onClick={onExport}>Run Export</Button>
             </div>
-
-            <p className="rounded-md border bg-muted/60 p-2 text-xs">Render Dir: {renderDir}</p>
           </CardContent>
         </Card>
       </div>
