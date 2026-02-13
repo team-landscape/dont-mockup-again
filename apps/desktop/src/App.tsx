@@ -1,8 +1,8 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
-import { ExportWorkflowPage } from './workflows/ExportWorkflowPage';
+import { ExportStepPanel } from './workflows/ExportStepPanel';
 import { LocalizationStepPanel } from './workflows/LocalizationStepPanel';
-import { PreviewWorkflowPage } from './workflows/PreviewWorkflowPage';
+import { PreviewStepPanel } from './workflows/PreviewStepPanel';
 import { ScreensStepPanel } from './workflows/ScreensStepPanel';
 import { TemplateInspectorSection } from './components/inspector/TemplateInspectorSection';
 import { OnboardingOverlay } from './components/onboarding/OnboardingOverlay';
@@ -567,7 +567,7 @@ export function App() {
           ) : null}
 
           {activeStep === 'preview' ? (
-            <PreviewWorkflowPage
+            <PreviewStepPanel
               deviceOptions={deviceOptions}
               selectedDevice={selectedDevice}
               onSelectDevice={setSelectedDevice}
@@ -579,7 +579,7 @@ export function App() {
           ) : null}
 
           {activeStep === 'export' ? (
-            <ExportWorkflowPage
+            <ExportStepPanel
               outputDir={outputDir}
               zipEnabled={doc.pipelines.export.zip}
               metadataCsvEnabled={doc.pipelines.export.metadataCsv}
