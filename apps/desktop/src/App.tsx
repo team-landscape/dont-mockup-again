@@ -16,10 +16,10 @@ import { OnboardingOverlay } from './components/onboarding/OnboardingOverlay';
 import { BusyOverlay } from './components/overlay/BusyOverlay';
 import { WorkflowSidebar } from './components/sidebar/WorkflowSidebar';
 import { useProjectImageAssets } from './hooks/useProjectImageAssets';
+import { useProjectBootstrapPaths } from './hooks/useProjectBootstrapPaths';
 import { useProjectImageUploadHandlers } from './hooks/useProjectImageUploadHandlers';
 import { resolveOutputDir as resolveOutputDirPath } from './lib/output-dir';
 import {
-  getDefaultExportDir,
   isTauriRuntime,
   listPngFiles,
   listSystemFonts,
@@ -45,7 +45,6 @@ import {
   type TemplateImageElement,
   type TemplateMain,
   type TemplateTextElement,
-  appendPathSegment,
   asNumber,
   buildProjectSnapshotForPersistence,
   clampNumber,
@@ -135,12 +134,10 @@ export function App() {
   const [activeStep, setActiveStep] = useState<StepId>('screens');
   const [projectPath, setProjectPath] = useState('');
   const [savedProjectSignature, setSavedProjectSignature] = useState<string | null>(null);
-  const [isProjectBaselineReady, setIsProjectBaselineReady] = useState(false);
   const [projectStatus, setProjectStatus] = useState('');
   const [projectError, setProjectError] = useState('');
   const [doc, setDoc] = useState<StoreShotDoc>(() => createDefaultProject());
   const [outputDir, setOutputDir] = useState('dist');
-  const [defaultExportDir, setDefaultExportDir] = useState('');
   const [isBusy, setIsBusy] = useState(false);
   const [busyTitle, setBusyTitle] = useState('');
   const [busyDetail, setBusyDetail] = useState('');
@@ -172,6 +169,12 @@ export function App() {
   const templateImageTargetRef = useRef<string | null>(null);
   const [, startSlotTransition] = useTransition();
   const [, startTemplateTransition] = useTransition();
+
+  const { defaultExportDir, isProjectBaselineReady } = useProjectBootstrapPaths({
+    defaultProjectFileName: DEFAULT_PROJECT_FILE_NAME,
+    setOutputDir,
+    setProjectPath
+  });
 
   const resolveOutputDir = useCallback((value: string | undefined) => {
     return resolveOutputDirPath(value, defaultExportDir);
@@ -322,37 +325,6 @@ export function App() {
       })
       .catch(() => {
         setAvailableFonts(defaultSystemFonts);
-      });
-  }, []);
-
-  useEffect(() => {
-    if (!isTauriRuntime()) {
-      setIsProjectBaselineReady(true);
-      return;
-    }
-
-    getDefaultExportDir()
-      .then((path) => {
-        if (!path || !path.trim()) return;
-        setDefaultExportDir(path);
-        setOutputDir((current) => {
-          const normalized = current.trim();
-          if (!normalized || normalized === 'dist') {
-            return path;
-          }
-          return current;
-        });
-        setProjectPath((current) => {
-          if (current.trim()) return current;
-          return appendPathSegment(path, DEFAULT_PROJECT_FILE_NAME);
-        });
-      })
-      .catch(() => {
-        setProjectPath((current) => (current.trim() ? current : DEFAULT_PROJECT_FILE_NAME));
-        // Fallback to static default when system export path lookup fails.
-      })
-      .finally(() => {
-        setIsProjectBaselineReady(true);
       });
   }, []);
 
