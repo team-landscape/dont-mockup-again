@@ -917,6 +917,8 @@ export function App() {
   const [screenFocusTrigger, setScreenFocusTrigger] = useState(0);
   const [slotPreviewUrls, setSlotPreviewUrls] = useState<Record<string, string>>({});
   const [slotPreviewPaths, setSlotPreviewPaths] = useState<Record<string, string>>({});
+  const [previewMatrixUrls, setPreviewMatrixUrls] = useState<Record<string, Record<string, string>>>({});
+  const [previewMatrixPaths, setPreviewMatrixPaths] = useState<Record<string, Record<string, string>>>({});
   const [slotSourceUrls, setSlotSourceUrls] = useState<Record<string, string>>({});
   const [templateImageUrls, setTemplateImageUrls] = useState<Record<string, string>>({});
   const [availableFonts, setAvailableFonts] = useState<string[]>(defaultSystemFonts);
@@ -990,6 +992,16 @@ export function App() {
       .map((item) => `${item.id}:${item.imagePath}`)
       .join('|'),
     [doc.template.main.elements]
+  );
+  const previewMatrixLoadKey = useMemo(
+    () => [
+      renderDir,
+      selectedPlatform,
+      selectedDevice,
+      doc.project.locales.join(','),
+      doc.project.slots.map((slot) => slot.id).join(',')
+    ].join('|'),
+    [doc.project.locales, doc.project.slots, renderDir, selectedDevice, selectedPlatform]
   );
 
   useEffect(() => {
@@ -1386,10 +1398,46 @@ export function App() {
     };
   }
 
+  async function loadPreviewMatrix() {
+    const sortedSlots = sortSlotsByOrder(doc.project.slots);
+    const locales = [...doc.project.locales];
+    let files: string[] = [];
+    try {
+      files = await listPngFiles(renderDir);
+    } catch {
+      setPreviewMatrixUrls({});
+      setPreviewMatrixPaths({});
+      return {};
+    }
+
+    const urlsByLocale: Record<string, Record<string, string>> = {};
+    const pathsByLocale: Record<string, Record<string, string>> = {};
+
+    for (const locale of locales) {
+      urlsByLocale[locale] = {};
+      pathsByLocale[locale] = {};
+
+      for (const slot of sortedSlots) {
+        const suffix = `${selectedPlatform}/${selectedDevice}/${locale}/${slot.id}.png`;
+        const picked = files.find((entry) => entry.endsWith(suffix));
+        if (!picked) continue;
+
+        const base64 = await readFileBase64(picked);
+        urlsByLocale[locale][slot.id] = `data:image/png;base64,${base64}`;
+        pathsByLocale[locale][slot.id] = picked;
+      }
+    }
+
+    setPreviewMatrixUrls(urlsByLocale);
+    setPreviewMatrixPaths(pathsByLocale);
+    return urlsByLocale;
+  }
+
   async function handleRender() {
     await runWithBusy(async () => {
       await runPipeline('render', [projectPath, renderDir]);
       await loadSlotPreviewMap();
+      await loadPreviewMatrix();
     }, {
       action: 'render',
       title: 'Rendering',
@@ -1425,6 +1473,7 @@ export function App() {
   async function handleRefreshPreview() {
     await runWithBusy(async () => {
       await loadSlotPreviewMap();
+      await loadPreviewMatrix();
     }, {
       action: 'refresh-preview',
       title: 'Refreshing Preview',
@@ -1502,8 +1551,8 @@ export function App() {
       ...(doc.template.main.slotBackgrounds[selectedSlotData.id] || {})
     };
   }, [doc.template.main.background, doc.template.main.slotBackgrounds, selectedSlotData]);
-  const previewPath = slotPreviewPaths[selectedSlot] || '';
-  const previewDataUrl = slotPreviewUrls[selectedSlot] || '';
+  const previewPath = previewMatrixPaths[selectedLocale]?.[selectedSlot] || slotPreviewPaths[selectedSlot] || '';
+  const previewDataUrl = previewMatrixUrls[selectedLocale]?.[selectedSlot] || slotPreviewUrls[selectedSlot] || '';
   const onboardingReady = doc.project.locales.length > 0
     && doc.project.platforms.length > 0
     && doc.project.devices.length > 0;
@@ -1591,6 +1640,15 @@ export function App() {
     if (!selectedSubtitleKey) return;
     updateCopyByKey(selectedSubtitleKey, selectedLocale, value);
   }, [selectedLocale, selectedSubtitleKey, updateCopyByKey]);
+
+  useEffect(() => {
+    if (activeStep !== 'preview' || !isTauriRuntime()) {
+      return;
+    }
+
+    void loadPreviewMatrix();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStep, previewMatrixLoadKey]);
 
   const updateTemplateMain = useCallback((mutator: (main: TemplateMain) => void) => {
     startTemplateTransition(() => {
@@ -2365,7 +2423,9 @@ export function App() {
               expectedPreviewPath={expectedPreviewPath}
               previewPath={previewPath}
               previewDataUrl={previewDataUrl}
+              previewMatrixDataUrls={previewMatrixUrls}
               issues={issues}
+              getCopyValue={(key, locale) => doc.copy.keys[key]?.[locale] || ''}
               onSelectDevice={setSelectedDevice}
               onSelectLocale={setSelectedLocale}
               onSelectSlot={handleSelectSlot}

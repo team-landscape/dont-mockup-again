@@ -48,7 +48,9 @@ interface PreviewWorkflowPageProps {
   expectedPreviewPath: string;
   previewPath: string;
   previewDataUrl?: string;
+  previewMatrixDataUrls: Record<string, Record<string, string>>;
   issues: ValidateIssue[];
+  getCopyValue: (key: string, locale: string) => string;
   onSelectDevice: (deviceId: string) => void;
   onSelectLocale: (locale: string) => void;
   onSelectSlot: (slotId: string) => void;
@@ -68,7 +70,9 @@ export function PreviewWorkflowPage({
   expectedPreviewPath,
   previewPath,
   previewDataUrl,
+  previewMatrixDataUrls,
   issues,
+  getCopyValue,
   onSelectDevice,
   onSelectLocale,
   onSelectSlot,
@@ -152,12 +156,52 @@ export function PreviewWorkflowPage({
             <CardDescription className="truncate">{previewPath || 'No image loaded'}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid min-h-[560px] place-items-center rounded-lg border bg-muted/30 p-4">
-              {previewDataUrl ? (
-                <img src={previewDataUrl} alt="render preview" className="max-h-[72vh] w-auto max-w-full rounded-md border" />
-              ) : (
-                <p className="text-sm text-muted-foreground">Render 후 Refresh Preview를 눌러 주세요.</p>
-              )}
+            <div className="space-y-4">
+              <div className="grid min-h-[440px] place-items-center rounded-lg border bg-muted/30 p-4">
+                {previewDataUrl ? (
+                  <img src={previewDataUrl} alt="render preview" className="max-h-[72vh] w-auto max-w-full rounded-md border" />
+                ) : (
+                  <p className="text-sm text-muted-foreground">Render 후 Refresh Preview를 눌러 주세요.</p>
+                )}
+              </div>
+
+              <div className="rounded-lg border p-3">
+                <p className="mb-2 text-sm font-medium">All Locales · All Slots</p>
+                <div className="overflow-x-auto">
+                  <div className="flex min-w-max gap-3 pb-1">
+                    {localeOptions.map((locale) => (
+                      <div key={locale.value} className="w-[280px] shrink-0 rounded-md border bg-muted/20 p-2">
+                        <p className="mb-2 text-xs font-semibold text-muted-foreground">{locale.label}</p>
+                        <div className="space-y-2">
+                          {slotOptions.map((slot) => {
+                            const imageUrl = previewMatrixDataUrls[locale.value]?.[slot.value];
+                            const title = getCopyValue(`${slot.value}.title`, locale.value);
+                            const subtitle = getCopyValue(`${slot.value}.subtitle`, locale.value);
+                            return (
+                              <div key={`${locale.value}:${slot.value}`} className="rounded-md border bg-background p-2">
+                                <p className="mb-1 text-[11px] font-semibold text-muted-foreground">{slot.label}</p>
+                                {imageUrl ? (
+                                  <img
+                                    src={imageUrl}
+                                    alt={`${locale.label} ${slot.label}`}
+                                    className="mb-2 h-auto max-h-[180px] w-full rounded-md border object-contain"
+                                  />
+                                ) : (
+                                  <div className="mb-2 grid h-[110px] place-items-center rounded-md border border-dashed text-xs text-muted-foreground">
+                                    No rendered image
+                                  </div>
+                                )}
+                                <p className="text-xs font-medium leading-tight">{title || '-'}</p>
+                                <p className="mt-1 text-[11px] leading-tight text-muted-foreground">{subtitle || '-'}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
