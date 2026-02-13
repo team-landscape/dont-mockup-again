@@ -1620,11 +1620,13 @@ export function App() {
       const flags: string[] = [];
       if (doc.pipelines.export.zip) flags.push('--zip');
 
+      // Ensure export always uses fresh renders for the currently selected output folder.
+      await runPipeline('render', [projectPath, renderDir]);
       await runPipeline('export', [projectPath, renderDir, outputDir, ...flags]);
     }, {
       action: 'export',
       title: 'Exporting',
-      detail: 'Creating output package...'
+      detail: 'Rendering and creating output package...'
     });
   }
 
