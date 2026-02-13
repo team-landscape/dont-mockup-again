@@ -495,25 +495,19 @@ function resolveTextLayerWithinSlot(layer: TemplateTextElement, slotWidth: numbe
 
 function resolveImageLayerForPreview(
   layer: TemplateImageElement,
-  slotWidth: number,
-  slotHeight: number
+  slotWidth: number
 ): TemplateImageElement {
   const safeSlotWidth = Math.max(1, slotWidth);
-  const safeSlotHeight = Math.max(1, slotHeight);
-  if (
-    safeSlotWidth === TEMPLATE_REFERENCE_WIDTH
-    && safeSlotHeight === TEMPLATE_REFERENCE_HEIGHT
-  ) {
+  if (safeSlotWidth === TEMPLATE_REFERENCE_WIDTH) {
     return layer;
   }
 
-  const scaleX = safeSlotWidth / TEMPLATE_REFERENCE_WIDTH;
-  const scaleY = safeSlotHeight / TEMPLATE_REFERENCE_HEIGHT;
-  const scale = Math.max(0.0001, Math.min(scaleX, scaleY));
-  const scaledWidth = Math.max(1, Math.round(layer.w * scaleX));
-  const scaledHeight = Math.max(1, Math.round(layer.h * scaleY));
-  const scaledX = clampNumber(Math.round(layer.x * scaleX), 0, Math.max(0, safeSlotWidth - scaledWidth));
-  const scaledY = clampNumber(Math.round(layer.y * scaleY), 0, Math.max(0, safeSlotHeight - scaledHeight));
+  const scale = Math.max(0.0001, safeSlotWidth / TEMPLATE_REFERENCE_WIDTH);
+  const scaledWidth = Math.max(1, Math.round(layer.w * scale));
+  const scaledHeight = Math.max(1, Math.round(layer.h * scale));
+  const scaledX = clampNumber(Math.round(layer.x * scale), 0, Math.max(0, safeSlotWidth - scaledWidth));
+  // Keep vertical spacing anchored to iOS template; shorter canvases crop from bottom.
+  const scaledY = Math.round(layer.y);
   const scaledCornerRadius = Math.max(0, Math.round(layer.cornerRadius * scale));
   const scaledFrameInset = Math.max(0, Math.round(layer.frameInset * scale));
   const scaledFrameRadius = Math.max(0, Math.round(layer.frameRadius * scale));
@@ -4944,7 +4938,7 @@ function resolvePreviewLayer(
     if (!options?.scaleImageToDevice) {
       return layer;
     }
-    return resolveImageLayerForPreview(layer, slotWidth, slotHeight);
+    return resolveImageLayerForPreview(layer, slotWidth);
   }
 
   if (layer.kind !== 'text') {
