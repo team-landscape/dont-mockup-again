@@ -4734,6 +4734,7 @@ const SlotCard = memo(function SlotCard({
         template={template}
         templateImageUrls={templateImageUrls}
         device={device}
+        scaleImageToDevice
         editable={editable}
         selectedElementId={selectedElementId}
         onSelectElement={onSelectElement}
@@ -5271,6 +5272,10 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
   } | null>(null);
   const width = Math.max(1, device.width || 1290);
   const height = Math.max(1, device.height || 2796);
+  const previewToTemplateScale = useMemo(() => {
+    if (!scaleImageToDevice) return 1;
+    return Math.max(0.0001, width / TEMPLATE_REFERENCE_WIDTH);
+  }, [scaleImageToDevice, width]);
   const previewSize = useMemo(
     () => getSlotPreviewCanvasSize(device),
     [device.height, device.width]
@@ -5406,7 +5411,9 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
         };
       });
       if (onMoveElement) {
-        onMoveElement(state.elementId, finalRoundedX, finalRoundedY);
+        const templateX = Math.round(finalRoundedX / previewToTemplateScale);
+        const templateY = Math.round(finalRoundedY / previewToTemplateScale);
+        onMoveElement(state.elementId, templateX, templateY);
       }
     } else {
       setDragLayerPosition(null);
@@ -5418,7 +5425,7 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
     }
     event.stopPropagation();
     event.preventDefault();
-  }, [dragLayerPosition, onMoveElement]);
+  }, [dragLayerPosition, onMoveElement, previewToTemplateScale]);
 
   const selectLayerAtClientPoint = useCallback((clientX: number, clientY: number) => {
     if (!editable || !onSelectElement) return false;
