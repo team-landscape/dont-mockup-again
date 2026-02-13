@@ -99,6 +99,8 @@ test('exporter creates zip output', async () => {
   });
 
   assert.equal(await exists(outDir), true);
+  assert.equal(await exists(result.outputDir), true);
+  assert.equal(path.dirname(result.outputDir), outDir);
   assert.equal(await exists(result.zipPath), true);
 });
 

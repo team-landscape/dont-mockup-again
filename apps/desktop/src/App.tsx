@@ -1903,19 +1903,19 @@ export function App() {
 
         setDetail('Exporting preview renders...');
         const exportRaw = await runPipeline('export', [projectPath, previewRenderDir, resolvedOutputDir, ...flags]);
-
-        setDetail('Verifying exported files...');
-        const exportCheck = await findMissingRenderedFiles(resolvedOutputDir, expectedSuffixes);
-        if (exportCheck.missing.length > 0) {
-          throw new Error(`Export output missing ${exportCheck.missing.length} file(s). Example: ${exportCheck.missing[0]}`);
-        }
-
         const exportParsed = extractJson(exportRaw) as {
           outputDir?: string;
           zipPath?: string | null;
           metadataCsvPath?: string | null;
         } | null;
         const outputPath = exportParsed?.outputDir || resolvedOutputDir;
+
+        setDetail('Verifying exported files...');
+        const exportCheck = await findMissingRenderedFiles(outputPath, expectedSuffixes);
+        if (exportCheck.missing.length > 0) {
+          throw new Error(`Export output missing ${exportCheck.missing.length} file(s). Example: ${exportCheck.missing[0]}`);
+        }
+
         const extras = [
           exportParsed?.zipPath ? `zip: ${exportParsed.zipPath}` : '',
           exportParsed?.metadataCsvPath ? `csv: ${exportParsed.metadataCsvPath}` : ''

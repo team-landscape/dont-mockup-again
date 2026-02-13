@@ -174,15 +174,48 @@ async function zipDirectory(sourceDir, zipPath) {
   });
 }
 
+function formatTimestampForDir(date = new Date()) {
+  const pad2 = (value) => String(value).padStart(2, '0');
+  const year = String(date.getFullYear());
+  const month = pad2(date.getMonth() + 1);
+  const day = pad2(date.getDate());
+  const hour = pad2(date.getHours());
+  const minute = pad2(date.getMinutes());
+  const second = pad2(date.getSeconds());
+  return `${year}${month}${day}-${hour}${minute}${second}`;
+}
+
+async function createTimestampOutputDir(baseOutputDir) {
+  await fs.mkdir(baseOutputDir, { recursive: true });
+  const stamp = formatTimestampForDir();
+
+  for (let index = 0; index < 1000; index += 1) {
+    const suffix = index === 0 ? '' : `-${index}`;
+    const dirName = `${stamp}${suffix}`;
+    const target = path.join(baseOutputDir, dirName);
+    try {
+      await fs.mkdir(target);
+      return target;
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST') {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error(`Failed to create timestamp export folder under: ${baseOutputDir}`);
+}
+
 export async function exportProject(projectPath, options = {}) {
   const { doc } = await loadProject(projectPath);
   const renderDir = options.renderDir || path.join(path.dirname(projectPath), 'dist-render');
-  const outputDir = options.outputDir || path.join(path.dirname(projectPath), 'dist');
+  const baseOutputDir = options.outputDir || path.join(path.dirname(projectPath), 'dist');
   const zipEnabled = options.zip !== false;
   const fastlaneLayout = options.fastlaneLayout === true;
   const metadataCsvEnabled = options.metadataCsv === true;
+  const outputDir = await createTimestampOutputDir(baseOutputDir);
 
-  await fs.mkdir(outputDir, { recursive: true });
   await copyRenderedAssets(renderDir, outputDir);
   await writeMetadata(doc, outputDir);
   const metadataCsvPath = metadataCsvEnabled ? await writeMetadataCsv(doc, outputDir) : null;
