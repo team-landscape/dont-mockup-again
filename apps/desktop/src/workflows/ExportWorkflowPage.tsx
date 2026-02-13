@@ -24,12 +24,14 @@ interface ExportWorkflowPageProps {
   zipEnabled: boolean;
   metadataCsvEnabled: boolean;
   isBusy: boolean;
+  exportStatus: string;
+  exportError: string;
   onOutputDirChange: (value: string) => void;
   onPickOutputDir: () => void;
   canPickOutputDir: boolean;
   onZipEnabledChange: (checked: boolean) => void;
   onMetadataCsvEnabledChange: (checked: boolean) => void;
-  onExport: () => void;
+  onExport: () => Promise<void>;
 }
 
 export function ExportWorkflowPage({
@@ -37,6 +39,8 @@ export function ExportWorkflowPage({
   zipEnabled,
   metadataCsvEnabled,
   isBusy,
+  exportStatus,
+  exportError,
   onOutputDirChange,
   onPickOutputDir,
   canPickOutputDir,
@@ -82,8 +86,32 @@ export function ExportWorkflowPage({
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button disabled={isBusy} onClick={onExport}>Run Export</Button>
+              <Button
+                type="button"
+                disabled={isBusy || !canPickOutputDir}
+                onClick={() => { void onExport(); }}
+              >
+                Run Export
+              </Button>
             </div>
+
+            {!canPickOutputDir ? (
+              <p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                Export is available only in the desktop (Tauri) runtime.
+              </p>
+            ) : null}
+
+            {exportStatus ? (
+              <p className="rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
+                {exportStatus}
+              </p>
+            ) : null}
+
+            {exportError ? (
+              <p className="rounded-md border border-destructive/25 bg-destructive/10 p-2 text-xs text-destructive">
+                {exportError}
+              </p>
+            ) : null}
           </CardContent>
         </Card>
       </div>

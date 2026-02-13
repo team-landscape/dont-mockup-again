@@ -1058,6 +1058,8 @@ export function App() {
   const [templateImageUrls, setTemplateImageUrls] = useState<Record<string, string>>({});
   const [availableFonts, setAvailableFonts] = useState<string[]>(defaultSystemFonts);
   const [issues, setIssues] = useState<ValidateIssue[]>([]);
+  const [exportStatus, setExportStatus] = useState('');
+  const [exportError, setExportError] = useState('');
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem(ONBOARDING_STORAGE_KEY) !== '1';
@@ -1805,6 +1807,14 @@ export function App() {
   }
 
   async function handleExport() {
+    setExportStatus('');
+    setExportError('');
+
+    if (!isTauriRuntime()) {
+      setExportError('Export is available only in desktop runtime. Start with `npm --prefix apps/desktop run tauri:dev`.');
+      return;
+    }
+
     try {
       await runWithBusy(async ({ setDetail }) => {
         const flags: string[] = [];
@@ -1830,13 +1840,25 @@ export function App() {
         }
 
         setDetail('Exporting preview renders...');
-        await runPipeline('export', [projectPath, previewRenderDir, resolvedOutputDir, ...flags]);
+        const exportRaw = await runPipeline('export', [projectPath, previewRenderDir, resolvedOutputDir, ...flags]);
 
         setDetail('Verifying exported files...');
         const exportCheck = await findMissingRenderedFiles(resolvedOutputDir, expectedSuffixes);
         if (exportCheck.missing.length > 0) {
           throw new Error(`Export output missing ${exportCheck.missing.length} file(s). Example: ${exportCheck.missing[0]}`);
         }
+
+        const exportParsed = extractJson(exportRaw) as {
+          outputDir?: string;
+          zipPath?: string | null;
+          metadataCsvPath?: string | null;
+        } | null;
+        const outputPath = exportParsed?.outputDir || resolvedOutputDir;
+        const extras = [
+          exportParsed?.zipPath ? `zip: ${exportParsed.zipPath}` : '',
+          exportParsed?.metadataCsvPath ? `csv: ${exportParsed.metadataCsvPath}` : ''
+        ].filter(Boolean).join(' | ');
+        setExportStatus(extras ? `Exported to ${outputPath} (${extras})` : `Exported to ${outputPath}`);
       }, {
         action: 'export',
         title: 'Exporting',
@@ -1844,9 +1866,7 @@ export function App() {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (typeof window !== 'undefined') {
-        window.alert(`Export failed:\n${message}`);
-      }
+      setExportError(message);
     }
   }
 
@@ -3096,6 +3116,8 @@ export function App() {
               zipEnabled={doc.pipelines.export.zip}
               metadataCsvEnabled={doc.pipelines.export.metadataCsv}
               isBusy={isBusy}
+              exportStatus={exportStatus}
+              exportError={exportError}
               onOutputDirChange={setOutputDir}
               onPickOutputDir={handlePickOutputDir}
               canPickOutputDir={isTauriRuntime()}
