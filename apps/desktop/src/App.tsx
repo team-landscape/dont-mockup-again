@@ -1,6 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { flushSync } from 'react-dom';
-import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
@@ -17,7 +17,6 @@ import { Textarea } from './components/ui/textarea';
 import {
   ColorField,
   FontSelector,
-  InspectorCopyFields,
   LabeledField,
   LocaleSelector,
   NumberField,
@@ -29,6 +28,7 @@ import { PreviewWorkflowPage } from './workflows/PreviewWorkflowPage';
 import { ScreensWorkflowPage } from './workflows/ScreensWorkflowPage';
 import { renderTemplatePreviewBase64, SlotRenderPreview } from './components/preview/SlotPreview';
 import { InfiniteSlotCanvas, type CanvasSlotItem } from './components/canvas/InfiniteSlotCanvas';
+import { SelectedScreenInspector } from './components/inspector/SelectedScreenInspector';
 import { OnboardingOverlay } from './components/onboarding/OnboardingOverlay';
 import { BusyOverlay } from './components/overlay/BusyOverlay';
 import { WorkflowSidebar } from './components/sidebar/WorkflowSidebar';
@@ -2080,94 +2080,6 @@ export function App() {
     updateTemplateElement
   ]);
 
-  function renderSelectedInspector() {
-    return (
-      <div className="space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Selected Screen Inspector</CardTitle>
-            <CardDescription>
-              {selectedSlotData ? `${selectedSlotData.name} · ${selectedLocale}` : '선택된 슬롯이 없습니다.'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {selectedSlotData ? (
-              <>
-                <LabeledField label="Slot Name">
-                  <Input
-                    value={selectedSlotNameDraft}
-                    onChange={(event) => setSelectedSlotNameDraft(event.target.value)}
-                    onBlur={commitSelectedSlotName}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        commitSelectedSlotName();
-                        return;
-                      }
-                      if (event.key === 'Escape') {
-                        event.preventDefault();
-                        setSelectedSlotNameDraft(selectedSlotData.name);
-                      }
-                    }}
-                  />
-                </LabeledField>
-
-                <LabeledField label="Slot Image">
-                  <div className="space-y-2">
-                    <p className="truncate rounded-md border bg-muted/60 p-2 text-xs">
-                      {selectedSlotData.sourceImagePath || 'No slot image selected'}
-                    </p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openSlotImagePicker(selectedSlotData.id)}
-                    >
-                      Choose Image
-                    </Button>
-                  </div>
-                </LabeledField>
-
-                <InspectorCopyFields
-                  locale={selectedLocale}
-                  titleValue={doc.copy.keys[fieldKey(selectedSlotData.id, 'title')]?.[selectedLocale] || ''}
-                  subtitleValue={doc.copy.keys[fieldKey(selectedSlotData.id, 'subtitle')]?.[selectedLocale] || ''}
-                  onTitleChange={handleSelectedTitleChange}
-                  onSubtitleChange={handleSelectedSubtitleChange}
-                />
-
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={slots[0]?.id === selectedSlotData.id}
-                    onClick={() => moveSlot(selectedSlotData.id, -1)}
-                  >
-                    <ArrowUp className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={slots[slots.length - 1]?.id === selectedSlotData.id}
-                    onClick={() => moveSlot(selectedSlotData.id, 1)}
-                  >
-                    <ArrowDown className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={() => removeSlot(selectedSlotData.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">슬롯을 추가하거나 선택해 주세요.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {templateInspectorSection}
-      </div>
-    );
-  }
-
   return (
     <div className="grid min-h-screen w-full max-w-none gap-4 p-4 lg:p-6">
       <input
@@ -2226,7 +2138,39 @@ export function App() {
                   onMoveTemplateElement={moveTemplateElement}
                 />
               )}
-              inspectorNode={renderSelectedInspector()}
+              inspectorNode={(
+                <SelectedScreenInspector
+                  selectedSlotData={selectedSlotData}
+                  selectedLocale={selectedLocale}
+                  selectedSlotNameDraft={selectedSlotNameDraft}
+                  titleValue={selectedSlotData ? (doc.copy.keys[fieldKey(selectedSlotData.id, 'title')]?.[selectedLocale] || '') : ''}
+                  subtitleValue={selectedSlotData ? (doc.copy.keys[fieldKey(selectedSlotData.id, 'subtitle')]?.[selectedLocale] || '') : ''}
+                  isMoveUpDisabled={slots[0]?.id === selectedSlotData?.id}
+                  isMoveDownDisabled={slots[slots.length - 1]?.id === selectedSlotData?.id}
+                  templateInspectorNode={templateInspectorSection}
+                  onSlotNameDraftChange={setSelectedSlotNameDraft}
+                  onCommitSlotName={commitSelectedSlotName}
+                  onResetSlotNameDraft={() => {
+                    if (!selectedSlotData) return;
+                    setSelectedSlotNameDraft(selectedSlotData.name);
+                  }}
+                  onOpenSlotImagePicker={openSlotImagePicker}
+                  onTitleChange={handleSelectedTitleChange}
+                  onSubtitleChange={handleSelectedSubtitleChange}
+                  onMoveSlotUp={() => {
+                    if (!selectedSlotData) return;
+                    moveSlot(selectedSlotData.id, -1);
+                  }}
+                  onMoveSlotDown={() => {
+                    if (!selectedSlotData) return;
+                    moveSlot(selectedSlotData.id, 1);
+                  }}
+                  onRemoveSlot={() => {
+                    if (!selectedSlotData) return;
+                    removeSlot(selectedSlotData.id);
+                  }}
+                />
+              )}
               isXlLayout={isXlLayout}
               selectedDevice={selectedDevice}
               selectedSlot={selectedSlot}
