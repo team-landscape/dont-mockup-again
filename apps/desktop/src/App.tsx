@@ -201,7 +201,10 @@ export function App() {
     return { id: selectedDevice, width: 1290, height: 2796, pixelRatio: 1, platform: selectedPlatform };
   }, [doc.project.devices, selectedDevice, selectedPlatform]);
 
-  const llmConfig = doc.pipelines.localization.llmCli || clone(defaultLlmConfig);
+  const llmConfig = useMemo(
+    () => doc.pipelines.localization.llmCli || clone(defaultLlmConfig),
+    [doc.pipelines.localization.llmCli]
+  );
   const deferredTemplateMain = useDeferredValue(doc.template.main);
   const templateElements = useMemo(
     () => normalizeTemplateElementOrder(resolveTemplateElementsForSlot(doc.template.main, selectedSlot)),
@@ -241,17 +244,6 @@ export function App() {
     setPreviewMatrixUrls,
     setPreviewMatrixPaths
   });
-  const previewMatrixLoadKey = useMemo(
-    () => [
-      PREVIEW_RENDER_DIR,
-      selectedPlatform,
-      selectedDevice,
-      doc.project.locales.join(','),
-      doc.project.slots.map((slot) => slot.id).join(',')
-    ].join('|'),
-    [doc.project.locales, doc.project.slots, selectedDevice, selectedPlatform]
-  );
-
   useEffect(() => {
     if (activeStep !== 'screens') return;
     setScreenFocusTrigger((current) => current + 1);
@@ -391,8 +383,7 @@ export function App() {
     }
 
     void loadPreviewMatrix();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStep, previewMatrixLoadKey]);
+  }, [activeStep, loadPreviewMatrix]);
 
   const {
     selectedTemplateSlotId,
