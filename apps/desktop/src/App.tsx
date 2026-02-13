@@ -813,16 +813,14 @@ function normalizeProject(raw: unknown): StoreShotDoc {
 }
 
 function reorderSlots(slots: Slot[]): Slot[] {
-  return slots
-    .map((slot, index) => ({ ...slot, order: index + 1 }))
-    .sort((a, b) => a.order - b.order);
+  return slots.map((slot, index) => ({ ...slot, order: index + 1 }));
 }
 
 function sortSlotsByOrder(slots: Slot[]): Slot[] {
   return [...slots].sort((a, b) => a.order - b.order);
 }
 
-function resolveNextSlotIdentity(slots: Slot[]) {
+function resolveNextSlotIdentity(slots: Slot[]): { slotId: string; slotNumber: number } {
   const existingIds = new Set(slots.map((slot) => slot.id));
   let slotNumber = slots.reduce((max, slot) => {
     const match = slot.id.match(/^slot(\d+)$/);
