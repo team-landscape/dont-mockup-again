@@ -140,7 +140,6 @@ export function App() {
   const [outputDir, setOutputDir] = useState('dist');
   const [defaultExportDir, setDefaultExportDir] = useState('');
   const [isBusy, setIsBusy] = useState(false);
-  const [busyAction, setBusyAction] = useState('');
   const [busyTitle, setBusyTitle] = useState('');
   const [busyDetail, setBusyDetail] = useState('');
   const [selectedDevice, setSelectedDevice] = useState('ios_phone');
@@ -504,7 +503,6 @@ export function App() {
     const updateDetail = (value: string) => setBusyDetail(value);
 
     flushSync(() => {
-      setBusyAction(options.action || '');
       setBusyTitle(options.title || 'Processing');
       setBusyDetail(options.detail || 'Please wait...');
       setIsBusy(true);
@@ -517,7 +515,6 @@ export function App() {
       await action({ setTitle: updateTitle, setDetail: updateDetail });
     } finally {
       setIsBusy(false);
-      setBusyAction('');
       setBusyTitle('');
       setBusyDetail('');
     }
