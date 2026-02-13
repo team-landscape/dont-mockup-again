@@ -583,7 +583,7 @@ function normalizeTemplateElements(raw: unknown, defaults: TemplateElement[]): T
       if (kind === 'text') {
         const align = source.align === 'left' || source.align === 'center' || source.align === 'right'
           ? source.align
-          : 'left';
+          : 'center';
         const textSource = source.textSource === 'title' || source.textSource === 'subtitle' || source.textSource === 'custom'
           ? source.textSource
           : 'custom';
@@ -789,8 +789,8 @@ function createDefaultProject(): StoreShotDoc {
     slotBackgrounds: normalizeSlotBackgrounds(defaultSlots, {}, defaultBackground),
     frame: { type: 'simpleRounded', enabled: true, inset: 80, radius: 80 },
     text: {
-      title: { x: 0, y: 120, w: 1290, h: 220, font: 'SF Pro', size: 88, weight: 700, align: 'left' },
-      subtitle: { x: 0, y: 330, w: 1290, h: 160, font: 'SF Pro', size: 48, weight: 500, align: 'left' }
+      title: { x: 0, y: 120, w: 1290, h: 220, font: 'SF Pro', size: 88, weight: 700, align: 'center' },
+      subtitle: { x: 0, y: 330, w: 1290, h: 160, font: 'SF Pro', size: 48, weight: 500, align: 'center' }
     },
     shotPlacement: { x: 120, y: 560, w: 1050, h: 2200, fit: 'cover', cornerRadius: 60 }
   };
@@ -1956,7 +1956,7 @@ export function App() {
           size: 64,
           lineHeight: 1.2,
           weight: 700,
-          align: 'left',
+          align: 'center',
           autoSize: true,
           widthPercent: 100,
           color: '#f9fafb',
