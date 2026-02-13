@@ -469,29 +469,6 @@ function resolveTextLayerWithinSlot(layer: TemplateTextElement, slotWidth: numbe
   };
 }
 
-function clampCenterOffsetPercent(value: number) {
-  if (!Number.isFinite(value)) return 0;
-  return clampNumber(value, -100, 100);
-}
-
-function resolveCenterOffsetPercentFromPosition(position: number, axisSize: number, elementSize: number) {
-  const maxPosition = Math.max(0, Math.max(1, axisSize) - Math.max(1, elementSize));
-  if (maxPosition <= 0) return 0;
-  const halfRange = maxPosition / 2;
-  const centered = clampNumber(position, 0, maxPosition) - halfRange;
-  const percent = (centered / halfRange) * 100;
-  return Math.round(percent * 100) / 100;
-}
-
-function resolvePositionFromCenterOffsetPercent(offsetPercent: number, axisSize: number, elementSize: number) {
-  const maxPosition = Math.max(0, Math.max(1, axisSize) - Math.max(1, elementSize));
-  if (maxPosition <= 0) return 0;
-  const clampedPercent = clampCenterOffsetPercent(offsetPercent);
-  const halfRange = maxPosition / 2;
-  const position = halfRange + (clampedPercent / 100) * halfRange;
-  return clampNumber(Math.round(position), 0, maxPosition);
-}
-
 function createDefaultTemplateElements(main: Pick<TemplateMain, 'frame' | 'text' | 'shotPlacement'>): TemplateElement[] {
   return [
     {
@@ -2487,34 +2464,24 @@ export function App() {
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <NumberField
-                  label="Offset X (%)"
-                  value={resolveCenterOffsetPercentFromPosition(
-                    selectedTemplateElement.x,
-                    Math.max(1, selectedDeviceSpec.width || 1290),
-                    selectedTemplateElement.w
-                  )}
+                  label="X"
+                  value={selectedTemplateElement.x}
                   onValueChange={(value) => updateTemplateElement(selectedTemplateElement.id, (current) => {
-                    const slotWidth = Math.max(1, selectedDeviceSpec.width || 1290);
-                    return {
-                      ...current,
-                      x: resolvePositionFromCenterOffsetPercent(value, slotWidth, current.w)
-                    };
+                    if (current.kind === 'text') {
+                      const slotWidth = Math.max(1, selectedDeviceSpec.width || 1290);
+                      const textWidth = resolveTextWidthFromPercent(current.widthPercent, slotWidth);
+                      return {
+                        ...current,
+                        x: clampNumber(value, 0, Math.max(0, slotWidth - textWidth))
+                      };
+                    }
+                    return { ...current, x: value };
                   })}
                 />
                 <NumberField
-                  label="Offset Y (%)"
-                  value={resolveCenterOffsetPercentFromPosition(
-                    selectedTemplateElement.y,
-                    Math.max(1, selectedDeviceSpec.height || 2796),
-                    selectedTemplateElement.h
-                  )}
-                  onValueChange={(value) => updateTemplateElement(selectedTemplateElement.id, (current) => {
-                    const slotHeight = Math.max(1, selectedDeviceSpec.height || 2796);
-                    return {
-                      ...current,
-                      y: resolvePositionFromCenterOffsetPercent(value, slotHeight, current.h)
-                    };
-                  })}
+                  label="Y"
+                  value={selectedTemplateElement.y}
+                  onValueChange={(value) => updateTemplateElement(selectedTemplateElement.id, (current) => ({ ...current, y: value }))}
                 />
                 <NumberField
                   label={selectedTemplateElement.kind === 'text' ? 'Width (%)' : 'Width'}
@@ -2569,7 +2536,6 @@ export function App() {
     addTemplateElement,
     openTemplateImagePicker,
     removeTemplateElement,
-    selectedDeviceSpec.height,
     selectedDeviceSpec.width,
     selectedElementFontOptions,
     selectedSlotBackground,
