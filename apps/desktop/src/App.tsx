@@ -385,6 +385,19 @@ function detectPlatformFromDeviceId(deviceId: string): Platform {
   return 'ios';
 }
 
+function detectDevicePlatform(device: Device, enabledPlatforms: Platform[]): Platform {
+  const inferred = device.platform || detectPlatformFromDeviceId(device.id);
+  if (enabledPlatforms.length === 0) {
+    return inferred;
+  }
+
+  if (enabledPlatforms.includes(inferred)) {
+    return inferred;
+  }
+
+  return enabledPlatforms[0];
+}
+
 function fieldKey(slotId: string, kind: 'title' | 'subtitle') {
   return `${slotId}.${kind}`;
 }
