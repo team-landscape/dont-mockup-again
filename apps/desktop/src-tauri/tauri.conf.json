@@ -13,8 +13,8 @@
     "windows": [
       {
         "title": "StoreShot Studio",
-        "width": 1340,
-        "height": 900,
+        "width": 2000,
+        "height": 1333,
         "resizable": true
       }
     ]
