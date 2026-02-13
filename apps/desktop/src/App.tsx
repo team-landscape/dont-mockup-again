@@ -1053,6 +1053,32 @@ function reorderSlots(slots: Slot[]): Slot[] {
   return slots.map((slot, index) => ({ ...slot, order: index + 1 }));
 }
 
+function buildProjectSnapshotForPersistence(
+  doc: StoreShotDoc,
+  resolvedOutputDir: string,
+  options?: { syncTemplateMain?: boolean; slotWidth?: number }
+): StoreShotDoc {
+  const next = clone(doc);
+  next.project.slots = reorderSlots(next.project.slots);
+
+  if (options?.syncTemplateMain !== false) {
+    const slotWidth = Math.max(1, options?.slotWidth || TEMPLATE_REFERENCE_WIDTH);
+    next.template.main = syncTemplateLegacyFields(next.template.main, slotWidth);
+  }
+
+  next.pipelines.export.outputDir = resolvedOutputDir;
+  const sourceLocale = next.pipelines.localization.sourceLocale || next.project.locales[0] || 'en-US';
+  next.pipelines.localization.sourceLocale = next.project.locales.includes(sourceLocale)
+    ? sourceLocale
+    : (next.project.locales[0] || 'en-US');
+
+  return next;
+}
+
+function serializeProjectSignature(snapshot: StoreShotDoc): string {
+  return JSON.stringify(snapshot);
+}
+
 function sortSlotsByOrder(slots: Slot[]): Slot[] {
   return [...slots].sort((a, b) => a.order - b.order);
 }
@@ -1120,6 +1146,8 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
 export function App() {
   const [activeStep, setActiveStep] = useState<StepId>('screens');
   const [projectPath, setProjectPath] = useState('');
+  const [savedProjectSignature, setSavedProjectSignature] = useState<string | null>(null);
+  const [isProjectBaselineReady, setIsProjectBaselineReady] = useState(false);
   const [projectStatus, setProjectStatus] = useState('');
   const [projectError, setProjectError] = useState('');
   const [doc, setDoc] = useState<StoreShotDoc>(() => createDefaultProject());
@@ -1188,6 +1216,20 @@ export function App() {
     }
     return normalized;
   }, [defaultExportDir, homeDir]);
+
+  const currentProjectSignature = useMemo(() => {
+    const resolvedOutputDir = resolveOutputDir(outputDir);
+    const snapshot = buildProjectSnapshotForPersistence(doc, resolvedOutputDir, {
+      syncTemplateMain: true,
+      slotWidth: TEMPLATE_REFERENCE_WIDTH
+    });
+    return serializeProjectSignature(snapshot);
+  }, [doc, outputDir, resolveOutputDir]);
+
+  const hasUnsavedChanges = useMemo(
+    () => savedProjectSignature !== null && currentProjectSignature !== savedProjectSignature,
+    [currentProjectSignature, savedProjectSignature]
+  );
 
   const previewRenderDir = useMemo(() => 'dist-render', []);
 
@@ -1421,6 +1463,7 @@ export function App() {
 
   useEffect(() => {
     if (!isTauriRuntime()) {
+      setIsProjectBaselineReady(true);
       return;
     }
 
@@ -1443,8 +1486,18 @@ export function App() {
       .catch(() => {
         setProjectPath((current) => (current.trim() ? current : DEFAULT_PROJECT_FILE_NAME));
         // Fallback to static default when system export path lookup fails.
+      })
+      .finally(() => {
+        setIsProjectBaselineReady(true);
       });
   }, []);
+
+  useEffect(() => {
+    if (!isProjectBaselineReady || savedProjectSignature !== null) {
+      return;
+    }
+    setSavedProjectSignature(currentProjectSignature);
+  }, [currentProjectSignature, isProjectBaselineReady, savedProjectSignature]);
 
   function updateDoc(mutator: (next: StoreShotDoc) => void) {
     setDoc((current) => {
@@ -1503,9 +1556,15 @@ export function App() {
         const text = await readTextFile(pickedPath);
         const parsed = extractJson(text);
         const normalized = normalizeProject(parsed);
+        const resolvedLoadedOutputDir = resolveOutputDir(normalized.pipelines.export.outputDir);
+        const loadedSnapshot = buildProjectSnapshotForPersistence(normalized, resolvedLoadedOutputDir, {
+          syncTemplateMain: true,
+          slotWidth: TEMPLATE_REFERENCE_WIDTH
+        });
         setDoc(normalized);
-        setOutputDir(resolveOutputDir(normalized.pipelines.export.outputDir));
+        setOutputDir(resolvedLoadedOutputDir);
         setProjectPath(pickedPath);
+        setSavedProjectSignature(serializeProjectSignature(loadedSnapshot));
       }, {
         action: 'load-project',
         title: 'Loading Project',
@@ -1519,36 +1578,34 @@ export function App() {
     }
   }
 
-  async function handleSaveProject() {
+  async function handleSaveProject(options?: { cancelStatus?: string }): Promise<boolean> {
     if (!isTauriRuntime()) {
       setProjectError('Save is available only in desktop runtime.');
-      return;
+      return false;
     }
 
     try {
       let targetPath = projectPath.trim();
+      const cancelStatus = options?.cancelStatus || 'Save cancelled.';
       if (!targetPath) {
         const preferredDir = defaultExportDir || undefined;
         const pickedPath = await pickProjectSavePath(DEFAULT_PROJECT_FILE_NAME, preferredDir);
         if (!pickedPath || !pickedPath.trim()) {
-          setProjectStatus('Save cancelled.');
+          setProjectStatus(cancelStatus);
           setProjectError('');
-          return;
+          return false;
         }
         targetPath = pickedPath;
       }
 
       await runWithBusy(async () => {
-        const next = clone(doc);
-        next.project.slots = reorderSlots(next.project.slots);
-        next.template.main = syncTemplateLegacyFields(next.template.main);
-        next.pipelines.export.outputDir = resolveOutputDir(outputDir);
-        const sourceLocale = next.pipelines.localization.sourceLocale || next.project.locales[0] || 'en-US';
-        next.pipelines.localization.sourceLocale = next.project.locales.includes(sourceLocale)
-          ? sourceLocale
-          : (next.project.locales[0] || 'en-US');
+        const next = buildProjectSnapshotForPersistence(doc, resolveOutputDir(outputDir), {
+          syncTemplateMain: true,
+          slotWidth: TEMPLATE_REFERENCE_WIDTH
+        });
         await writeTextFile(targetPath, JSON.stringify(next, null, 2));
         setProjectPath(targetPath);
+        setSavedProjectSignature(serializeProjectSignature(next));
       }, {
         action: 'save-project',
         title: 'Saving Project',
@@ -1556,18 +1613,43 @@ export function App() {
       });
       setProjectError('');
       setProjectStatus(`Saved ${targetPath}`);
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setProjectError(message);
+      return false;
     }
   }
 
-  function handleCreateNewProject() {
+  async function handleCreateNewProject() {
+    if (hasUnsavedChanges) {
+      const shouldSave = typeof window === 'undefined' || typeof window.confirm !== 'function'
+        ? true
+        : window.confirm('저장되지 않은 변경사항이 있습니다. New 전에 먼저 저장할까요?');
+
+      if (!shouldSave) {
+        setProjectStatus('New cancelled.');
+        setProjectError('');
+        return;
+      }
+
+      const saved = await handleSaveProject({ cancelStatus: 'New cancelled (save cancelled).' });
+      if (!saved) {
+        return;
+      }
+    }
+
     const fresh = createDefaultProject();
+    const resolvedFreshOutputDir = resolveOutputDir(fresh.pipelines.export.outputDir);
+    const freshSnapshot = buildProjectSnapshotForPersistence(fresh, resolvedFreshOutputDir, {
+      syncTemplateMain: true,
+      slotWidth: TEMPLATE_REFERENCE_WIDTH
+    });
     setDoc(fresh);
-    setOutputDir(resolveOutputDir(fresh.pipelines.export.outputDir));
+    setOutputDir(resolvedFreshOutputDir);
     setIssues([]);
     setProjectPath('');
+    setSavedProjectSignature(serializeProjectSignature(freshSnapshot));
     setProjectError('');
     setProjectStatus('Started a new project (unsaved). Use Save to choose a file.');
   }
@@ -1703,17 +1785,12 @@ export function App() {
       throw new Error('No project file selected. Save project first.');
     }
 
-    const next = clone(doc);
-    next.project.slots = reorderSlots(next.project.slots);
-    if (options?.syncTemplateMain !== false) {
-      next.template.main = syncTemplateLegacyFields(next.template.main, Math.max(1, selectedDeviceSpec.width || 1290));
-    }
-    next.pipelines.export.outputDir = resolveOutputDir(outputDir);
-    const sourceLocale = next.pipelines.localization.sourceLocale || next.project.locales[0] || 'en-US';
-    next.pipelines.localization.sourceLocale = next.project.locales.includes(sourceLocale)
-      ? sourceLocale
-      : (next.project.locales[0] || 'en-US');
+    const next = buildProjectSnapshotForPersistence(doc, resolveOutputDir(outputDir), {
+      syncTemplateMain: options?.syncTemplateMain !== false,
+      slotWidth: Math.max(1, selectedDeviceSpec.width || TEMPLATE_REFERENCE_WIDTH)
+    });
     await writeTextFile(projectPath, JSON.stringify(next, null, 2));
+    setSavedProjectSignature(serializeProjectSignature(next));
     return next;
   }, [doc, outputDir, projectPath, resolveOutputDir, selectedDeviceSpec.width]);
 
@@ -3114,7 +3191,9 @@ export function App() {
                   {projectPath || 'Project path: unsaved project'}
                 </p>
                 <Button size="sm" disabled={isBusy} variant="outline" onClick={handleLoadProject}><FolderDown className="mr-1 h-3.5 w-3.5" />Load</Button>
-                <Button size="sm" disabled={isBusy} variant="outline" onClick={handleSaveProject}><Save className="mr-1 h-3.5 w-3.5" />Save</Button>
+                <Button size="sm" disabled={isBusy} variant="outline" onClick={() => {
+                  void handleSaveProject();
+                }}><Save className="mr-1 h-3.5 w-3.5" />Save</Button>
                 <Button size="sm" disabled={isBusy} onClick={handleCreateNewProject}><FolderUp className="mr-1 h-3.5 w-3.5" />New</Button>
                 <Button size="sm" variant="secondary" onClick={handleOpenOnboarding}>Setup</Button>
                 {projectStatus ? (
