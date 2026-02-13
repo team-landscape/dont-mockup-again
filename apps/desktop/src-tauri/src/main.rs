@@ -286,6 +286,14 @@ fn write_file_base64(path: String, data_base64: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_default_download_dir(app: tauri::AppHandle) -> Option<String> {
+    app.path()
+        .download_dir()
+        .ok()
+        .map(|path| path.to_string_lossy().replace('\\', "/"))
+}
+
+#[tauri::command]
 fn pick_output_dir() -> Option<String> {
     rfd::FileDialog::new()
         .pick_folder()
@@ -318,6 +326,7 @@ fn main() {
             list_png_files,
             read_file_base64,
             write_file_base64,
+            get_default_download_dir,
             pick_output_dir,
             list_system_fonts
         ])

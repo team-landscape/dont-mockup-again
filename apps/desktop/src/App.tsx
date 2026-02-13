@@ -333,6 +333,10 @@ async function writeFileBase64(path: string, dataBase64: string) {
   return invokeCommand<void>('write_file_base64', { path, dataBase64 });
 }
 
+async function getDefaultDownloadDir() {
+  return invokeCommand<string | null>('get_default_download_dir', {});
+}
+
 async function pickOutputDir() {
   return invokeCommand<string | null>('pick_output_dir', {});
 }
@@ -1015,6 +1019,7 @@ export function App() {
   const projectPath = 'examples/sample.storeshot.json';
   const [doc, setDoc] = useState<StoreShotDoc>(() => createDefaultProject());
   const [outputDir, setOutputDir] = useState('dist');
+  const [defaultDownloadDir, setDefaultDownloadDir] = useState('');
   const [isBusy, setIsBusy] = useState(false);
   const [busyAction, setBusyAction] = useState('');
   const [busyTitle, setBusyTitle] = useState('');
@@ -1048,6 +1053,14 @@ export function App() {
   const slotSourceEntriesRef = useRef<Array<{ id: string; sourceImagePath: string }>>([]);
   const [, startSlotTransition] = useTransition();
   const [, startTemplateTransition] = useTransition();
+
+  const resolveOutputDir = useCallback((value: string | undefined) => {
+    const normalized = typeof value === 'string' ? value.trim() : '';
+    if (!normalized || normalized === 'dist') {
+      return defaultDownloadDir || 'dist';
+    }
+    return normalized;
+  }, [defaultDownloadDir]);
 
   const renderDir = useMemo(() => `${outputDir}-render`, [outputDir]);
 
@@ -1284,6 +1297,28 @@ export function App() {
       return;
     }
 
+    getDefaultDownloadDir()
+      .then((path) => {
+        if (!path || !path.trim()) return;
+        setDefaultDownloadDir(path);
+        setOutputDir((current) => {
+          const normalized = current.trim();
+          if (!normalized || normalized === 'dist') {
+            return path;
+          }
+          return current;
+        });
+      })
+      .catch(() => {
+        // Fallback to static default when system download path lookup fails.
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
     readTextFile(projectPath)
       .then((text) => {
         const parsed = extractJson(text);
@@ -1291,13 +1326,13 @@ export function App() {
 
         const normalized = normalizeProject(parsed);
         setDoc(normalized);
-        setOutputDir(normalized.pipelines.export.outputDir || 'dist');
+        setOutputDir(resolveOutputDir(normalized.pipelines.export.outputDir));
       })
       .catch(() => {
         // Sample file might not exist in clean environments.
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [resolveOutputDir]);
 
   function updateDoc(mutator: (next: StoreShotDoc) => void) {
     setDoc((current) => {
@@ -1343,7 +1378,7 @@ export function App() {
       const parsed = extractJson(text);
       const normalized = normalizeProject(parsed);
       setDoc(normalized);
-      setOutputDir(normalized.pipelines.export.outputDir || 'dist');
+      setOutputDir(resolveOutputDir(normalized.pipelines.export.outputDir));
     }, {
       action: 'load-project',
       title: 'Loading Project',
@@ -1372,7 +1407,7 @@ export function App() {
   function handleCreateNewProject() {
     const fresh = createDefaultProject();
     setDoc(fresh);
-    setOutputDir(fresh.pipelines.export.outputDir);
+    setOutputDir(resolveOutputDir(fresh.pipelines.export.outputDir));
     setIssues([]);
   }
 
