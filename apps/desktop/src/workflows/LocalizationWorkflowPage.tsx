@@ -70,9 +70,16 @@ export function LocalizationWorkflowPage({
   getCopyValue,
   onCopyChange
 }: LocalizationWorkflowPageProps) {
+  const localeColumnWidth = 220;
+  const localeColumnCount = Math.max(locales.length, 2);
+  const localeGridStyle = {
+    gridTemplateColumns: `repeat(${localeColumnCount}, minmax(${localeColumnWidth}px, 1fr))`
+  };
+  const editorMinWidth = Math.max(980, localeColumnCount * localeColumnWidth + 80);
+
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-[minmax(360px,420px)_minmax(0,1fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(320px,380px)_minmax(0,1fr)]">
         <Card>
           <CardHeader>
             <CardTitle>Localization Pipeline</CardTitle>
@@ -147,15 +154,15 @@ export function LocalizationWorkflowPage({
             <CardDescription>{slots.length} slot(s) · {locales.length} locale(s)</CardDescription>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-[calc(100vh-320px)] pr-2">
-              <div className="space-y-2">
+            <ScrollArea className="h-[calc(100vh-320px)] w-full pr-2">
+              <div className="space-y-2 pb-2" style={{ minWidth: `${editorMinWidth}px` }}>
                 <div className="rounded-md border p-3">
                   <p className="mb-2 text-xs font-semibold text-muted-foreground">APP METADATA</p>
                   <div className="space-y-3">
                     {appMetadataFields.map((field) => (
                       <div key={field.key} className="space-y-2">
                         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{field.label}</p>
-                        <div className="grid gap-2 md:grid-cols-2">
+                        <div className="grid gap-2" style={localeGridStyle}>
                           {locales.map((locale) => (
                             <LabeledField key={`${field.key}:${locale}`} label={locale}>
                               {field.multiline ? (
@@ -187,7 +194,7 @@ export function LocalizationWorkflowPage({
                         return (
                           <div key={key} className="space-y-2">
                             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{field}</p>
-                            <div className="grid gap-2 md:grid-cols-2">
+                            <div className="grid gap-2" style={localeGridStyle}>
                               {locales.map((locale) => (
                                 <LabeledField key={`${key}:${locale}`} label={locale}>
                                   <Input
