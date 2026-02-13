@@ -1,5 +1,4 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { flushSync } from 'react-dom';
 
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
@@ -17,6 +16,7 @@ import { BusyOverlay } from './components/overlay/BusyOverlay';
 import { WorkflowSidebar } from './components/sidebar/WorkflowSidebar';
 import { useProjectImageAssets } from './hooks/useProjectImageAssets';
 import { useProjectBootstrapPaths } from './hooks/useProjectBootstrapPaths';
+import { useBusyRunner } from './hooks/useBusyRunner';
 import { useProjectImageUploadHandlers } from './hooks/useProjectImageUploadHandlers';
 import {
   collectExpectedRenderSuffixes,
@@ -85,12 +85,6 @@ interface ValidateIssue {
   level: 'error' | 'warning';
   code: string;
   message: string;
-}
-
-interface BusyRunOptions {
-  action?: string;
-  title?: string;
-  detail?: string;
 }
 
 const steps: Array<{ id: StepId; title: string }> = [
@@ -169,6 +163,11 @@ export function App() {
   const templateImageTargetRef = useRef<string | null>(null);
   const [, startSlotTransition] = useTransition();
   const [, startTemplateTransition] = useTransition();
+  const runWithBusy = useBusyRunner({
+    setIsBusy,
+    setBusyTitle,
+    setBusyDetail
+  });
 
   const { defaultExportDir, isProjectBaselineReady } = useProjectBootstrapPaths({
     defaultProjectFileName: DEFAULT_PROJECT_FILE_NAME,
@@ -341,34 +340,6 @@ export function App() {
       mutator(next);
       return next;
     });
-  }
-
-  async function runWithBusy(
-    action: (helpers: {
-      setTitle: (value: string) => void;
-      setDetail: (value: string) => void;
-    }) => Promise<void>,
-    options: BusyRunOptions = {}
-  ) {
-    const updateTitle = (value: string) => setBusyTitle(value);
-    const updateDetail = (value: string) => setBusyDetail(value);
-
-    flushSync(() => {
-      setBusyTitle(options.title || 'Processing');
-      setBusyDetail(options.detail || 'Please wait...');
-      setIsBusy(true);
-    });
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    if (typeof window !== 'undefined') {
-      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-    }
-    try {
-      await action({ setTitle: updateTitle, setDetail: updateDetail });
-    } finally {
-      setIsBusy(false);
-      setBusyTitle('');
-      setBusyDetail('');
-    }
   }
 
   async function handleLoadProject() {
