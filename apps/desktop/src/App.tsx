@@ -16,10 +16,9 @@ import {
   SelectValue
 } from './components/ui/select';
 import { Switch } from './components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Textarea } from './components/ui/textarea';
 
-type Tab = 'screens' | 'localization' | 'preview' | 'export';
+type StepId = 'screens' | 'localization' | 'preview' | 'export';
 type Platform = 'ios' | 'android';
 type Align = 'left' | 'center' | 'right';
 type TemplateElementKind = 'text' | 'image';
@@ -35,6 +34,7 @@ interface Device {
 
 interface Slot {
   id: string;
+  name: string;
   order: number;
   sourceImagePath: string;
 }
@@ -189,7 +189,7 @@ interface SlotCanvasPosition {
   y: number;
 }
 
-const tabs: Array<{ id: Tab; title: string; description: string }> = [
+const steps: Array<{ id: StepId; title: string; description: string }> = [
   { id: 'screens', title: 'Screens', description: '미리보기 + 슬롯 + 템플릿 편집 Composer' },
   { id: 'localization', title: 'Localization', description: 'BYOY import + LLM CLI 설정 + copy 편집' },
   { id: 'preview', title: 'Preview / Validate', description: '렌더/검증/프리뷰' },
@@ -270,10 +270,10 @@ const XL_MEDIA_QUERY = '(min-width: 1280px)';
 const ONBOARDING_STORAGE_KEY = 'storeshot.desktop.onboarding.v1.completed';
 const SLOT_CANVAS_WIDTH = 24000;
 const SLOT_CANVAS_HEIGHT = 16000;
-const SLOT_CANVAS_CARD_WIDTH = 540;
-const SLOT_CANVAS_CARD_HEIGHT = 760;
-const SLOT_CANVAS_GAP_X = 4;
-const SLOT_CANVAS_GAP_Y = 4;
+const SLOT_CANVAS_PREVIEW_MAX_HEIGHT = 720;
+const SLOT_CANVAS_CARD_CHROME_HEIGHT = 40;
+const SLOT_CANVAS_GAP_X = 8;
+const SLOT_CANVAS_GAP_Y = 8;
 const SLOT_CANVAS_DEFAULT_COLS = 3;
 const SLOT_CANVAS_BASE_X = 9600;
 const SLOT_CANVAS_BASE_Y = 880;
@@ -354,6 +354,26 @@ function detectPlatformFromDeviceId(deviceId: string): Platform {
 
 function fieldKey(slotId: string, kind: 'title' | 'subtitle') {
   return `${slotId}.${kind}`;
+}
+
+function getSlotPreviewCanvasSize(device: Device) {
+  const width = Math.max(1, device.width || 1290);
+  const height = Math.max(1, device.height || 2796);
+  const renderScale = Math.min(1, SLOT_CANVAS_PREVIEW_MAX_HEIGHT / height);
+
+  return {
+    width: Math.max(1, Math.round(width * renderScale)),
+    height: Math.max(1, Math.round(height * renderScale)),
+    renderScale
+  };
+}
+
+function getSlotCanvasCardSize(device: Device) {
+  const preview = getSlotPreviewCanvasSize(device);
+  return {
+    width: preview.width,
+    height: preview.height + SLOT_CANVAS_CARD_CHROME_HEIGHT
+  };
 }
 
 function normalizeLocaleTag(input: string) {
@@ -646,9 +666,9 @@ function syncTemplateLegacyFields(main: TemplateMain): TemplateMain {
 
 function createDefaultProject(): StoreShotDoc {
   const defaultSlots: Slot[] = [
-    { id: 'slot1', order: 1, sourceImagePath: 'examples/assets/source/shot1.png' },
-    { id: 'slot2', order: 2, sourceImagePath: 'examples/assets/source/shot2.png' },
-    { id: 'slot3', order: 3, sourceImagePath: 'examples/assets/source/shot3.png' }
+    { id: 'slot1', name: '슬롯 1', order: 1, sourceImagePath: 'examples/assets/source/shot1.png' },
+    { id: 'slot2', name: '슬롯 2', order: 2, sourceImagePath: 'examples/assets/source/shot2.png' },
+    { id: 'slot3', name: '슬롯 3', order: 3, sourceImagePath: 'examples/assets/source/shot3.png' }
   ];
 
   const defaultBackground: TemplateBackground = { type: 'gradient', from: '#111827', to: '#1f2937', direction: '180deg' };
@@ -721,7 +741,11 @@ function normalizeProject(raw: unknown): StoreShotDoc {
 
   const doc = raw as Partial<StoreShotDoc>;
   const normalizedSlots = (doc.project?.slots || base.project.slots)
-    .map((slot, index) => ({ ...slot, order: slot.order || index + 1 }))
+    .map((slot, index) => ({
+      ...slot,
+      name: typeof slot.name === 'string' && slot.name.trim() ? slot.name : `슬롯 ${index + 1}`,
+      order: slot.order || index + 1
+    }))
     .sort((a, b) => a.order - b.order);
   const mergedBackground = { ...base.template.main.background, ...doc.template?.main?.background };
   const normalizedMain = syncTemplateLegacyFields({
@@ -796,12 +820,12 @@ function reorderSlots(slots: Slot[]): Slot[] {
     .sort((a, b) => a.order - b.order);
 }
 
-function defaultSlotCanvasPosition(index: number): SlotCanvasPosition {
+function defaultSlotCanvasPosition(index: number, cardWidth: number, cardHeight: number): SlotCanvasPosition {
   const col = index % SLOT_CANVAS_DEFAULT_COLS;
   const row = Math.floor(index / SLOT_CANVAS_DEFAULT_COLS);
   return {
-    x: SLOT_CANVAS_BASE_X + col * (SLOT_CANVAS_CARD_WIDTH + SLOT_CANVAS_GAP_X),
-    y: SLOT_CANVAS_BASE_Y + row * (SLOT_CANVAS_CARD_HEIGHT + SLOT_CANVAS_GAP_Y)
+    x: SLOT_CANVAS_BASE_X + col * (cardWidth + SLOT_CANVAS_GAP_X),
+    y: SLOT_CANVAS_BASE_Y + row * (cardHeight + SLOT_CANVAS_GAP_Y)
   };
 }
 
@@ -814,7 +838,7 @@ function extractJson(raw: string): unknown {
 }
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('screens');
+  const [activeStep, setActiveStep] = useState<StepId>('screens');
   const projectPath = 'examples/sample.storeshot.json';
   const [doc, setDoc] = useState<StoreShotDoc>(() => createDefaultProject());
   const [outputDir, setOutputDir] = useState('dist');
@@ -823,6 +847,7 @@ export function App() {
   const [selectedDevice, setSelectedDevice] = useState('ios_phone');
   const [selectedLocale, setSelectedLocale] = useState('en-US');
   const [selectedSlot, setSelectedSlot] = useState('slot1');
+  const [selectedSlotNameDraft, setSelectedSlotNameDraft] = useState('');
   const [selectedTemplateElementId, setSelectedTemplateElementId] = useState('text-title');
   const [screenFocusTrigger, setScreenFocusTrigger] = useState(0);
   const [slotPreviewUrls, setSlotPreviewUrls] = useState<Record<string, string>>({});
@@ -846,9 +871,15 @@ export function App() {
 
   const renderDir = useMemo(() => `${outputDir}-render`, [outputDir]);
 
-  const activeTabDescription = useMemo(() => {
-    return tabs.find((item) => item.id === activeTab)?.description || '';
-  }, [activeTab]);
+  const activeStepIndex = useMemo(
+    () => Math.max(steps.findIndex((item) => item.id === activeStep), 0),
+    [activeStep]
+  );
+  const activeStepDescription = useMemo(() => {
+    return steps.find((item) => item.id === activeStep)?.description || '';
+  }, [activeStep]);
+  const isFirstStep = activeStepIndex === 0;
+  const isLastStep = activeStepIndex === steps.length - 1;
 
   const selectedPlatform = useMemo<Platform>(() => {
     const device = doc.project.devices.find((entry) => entry.id === selectedDevice);
@@ -903,9 +934,19 @@ export function App() {
   );
 
   useEffect(() => {
-    if (activeTab !== 'screens') return;
+    if (activeStep !== 'screens') return;
     setScreenFocusTrigger((current) => current + 1);
-  }, [activeTab]);
+  }, [activeStep]);
+
+  const goPrevStep = useCallback(() => {
+    if (activeStepIndex === 0) return;
+    setActiveStep(steps[activeStepIndex - 1].id);
+  }, [activeStepIndex]);
+
+  const goNextStep = useCallback(() => {
+    if (activeStepIndex >= steps.length - 1) return;
+    setActiveStep(steps[activeStepIndex + 1].id);
+  }, [activeStepIndex]);
 
   useEffect(() => {
     if (!doc.project.locales.includes(selectedLocale)) {
@@ -1046,7 +1087,7 @@ export function App() {
       .catch(() => {
         // Sample file might not exist in clean environments.
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function updateDoc(mutator: (next: StoreShotDoc) => void) {
@@ -1154,6 +1195,7 @@ export function App() {
       const nextIndex = next.project.slots.length + 1;
       const newSlot = {
         id: nextId,
+        name: `슬롯 ${nextNumber}`,
         order: nextIndex,
         sourceImagePath: `examples/assets/source/shot${Math.min(3, nextNumber)}.png`
       };
@@ -1175,6 +1217,30 @@ export function App() {
       delete next.template.main.slotBackgrounds[slotId];
     });
   }
+
+  const renameSlot = useCallback((slotId: string, nextName: string) => {
+    const normalizedName = nextName.trim();
+    if (!normalizedName) return;
+
+    setDoc((current) => {
+      let changed = false;
+      const nextSlots = current.project.slots.map((slot) => {
+        if (slot.id !== slotId) return slot;
+        if (slot.name === normalizedName) return slot;
+        changed = true;
+        return { ...slot, name: normalizedName };
+      });
+
+      if (!changed) return current;
+      return {
+        ...current,
+        project: {
+          ...current.project,
+          slots: nextSlots
+        }
+      };
+    });
+  }, []);
 
   async function handleImportByoy() {
     await runWithBusy(async () => {
@@ -1293,6 +1359,21 @@ export function App() {
     () => slots.find((slot) => slot.id === selectedSlot) || null,
     [slots, selectedSlot]
   );
+  useEffect(() => {
+    setSelectedSlotNameDraft(selectedSlotData?.name || '');
+  }, [selectedSlotData?.id, selectedSlotData?.name]);
+  const commitSelectedSlotName = useCallback(() => {
+    if (!selectedSlotData) return;
+
+    const normalizedName = selectedSlotNameDraft.trim();
+    if (!normalizedName) {
+      setSelectedSlotNameDraft(selectedSlotData.name);
+      return;
+    }
+
+    renameSlot(selectedSlotData.id, normalizedName);
+    setSelectedSlotNameDraft(normalizedName);
+  }, [renameSlot, selectedSlotData, selectedSlotNameDraft]);
   const selectedTitleKey = useMemo(
     () => (selectedSlotData ? fieldKey(selectedSlotData.id, 'title') : ''),
     [selectedSlotData]
@@ -1313,14 +1394,18 @@ export function App() {
   const onboardingReady = doc.project.locales.length > 0
     && doc.project.platforms.length > 0
     && doc.project.devices.length > 0;
+  const slotCanvasCardSize = useMemo(
+    () => getSlotCanvasCardSize(selectedDeviceSpec),
+    [selectedDeviceSpec]
+  );
 
   const slotCanvasPositions = useMemo<Record<string, SlotCanvasPosition>>(() => {
     const next: Record<string, SlotCanvasPosition> = {};
     slots.forEach((slot, index) => {
-      next[slot.id] = defaultSlotCanvasPosition(index);
+      next[slot.id] = defaultSlotCanvasPosition(index, slotCanvasCardSize.width, slotCanvasCardSize.height);
     });
     return next;
-  }, [slots]);
+  }, [slotCanvasCardSize.height, slotCanvasCardSize.width, slots]);
 
   const reorderSlotByDrag = useCallback((slotId: string, targetIndex: number) => {
     updateDoc((next) => {
@@ -1873,9 +1958,8 @@ export function App() {
                 <div key={element.id} className="flex items-center gap-2">
                   <button
                     type="button"
-                    className={`flex-1 rounded-md border px-3 py-2 text-left text-sm ${
-                      selectedTemplateElement?.id === element.id ? 'border-primary bg-primary/10' : 'border-border'
-                    }`}
+                    className={`flex-1 rounded-md border px-3 py-2 text-left text-sm ${selectedTemplateElement?.id === element.id ? 'border-primary bg-primary/10' : 'border-border'
+                      }`}
                     onClick={() => setSelectedTemplateElementId(element.id)}
                   >
                     <span className="font-medium">{element.name}</span>
@@ -1980,12 +2064,31 @@ export function App() {
           <CardHeader>
             <CardTitle>Selected Screen Inspector</CardTitle>
             <CardDescription>
-              {selectedSlotData ? `${selectedSlotData.id} · ${selectedLocale}` : '선택된 슬롯이 없습니다.'}
+              {selectedSlotData ? `${selectedSlotData.name} · ${selectedLocale}` : '선택된 슬롯이 없습니다.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {selectedSlotData ? (
               <>
+                <LabeledField label="Slot Name">
+                  <Input
+                    value={selectedSlotNameDraft}
+                    onChange={(event) => setSelectedSlotNameDraft(event.target.value)}
+                    onBlur={commitSelectedSlotName}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        commitSelectedSlotName();
+                        return;
+                      }
+                      if (event.key === 'Escape') {
+                        event.preventDefault();
+                        setSelectedSlotNameDraft(selectedSlotData.name);
+                      }
+                    }}
+                  />
+                </LabeledField>
+
                 <InspectorCopyFields
                   locale={selectedLocale}
                   titleValue={doc.copy.keys[fieldKey(selectedSlotData.id, 'title')]?.[selectedLocale] || ''}
@@ -2037,13 +2140,13 @@ export function App() {
         onChange={(event) => { void handleTemplateImageFileChange(event); }}
       />
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Tab)} className="relative">
+      <div className="relative">
         <div className="pointer-events-none fixed left-3 top-3 z-40 w-[220px]">
           <div className="pointer-events-auto space-y-2">
             <Card className="border bg-card/95 shadow-xl backdrop-blur">
               <CardHeader className="gap-1 pb-2">
                 <CardTitle className="text-sm tracking-tight">StoreShot Studio</CardTitle>
-                <CardDescription className="text-xs">{activeTabDescription}</CardDescription>
+                <CardDescription className="text-xs">{activeStepDescription}</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-2 pt-0">
                 <Button size="sm" disabled={isBusy} variant="outline" onClick={handleLoadProject}><FolderDown className="mr-1 h-3.5 w-3.5" />Load</Button>
@@ -2053,29 +2156,67 @@ export function App() {
               </CardContent>
             </Card>
 
-            <TabsList className="flex h-fit w-full flex-col items-stretch gap-1 border bg-card/90 p-1 shadow-xl backdrop-blur">
-              {tabs.map((tab) => (
-                <TabsTrigger key={tab.id} value={tab.id} className="w-full justify-start">
-                  {tab.title}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            <Card className="border bg-card/90 shadow-xl backdrop-blur">
+              <CardHeader className="gap-1 pb-2">
+                <CardTitle className="text-sm tracking-tight">Workflow</CardTitle>
+                <CardDescription className="text-xs">Step {activeStepIndex + 1} / {steps.length}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 pt-0">
+                {steps.map((step, index) => {
+                  const isCurrent = index === activeStepIndex;
+                  const isCompleted = index < activeStepIndex;
+                  return (
+                    <div
+                      key={step.id}
+                      className={`flex items-start gap-2 rounded-md border px-2 py-1.5 ${isCurrent
+                          ? 'border-primary bg-primary/10'
+                          : isCompleted
+                            ? 'border-border bg-muted/40'
+                            : 'border-border bg-background/60'
+                        }`}
+                    >
+                      <span className={`mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${isCurrent ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                        }`}
+                      >
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium">{step.title}</p>
+                        <p className="truncate text-[11px] text-muted-foreground">{step.description}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <Button size="sm" variant="outline" disabled={isBusy || isFirstStep} onClick={goPrevStep}>
+                    Previous
+                  </Button>
+                  <Button size="sm" disabled={isBusy || isLastStep} onClick={goNextStep}>
+                    Next
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
-        <div className={activeTab === 'screens' ? 'space-y-4' : 'space-y-4 pt-2 lg:pl-[250px]'}>
-          {activeTab === 'screens' ? (
-            <TabsContent value="screens" className="relative mt-0 h-[calc(100vh-2.5rem)] overflow-hidden rounded-xl border">
+        <div className={activeStep === 'screens' ? 'space-y-4' : 'space-y-4 pt-2 lg:pl-[250px]'}>
+          {activeStep === 'screens' ? (
+            <div className="relative mt-0 h-[calc(100vh-2.5rem)] overflow-hidden rounded-xl border">
               <InfiniteSlotCanvas
                 className="h-full w-full"
                 focusTrigger={screenFocusTrigger}
                 items={screenCanvasSlots}
                 positions={slotCanvasPositions}
+                cardWidth={slotCanvasCardSize.width}
+                cardHeight={slotCanvasCardSize.height}
                 selectedSlot={selectedSlot}
                 templateImageUrls={templateImageUrls}
                 device={selectedDeviceSpec}
                 onSelect={handleSelectSlot}
                 onReorder={reorderSlotByDrag}
+                onRename={renameSlot}
               />
 
               <div className="pointer-events-none fixed left-3 top-[13.5rem] z-30 w-[min(560px,calc(100%-1.5rem))] lg:left-[15.5rem] lg:top-3 lg:w-[min(560px,calc(100%-17.5rem))] xl:w-[540px]">
@@ -2122,7 +2263,7 @@ export function App() {
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {slots.map((slot) => (
-                            <SelectItem key={slot.id} value={slot.id}>{slot.id}</SelectItem>
+                            <SelectItem key={slot.id} value={slot.id}>{slot.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -2148,220 +2289,220 @@ export function App() {
                   </div>
                 </div>
               )}
-            </TabsContent>
-          ) : null}
-
-          {activeTab === 'localization' ? (
-            <TabsContent value="localization" className="space-y-4">
-            <div className="grid gap-4 xl:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Localization Pipeline</CardTitle>
-                  <CardDescription>BYOY import 또는 LLM CLI 설정</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <LabeledField label="Mode">
-                    <Select
-                      value={doc.pipelines.localization.mode}
-                      onValueChange={(value) => updateDoc((next) => {
-                        next.pipelines.localization.mode = value as 'byoy' | 'llm-cli';
-                      })}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="byoy">BYOY</SelectItem>
-                        <SelectItem value="llm-cli">LLM CLI</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </LabeledField>
-
-                  <LabeledField label="BYOY JSON Path">
-                    <Input value={byoyPath} onChange={(event) => setByoyPath(event.target.value)} />
-                  </LabeledField>
-                  <Button variant="outline" disabled={isBusy} onClick={handleImportByoy}>Import BYOY JSON</Button>
-
-                  <div className="rounded-md border p-3">
-                    <p className="mb-3 text-sm font-medium">LLM CLI Config</p>
-                    <div className="grid gap-3">
-                      <LabeledField label="Command">
-                        <Input value={llmConfig.command} onChange={(event) => upsertLlmConfig((cfg) => { cfg.command = event.target.value; })} />
-                      </LabeledField>
-                      <LabeledField label="Args Template (comma separated)">
-                        <Input
-                          value={llmConfig.argsTemplate.join(', ')}
-                          onChange={(event) => upsertLlmConfig((cfg) => {
-                            cfg.argsTemplate = event.target.value.split(',').map((item) => item.trim()).filter(Boolean);
-                          })}
-                        />
-                      </LabeledField>
-                      <NumberField
-                        label="Timeout Sec"
-                        value={llmConfig.timeoutSec}
-                        onValueChange={(value) => upsertLlmConfig((cfg) => { cfg.timeoutSec = value; })}
-                      />
-                      <LabeledField label="Glossary Path">
-                        <Input value={llmConfig.glossaryPath || ''} onChange={(event) => upsertLlmConfig((cfg) => { cfg.glossaryPath = event.target.value; })} />
-                      </LabeledField>
-                      <LabeledField label="Style Guide Path">
-                        <Input value={llmConfig.styleGuidePath || ''} onChange={(event) => upsertLlmConfig((cfg) => { cfg.styleGuidePath = event.target.value; })} />
-                      </LabeledField>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Copy Editor</CardTitle>
-                  <CardDescription>{doc.project.locales.length} locale(s)</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[520px] pr-2">
-                    <div className="space-y-2">
-                      {copyKeys.map((key) => (
-                        <div key={key} className="rounded-md border p-3">
-                          <p className="mb-2 text-xs font-semibold text-muted-foreground">{key}</p>
-                          <div className="grid gap-2 md:grid-cols-2">
-                            {doc.project.locales.map((locale) => (
-                              <LabeledField key={`${key}:${locale}`} label={locale}>
-                                <Input
-                                  value={doc.copy.keys[key]?.[locale] || ''}
-                                  onChange={(event) => updateCopyByKey(key, locale, event.target.value)}
-                                />
-                              </LabeledField>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
             </div>
-            </TabsContent>
           ) : null}
 
-          {activeTab === 'preview' ? (
-            <TabsContent value="preview" className="space-y-4">
-            <div className="grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Render Controls</CardTitle>
-                  <CardDescription>렌더/검증/프리뷰 로드</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <LabeledField label="Device">
-                    <Select value={selectedDevice} onValueChange={setSelectedDevice}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {doc.project.devices.map((device) => (
-                          <SelectItem key={device.id} value={device.id}>{device.id}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </LabeledField>
+          {activeStep === 'localization' ? (
+            <div className="space-y-4">
+              <div className="grid gap-4 xl:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Localization Pipeline</CardTitle>
+                    <CardDescription>BYOY import 또는 LLM CLI 설정</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <LabeledField label="Mode">
+                      <Select
+                        value={doc.pipelines.localization.mode}
+                        onValueChange={(value) => updateDoc((next) => {
+                          next.pipelines.localization.mode = value as 'byoy' | 'llm-cli';
+                        })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="byoy">BYOY</SelectItem>
+                          <SelectItem value="llm-cli">LLM CLI</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </LabeledField>
 
-                  <LabeledField label="Locale">
-                    <Select value={selectedLocale} onValueChange={setSelectedLocale}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {doc.project.locales.map((locale) => (
-                          <SelectItem key={locale} value={locale}>{locale}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </LabeledField>
+                    <LabeledField label="BYOY JSON Path">
+                      <Input value={byoyPath} onChange={(event) => setByoyPath(event.target.value)} />
+                    </LabeledField>
+                    <Button variant="outline" disabled={isBusy} onClick={handleImportByoy}>Import BYOY JSON</Button>
 
-                  <LabeledField label="Slot">
-                    <Select value={selectedSlot} onValueChange={handleSelectSlot}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {doc.project.slots.map((slot) => (
-                          <SelectItem key={slot.id} value={slot.id}>{slot.id}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </LabeledField>
+                    <div className="rounded-md border p-3">
+                      <p className="mb-3 text-sm font-medium">LLM CLI Config</p>
+                      <div className="grid gap-3">
+                        <LabeledField label="Command">
+                          <Input value={llmConfig.command} onChange={(event) => upsertLlmConfig((cfg) => { cfg.command = event.target.value; })} />
+                        </LabeledField>
+                        <LabeledField label="Args Template (comma separated)">
+                          <Input
+                            value={llmConfig.argsTemplate.join(', ')}
+                            onChange={(event) => upsertLlmConfig((cfg) => {
+                              cfg.argsTemplate = event.target.value.split(',').map((item) => item.trim()).filter(Boolean);
+                            })}
+                          />
+                        </LabeledField>
+                        <NumberField
+                          label="Timeout Sec"
+                          value={llmConfig.timeoutSec}
+                          onValueChange={(value) => upsertLlmConfig((cfg) => { cfg.timeoutSec = value; })}
+                        />
+                        <LabeledField label="Glossary Path">
+                          <Input value={llmConfig.glossaryPath || ''} onChange={(event) => upsertLlmConfig((cfg) => { cfg.glossaryPath = event.target.value; })} />
+                        </LabeledField>
+                        <LabeledField label="Style Guide Path">
+                          <Input value={llmConfig.styleGuidePath || ''} onChange={(event) => upsertLlmConfig((cfg) => { cfg.styleGuidePath = event.target.value; })} />
+                        </LabeledField>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
-                  <div className="flex flex-wrap gap-2">
-                    <Button disabled={isBusy} onClick={handleRender}>Render</Button>
-                    <Button disabled={isBusy} variant="outline" onClick={handleValidate}>Validate</Button>
-                    <Button disabled={isBusy} variant="secondary" onClick={handleRefreshPreview}><RefreshCcw className="mr-1 h-4 w-4" />Refresh</Button>
-                  </div>
-
-                  <p className="rounded-md border bg-muted/60 p-2 text-xs">{expectedPreviewPath}</p>
-
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Validation Issues</p>
-                    {issues.length === 0 ? (
-                      <Badge variant="secondary">No issues</Badge>
-                    ) : (
-                      <div className="grid gap-2">
-                        {issues.map((issue, index) => (
-                          <div key={`${issue.code}:${index}`} className="rounded-md border p-2">
-                            <Badge variant={issue.level === 'error' ? 'destructive' : 'outline'}>
-                              {issue.level.toUpperCase()} · {issue.code}
-                            </Badge>
-                            <p className="mt-1 text-xs text-muted-foreground">{issue.message}</p>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Copy Editor</CardTitle>
+                    <CardDescription>{doc.project.locales.length} locale(s)</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[520px] pr-2">
+                      <div className="space-y-2">
+                        {copyKeys.map((key) => (
+                          <div key={key} className="rounded-md border p-3">
+                            <p className="mb-2 text-xs font-semibold text-muted-foreground">{key}</p>
+                            <div className="grid gap-2 md:grid-cols-2">
+                              {doc.project.locales.map((locale) => (
+                                <LabeledField key={`${key}:${locale}`} label={locale}>
+                                  <Input
+                                    value={doc.copy.keys[key]?.[locale] || ''}
+                                    onChange={(event) => updateCopyByKey(key, locale, event.target.value)}
+                                  />
+                                </LabeledField>
+                              ))}
+                            </div>
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Preview</CardTitle>
-                  <CardDescription className="truncate">{previewPath || 'No image loaded'}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid min-h-[560px] place-items-center rounded-lg border bg-muted/30 p-4">
-                    {previewDataUrl ? (
-                      <img src={previewDataUrl} alt="render preview" className="max-h-[72vh] w-auto max-w-full rounded-md border" />
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Render 후 Refresh Preview를 눌러 주세요.</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
-            </TabsContent>
           ) : null}
 
-          {activeTab === 'export' ? (
-            <TabsContent value="export" className="space-y-4">
-            <div className="grid gap-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Export</CardTitle>
-                  <CardDescription>dist/zip layout 생성</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <LabeledField label="Output Dir">
-                    <Input value={outputDir} onChange={(event) => setOutputDir(event.target.value)} />
-                  </LabeledField>
+          {activeStep === 'preview' ? (
+            <div className="space-y-4">
+              <div className="grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Render Controls</CardTitle>
+                    <CardDescription>렌더/검증/프리뷰 로드</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <LabeledField label="Device">
+                      <Select value={selectedDevice} onValueChange={setSelectedDevice}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {doc.project.devices.map((device) => (
+                            <SelectItem key={device.id} value={device.id}>{device.id}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </LabeledField>
 
-                  <SwitchRow
-                    label="Create zip"
-                    checked={doc.pipelines.export.zip}
-                    onCheckedChange={(checked) => updateDoc((next) => { next.pipelines.export.zip = checked; })}
-                  />
+                    <LabeledField label="Locale">
+                      <Select value={selectedLocale} onValueChange={setSelectedLocale}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {doc.project.locales.map((locale) => (
+                            <SelectItem key={locale} value={locale}>{locale}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </LabeledField>
 
-                  <div className="flex flex-wrap gap-2">
-                    <Button disabled={isBusy} onClick={handleExport}>Run Export</Button>
-                  </div>
+                    <LabeledField label="Slot">
+                      <Select value={selectedSlot} onValueChange={handleSelectSlot}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {doc.project.slots.map((slot) => (
+                            <SelectItem key={slot.id} value={slot.id}>{slot.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </LabeledField>
 
-                  <p className="rounded-md border bg-muted/60 p-2 text-xs">Render Dir: {renderDir}</p>
-                </CardContent>
-              </Card>
+                    <div className="flex flex-wrap gap-2">
+                      <Button disabled={isBusy} onClick={handleRender}>Render</Button>
+                      <Button disabled={isBusy} variant="outline" onClick={handleValidate}>Validate</Button>
+                      <Button disabled={isBusy} variant="secondary" onClick={handleRefreshPreview}><RefreshCcw className="mr-1 h-4 w-4" />Refresh</Button>
+                    </div>
+
+                    <p className="rounded-md border bg-muted/60 p-2 text-xs">{expectedPreviewPath}</p>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Validation Issues</p>
+                      {issues.length === 0 ? (
+                        <Badge variant="secondary">No issues</Badge>
+                      ) : (
+                        <div className="grid gap-2">
+                          {issues.map((issue, index) => (
+                            <div key={`${issue.code}:${index}`} className="rounded-md border p-2">
+                              <Badge variant={issue.level === 'error' ? 'destructive' : 'outline'}>
+                                {issue.level.toUpperCase()} · {issue.code}
+                              </Badge>
+                              <p className="mt-1 text-xs text-muted-foreground">{issue.message}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Preview</CardTitle>
+                    <CardDescription className="truncate">{previewPath || 'No image loaded'}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid min-h-[560px] place-items-center rounded-lg border bg-muted/30 p-4">
+                      {previewDataUrl ? (
+                        <img src={previewDataUrl} alt="render preview" className="max-h-[72vh] w-auto max-w-full rounded-md border" />
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Render 후 Refresh Preview를 눌러 주세요.</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
-            </TabsContent>
+          ) : null}
+
+          {activeStep === 'export' ? (
+            <div className="space-y-4">
+              <div className="grid gap-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Export</CardTitle>
+                    <CardDescription>dist/zip layout 생성</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <LabeledField label="Output Dir">
+                      <Input value={outputDir} onChange={(event) => setOutputDir(event.target.value)} />
+                    </LabeledField>
+
+                    <SwitchRow
+                      label="Create zip"
+                      checked={doc.pipelines.export.zip}
+                      onCheckedChange={(checked) => updateDoc((next) => { next.pipelines.export.zip = checked; })}
+                    />
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button disabled={isBusy} onClick={handleExport}>Run Export</Button>
+                    </div>
+
+                    <p className="rounded-md border bg-muted/60 p-2 text-xs">Render Dir: {renderDir}</p>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           ) : null}
 
         </div>
-      </Tabs>
+      </div>
 
       {isOnboardingOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-background/90 p-4 backdrop-blur-sm">
@@ -2709,11 +2850,14 @@ interface InfiniteSlotCanvasProps {
   focusTrigger?: number;
   items: CanvasSlotItem[];
   positions: Record<string, SlotCanvasPosition>;
+  cardWidth: number;
+  cardHeight: number;
   selectedSlot: string;
   templateImageUrls: Record<string, string>;
   device: Device;
   onSelect: (slotId: string) => void;
   onReorder: (slotId: string, targetIndex: number) => void;
+  onRename: (slotId: string, nextName: string) => void;
 }
 
 const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
@@ -2721,11 +2865,14 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   focusTrigger,
   items,
   positions,
+  cardWidth,
+  cardHeight,
   selectedSlot,
   templateImageUrls,
   device,
   onSelect,
-  onReorder
+  onReorder,
+  onRename
 }: InfiniteSlotCanvasProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const selectedSlotRef = useRef(selectedSlot);
@@ -2738,8 +2885,14 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   const dragRef = useRef<{
     slotId: string;
     pointerId: number;
+    startIndex: number;
     lastTargetIndex: number;
+    pointerOffsetX: number;
+    pointerOffsetY: number;
   } | null>(null);
+  const [dragPreview, setDragPreview] = useState<{ slotId: string; x: number; y: number } | null>(null);
+  const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
+  const [editingSlotName, setEditingSlotName] = useState('');
   const panRef = useRef<{
     pointerId: number;
     startClientX: number;
@@ -2753,6 +2906,9 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   const viewportOffsetRef = useRef<SlotCanvasPosition>({ x: 0, y: 0 });
   const transformFrameRef = useRef<number | null>(null);
   const focusAnimationFrameRef = useRef<number | null>(null);
+  const dragPreviewFrameRef = useRef<number | null>(null);
+  const pendingDragPreviewRef = useRef<{ slotId: string; x: number; y: number } | null>(null);
+  const focusViewportOnSlotsRef = useRef<(behavior?: ScrollBehavior) => void>(() => {});
   const suppressNextSelectionCenterRef = useRef(false);
 
   const clampZoom = useCallback((value: number) => {
@@ -2867,11 +3023,11 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     let maxY = Number.NEGATIVE_INFINITY;
 
     for (const [index, item] of items.entries()) {
-      const position = positions[item.slot.id] || defaultSlotCanvasPosition(index);
+      const position = positions[item.slot.id] || defaultSlotCanvasPosition(index, cardWidth, cardHeight);
       minX = Math.min(minX, position.x);
       minY = Math.min(minY, position.y);
-      maxX = Math.max(maxX, position.x + SLOT_CANVAS_CARD_WIDTH);
-      maxY = Math.max(maxY, position.y + SLOT_CANVAS_CARD_HEIGHT);
+      maxX = Math.max(maxX, position.x + cardWidth);
+      maxY = Math.max(maxY, position.y + cardHeight);
     }
 
     if (!Number.isFinite(minX) || !Number.isFinite(minY)) return;
@@ -2909,7 +3065,11 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
 
     if (dragRef.current) return;
     setViewportOffset(targetX, targetY, zoomRef.current);
-  }, [cancelFocusAnimation, items, positions, setViewportOffset]);
+  }, [cancelFocusAnimation, cardHeight, cardWidth, items, positions, setViewportOffset]);
+
+  useEffect(() => {
+    focusViewportOnSlotsRef.current = focusViewportOnSlots;
+  }, [focusViewportOnSlots]);
 
   const applyZoomAtPoint = useCallback((nextZoomValue: number, clientX: number, clientY: number) => {
     const viewport = viewportRef.current;
@@ -2972,6 +3132,89 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
       clientX: event.clientX,
       clientY: event.clientY
     };
+  }, []);
+
+  const toWorldPoint = useCallback((clientX: number, clientY: number) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return null;
+
+    const rect = viewport.getBoundingClientRect();
+    const pointX = clientX - rect.left;
+    const pointY = clientY - rect.top;
+    return {
+      x: (viewportOffsetRef.current.x + pointX) / zoomRef.current,
+      y: (viewportOffsetRef.current.y + pointY) / zoomRef.current
+    };
+  }, []);
+
+  const commitDragPreview = useCallback((slotId: string, x: number, y: number) => {
+    setDragPreview((current) => {
+      if (!current || current.slotId !== slotId) {
+        return { slotId, x, y };
+      }
+      if (Math.abs(current.x - x) < 0.01 && Math.abs(current.y - y) < 0.01) {
+        return current;
+      }
+      return { ...current, x, y };
+    });
+  }, []);
+
+  const flushDragPreview = useCallback(() => {
+    dragPreviewFrameRef.current = null;
+    const pending = pendingDragPreviewRef.current;
+    pendingDragPreviewRef.current = null;
+    if (!pending) return;
+    commitDragPreview(pending.slotId, pending.x, pending.y);
+
+    const state = dragRef.current;
+    if (!state || state.slotId !== pending.slotId) return;
+
+    const dragCenterX = pending.x + cardWidth / 2;
+    const dragCenterY = pending.y + cardHeight / 2;
+    let targetIndex = state.lastTargetIndex;
+    let minDistance = Number.POSITIVE_INFINITY;
+
+    for (let index = 0; index < items.length; index += 1) {
+      const position = defaultSlotCanvasPosition(index, cardWidth, cardHeight);
+      const centerX = position.x + cardWidth / 2;
+      const centerY = position.y + cardHeight / 2;
+      const distance = ((dragCenterX - centerX) ** 2) + ((dragCenterY - centerY) ** 2);
+      if (distance < minDistance) {
+        minDistance = distance;
+        targetIndex = index;
+      }
+    }
+
+    if (targetIndex !== state.lastTargetIndex) {
+      state.lastTargetIndex = targetIndex;
+    }
+  }, [cardHeight, cardWidth, commitDragPreview, items]);
+
+  const scheduleDragPreview = useCallback((slotId: string, x: number, y: number) => {
+    pendingDragPreviewRef.current = { slotId, x, y };
+    if (dragPreviewFrameRef.current != null) return;
+    dragPreviewFrameRef.current = window.requestAnimationFrame(flushDragPreview);
+  }, [flushDragPreview]);
+
+  const cancelScheduledDragPreview = useCallback(() => {
+    pendingDragPreviewRef.current = null;
+    if (dragPreviewFrameRef.current != null) {
+      window.cancelAnimationFrame(dragPreviewFrameRef.current);
+      dragPreviewFrameRef.current = null;
+    }
+  }, []);
+
+  const commitSlotNameEdit = useCallback((slotId: string) => {
+    const nextName = editingSlotName.trim();
+    setEditingSlotId(null);
+    setEditingSlotName('');
+    if (!nextName) return;
+    onRename(slotId, nextName);
+  }, [editingSlotName, onRename]);
+
+  const cancelSlotNameEdit = useCallback(() => {
+    setEditingSlotId(null);
+    setEditingSlotName('');
   }, []);
 
   const handleCanvasWheel = useCallback((event: WheelEvent) => {
@@ -3178,15 +3421,25 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
   }, [readPinch]);
 
   const handleDragPointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>, slotId: string) => {
+    if (editingSlotId === slotId) return;
     if (event.button !== 0) return;
+    if (event.detail > 1) return;
     const slotIndex = items.findIndex((item) => item.slot.id === slotId);
     if (slotIndex < 0) return;
+    const basePosition = positions[slotId] || defaultSlotCanvasPosition(slotIndex, cardWidth, cardHeight);
+    const worldPoint = toWorldPoint(event.clientX, event.clientY);
+    if (!worldPoint) return;
 
     dragRef.current = {
       slotId,
       pointerId: event.pointerId,
-      lastTargetIndex: slotIndex
+      startIndex: slotIndex,
+      lastTargetIndex: slotIndex,
+      pointerOffsetX: worldPoint.x - basePosition.x,
+      pointerOffsetY: worldPoint.y - basePosition.y
     };
+    cancelScheduledDragPreview();
+    commitDragPreview(slotId, basePosition.x, basePosition.y);
     panRef.current = null;
     cancelFocusAnimation();
     suppressNextSelectionCenterRef.current = true;
@@ -3197,48 +3450,32 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     event.currentTarget.setPointerCapture(event.pointerId);
     event.stopPropagation();
     event.preventDefault();
-  }, [cancelFocusAnimation, items, onSelect]);
+  }, [cancelFocusAnimation, cancelScheduledDragPreview, cardHeight, cardWidth, commitDragPreview, editingSlotId, items, onSelect, positions, toWorldPoint]);
 
   const handleDragPointerMove = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
     const state = dragRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
+    const worldPoint = toWorldPoint(event.clientX, event.clientY);
+    if (!worldPoint) return;
+    const previewX = worldPoint.x - state.pointerOffsetX;
+    const previewY = worldPoint.y - state.pointerOffsetY;
 
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-
-    const rect = viewport.getBoundingClientRect();
-    const pointX = event.clientX - rect.left;
-    const pointY = event.clientY - rect.top;
-    const worldX = (viewportOffsetRef.current.x + pointX) / zoomRef.current;
-    const worldY = (viewportOffsetRef.current.y + pointY) / zoomRef.current;
-
-    let targetIndex = state.lastTargetIndex;
-    let minDistance = Number.POSITIVE_INFINITY;
-    for (let index = 0; index < items.length; index += 1) {
-      const position = defaultSlotCanvasPosition(index);
-      const centerX = position.x + SLOT_CANVAS_CARD_WIDTH / 2;
-      const centerY = position.y + SLOT_CANVAS_CARD_HEIGHT / 2;
-      const distance = ((worldX - centerX) ** 2) + ((worldY - centerY) ** 2);
-      if (distance < minDistance) {
-        minDistance = distance;
-        targetIndex = index;
-      }
-    }
-
-    if (targetIndex !== state.lastTargetIndex) {
-      state.lastTargetIndex = targetIndex;
-      onReorder(state.slotId, targetIndex);
-    }
+    scheduleDragPreview(state.slotId, previewX, previewY);
 
     event.stopPropagation();
     event.preventDefault();
-  }, [items, onReorder]);
+  }, [scheduleDragPreview, toWorldPoint]);
 
   const handleDragPointerEnd = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
     const state = dragRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
 
     dragRef.current = null;
+    cancelScheduledDragPreview();
+    setDragPreview(null);
+    if (state.lastTargetIndex !== state.startIndex) {
+      onReorder(state.slotId, state.lastTargetIndex);
+    }
     if (selectedSlot === state.slotId) {
       suppressNextSelectionCenterRef.current = false;
     }
@@ -3247,15 +3484,34 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     }
     event.stopPropagation();
     event.preventDefault();
-  }, [selectedSlot]);
+  }, [cancelScheduledDragPreview, onReorder, selectedSlot]);
 
   useEffect(() => {
     return () => {
       if (focusAnimationFrameRef.current != null) {
         window.cancelAnimationFrame(focusAnimationFrameRef.current);
       }
+      if (dragPreviewFrameRef.current != null) {
+        window.cancelAnimationFrame(dragPreviewFrameRef.current);
+      }
+      pendingDragPreviewRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!dragPreview) return;
+    if (items.some((item) => item.slot.id === dragPreview.slotId)) return;
+    dragRef.current = null;
+    cancelScheduledDragPreview();
+    setDragPreview(null);
+  }, [cancelScheduledDragPreview, dragPreview, items]);
+
+  useEffect(() => {
+    if (!editingSlotId) return;
+    if (items.some((item) => item.slot.id === editingSlotId)) return;
+    setEditingSlotId(null);
+    setEditingSlotName('');
+  }, [editingSlotId, items]);
 
   const handleViewportPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (dragRef.current) return;
@@ -3309,7 +3565,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     const timers: number[] = [];
     const schedule = (delayMs: number) => {
       const timerId = window.setTimeout(() => {
-        focusViewportOnSlots('auto');
+        focusViewportOnSlotsRef.current('auto');
       }, delayMs);
       timers.push(timerId);
     };
@@ -3323,7 +3579,7 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
         window.clearTimeout(timerId);
       }
     };
-  }, [focusTrigger, focusViewportOnSlots]);
+  }, [focusTrigger]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -3347,8 +3603,8 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
     const bottom = top + viewport.clientHeight;
     const scaledX = position.x * zoomRef.current;
     const scaledY = position.y * zoomRef.current;
-    const scaledWidth = SLOT_CANVAS_CARD_WIDTH * zoomRef.current;
-    const scaledHeight = SLOT_CANVAS_CARD_HEIGHT * zoomRef.current;
+    const scaledWidth = cardWidth * zoomRef.current;
+    const scaledHeight = cardHeight * zoomRef.current;
     const nodeLeft = scaledX;
     const nodeTop = scaledY;
     const nodeRight = scaledX + scaledWidth;
@@ -3367,11 +3623,12 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
       nodeTop - viewport.clientHeight / 2 + scaledHeight / 2,
       zoomRef.current
     );
-  }, [positions, selectedSlot, setViewportOffset]);
+  }, [cardHeight, cardWidth, positions, selectedSlot, setViewportOffset]);
 
+  const dragCursorClass = dragPreview ? 'cursor-grabbing' : '';
   const viewportClassName = className
-    ? `relative overflow-hidden overscroll-none ${className}`
-    : 'relative h-[78vh] overflow-hidden overscroll-none rounded-md border bg-muted/20';
+    ? `relative overflow-hidden overscroll-none ${dragCursorClass} ${className}`
+    : `relative h-[78vh] overflow-hidden overscroll-none rounded-md border bg-muted/20 ${dragCursorClass}`;
 
   return (
     <div
@@ -3391,40 +3648,132 @@ const InfiniteSlotCanvas = memo(function InfiniteSlotCanvas({
       <div ref={boardTransformRef} className="absolute left-0 top-0" style={boardTransformStyle}>
         <div className="relative" style={boardContentStyle}>
           {items.map((item, index) => {
-            const position = positions[item.slot.id] || defaultSlotCanvasPosition(index);
+            const position = positions[item.slot.id] || defaultSlotCanvasPosition(index, cardWidth, cardHeight);
+            const dragState = dragRef.current;
+            const isDragging = dragPreview?.slotId === item.slot.id;
+            const isSelected = selectedSlot === item.slot.id;
+            const isEditing = editingSlotId === item.slot.id;
+            const slotLabel = item.slot.name;
+            const draggedOffsetX = isDragging && dragPreview ? dragPreview.x - position.x : 0;
+            const draggedOffsetY = isDragging && dragPreview ? dragPreview.y - position.y : 0;
+
+            let displacedOffsetX = 0;
+            let displacedOffsetY = 0;
+            if (!isDragging && dragState && dragState.startIndex !== dragState.lastTargetIndex) {
+              let previewIndex = index;
+
+              if (dragState.startIndex < dragState.lastTargetIndex) {
+                if (index > dragState.startIndex && index <= dragState.lastTargetIndex) {
+                  previewIndex = index - 1;
+                }
+              } else if (dragState.startIndex > dragState.lastTargetIndex) {
+                if (index >= dragState.lastTargetIndex && index < dragState.startIndex) {
+                  previewIndex = index + 1;
+                }
+              }
+
+              if (previewIndex !== index) {
+                const previewPosition = defaultSlotCanvasPosition(previewIndex, cardWidth, cardHeight);
+                displacedOffsetX = previewPosition.x - position.x;
+                displacedOffsetY = previewPosition.y - position.y;
+              }
+            }
+
+            const headerOffsetX = isDragging ? draggedOffsetX : displacedOffsetX;
+            const headerOffsetY = isDragging ? draggedOffsetY : displacedOffsetY;
+            const cardStyle: CSSProperties = {
+              left: position.x,
+              top: position.y,
+              width: cardWidth
+            };
+            const dragHandleStyle: CSSProperties = isDragging
+              ? {
+                position: 'relative',
+                zIndex: 40,
+                transform: `translate3d(${headerOffsetX}px, ${headerOffsetY}px, 0)`,
+                willChange: 'transform'
+              }
+              : {
+                position: 'relative',
+                zIndex: displacedOffsetX !== 0 || displacedOffsetY !== 0 ? 30 : 1,
+                transform: `translate3d(${headerOffsetX}px, ${headerOffsetY}px, 0)`,
+                transition: 'transform 120ms ease'
+              };
 
             return (
               <div
                 key={item.slot.id}
                 data-slot-card
-                className="absolute"
-                style={{ left: position.x, top: position.y }}
+                className={`absolute ${isDragging ? 'z-30' : ''}`}
+                style={cardStyle}
               >
-                <div className="mb-2 flex items-center justify-between rounded-md border bg-card/90 px-2 py-1 text-[11px] shadow-sm backdrop-blur">
+                {isEditing ? (
+                  <div
+                    className="mb-2 rounded-md border border-primary/70 bg-primary/10 p-1.5"
+                    style={dragHandleStyle}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <Input
+                      value={editingSlotName}
+                      onChange={(event) => setEditingSlotName(event.target.value)}
+                      onBlur={() => commitSlotNameEdit(item.slot.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          commitSlotNameEdit(item.slot.id);
+                          return;
+                        }
+                        if (event.key === 'Escape') {
+                          event.preventDefault();
+                          cancelSlotNameEdit();
+                        }
+                      }}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      autoFocus
+                      className="h-7 text-xs"
+                    />
+                  </div>
+                ) : (
                   <button
                     type="button"
-                    className="cursor-grab rounded px-1.5 py-0.5 font-medium text-muted-foreground hover:bg-muted/80 active:cursor-grabbing"
+                    className={`mb-2 flex w-full items-center justify-between rounded-md border px-2 py-1 text-[11px] ${
+                      isDragging
+                        ? 'cursor-grabbing border-primary/70 bg-primary/15 text-primary shadow-xl'
+                        : isSelected
+                          ? 'cursor-grab border-primary/60 bg-primary/10 text-primary shadow-md'
+                          : 'cursor-grab border-border bg-card/90 shadow-sm backdrop-blur hover:bg-card'
+                    }`}
+                    style={dragHandleStyle}
+                    onDoubleClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setEditingSlotId(item.slot.id);
+                      setEditingSlotName(slotLabel);
+                    }}
                     onPointerDown={(event) => handleDragPointerDown(event, item.slot.id)}
                     onPointerMove={handleDragPointerMove}
                     onPointerUp={handleDragPointerEnd}
                     onPointerCancel={handleDragPointerEnd}
                   >
-                    Drag
+                    <span className={`font-medium ${isDragging || isSelected ? 'text-primary' : 'text-muted-foreground'}`}>
+                      {slotLabel}
+                    </span>
                   </button>
-                  <span className="font-mono text-muted-foreground">{position.x}, {position.y}</span>
-                </div>
+                )}
 
-                <SlotCard
-                  slot={item.slot}
-                  titleValue={item.titleValue}
-                  subtitleValue={item.subtitleValue}
-                  renderedPreviewUrl={item.renderedPreviewUrl}
-                  sourceImageUrl={item.sourceImageUrl}
-                  template={item.template}
-                  templateImageUrls={templateImageUrls}
-                  device={device}
-                  onSelect={onSelect}
-                />
+                <div className={isDragging ? 'rounded-md ring-2 ring-primary/35 shadow-2xl' : ''}>
+                  <SlotCard
+                    slot={item.slot}
+                    titleValue={item.titleValue}
+                    subtitleValue={item.subtitleValue}
+                    renderedPreviewUrl={item.renderedPreviewUrl}
+                    sourceImageUrl={item.sourceImageUrl}
+                    template={item.template}
+                    templateImageUrls={templateImageUrls}
+                    device={device}
+                    onSelect={onSelect}
+                  />
+                </div>
               </div>
             );
           })}
@@ -3703,9 +4052,10 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
 
       const width = Math.max(1, device.width || 1290);
       const height = Math.max(1, device.height || 2796);
-      const renderScale = Math.min(1, 720 / height);
-      const canvasWidth = Math.max(1, Math.round(width * renderScale));
-      const canvasHeight = Math.max(1, Math.round(height * renderScale));
+      const previewSize = getSlotPreviewCanvasSize(device);
+      const renderScale = previewSize.renderScale;
+      const canvasWidth = previewSize.width;
+      const canvasHeight = previewSize.height;
       if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
