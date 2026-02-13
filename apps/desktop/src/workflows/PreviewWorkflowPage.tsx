@@ -47,11 +47,8 @@ interface PreviewWorkflowPageProps {
   isBusy: boolean;
   expectedPreviewPath: string;
   previewPath: string;
-  previewDataUrl?: string;
-  previewMatrixDataUrls: Record<string, Record<string, string>>;
-  slotSourceDataUrls: Record<string, string>;
   issues: ValidateIssue[];
-  getCopyValue: (key: string, locale: string) => string;
+  renderSlotPreviewCard: (params: { locale: string; slotId: string; slotLabel: string }) => ReactNode;
   onSelectDevice: (deviceId: string) => void;
   onSelectLocale: (locale: string) => void;
   onSelectSlot: (slotId: string) => void;
@@ -70,11 +67,8 @@ export function PreviewWorkflowPage({
   isBusy,
   expectedPreviewPath,
   previewPath,
-  previewDataUrl,
-  previewMatrixDataUrls,
-  slotSourceDataUrls,
   issues,
-  getCopyValue,
+  renderSlotPreviewCard,
   onSelectDevice,
   onSelectLocale,
   onSelectSlot,
@@ -158,41 +152,25 @@ export function PreviewWorkflowPage({
             <CardDescription className="truncate">{previewPath || 'No image loaded'}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {localeOptions.map((locale) => (
-                <div key={locale.value} className="rounded-lg border bg-muted/20 p-3">
-                  <p className="mb-2 text-sm font-semibold">{locale.label}</p>
-                  <div className="overflow-x-auto">
-                    <div className="flex min-w-max gap-3 pb-1">
-                      {slotOptions.map((slot) => {
-                        const renderedImageUrl = previewMatrixDataUrls[locale.value]?.[slot.value];
-                        const sourceImageUrl = slotSourceDataUrls[slot.value];
-                        const imageUrl = renderedImageUrl || sourceImageUrl;
-                        const title = getCopyValue(`${slot.value}.title`, locale.value);
-                        const subtitle = getCopyValue(`${slot.value}.subtitle`, locale.value);
-                        return (
-                          <div key={`${locale.value}:${slot.value}`} className="w-[300px] shrink-0 rounded-md border bg-background p-2">
-                            <p className="mb-1 text-xs font-semibold text-muted-foreground">{slot.label}</p>
-                            {imageUrl ? (
-                              <img
-                                src={imageUrl}
-                                alt={`${locale.label} ${slot.label}`}
-                                className="mb-2 h-auto max-h-[420px] w-full rounded-md border object-contain"
-                              />
-                            ) : (
-                              <div className="mb-2 grid h-[220px] place-items-center rounded-md border border-dashed text-xs text-muted-foreground">
-                                Render 후 Preview가 표시됩니다
-                              </div>
-                            )}
-                            <p className="text-sm font-medium leading-tight">{title || '-'}</p>
-                            <p className="mt-1 text-xs leading-tight text-muted-foreground">{subtitle || '-'}</p>
-                          </div>
-                        );
-                      })}
+                <div className="space-y-3">
+                  {localeOptions.map((locale) => (
+                    <div key={locale.value} className="rounded-lg border bg-muted/20 p-3">
+                      <p className="mb-2 text-sm font-semibold">{locale.label}</p>
+                      <div className="overflow-x-auto">
+                        <div className="flex min-w-max gap-3 pb-1">
+                          {slotOptions.map((slot) => (
+                            <div key={`${locale.value}:${slot.value}`} className="w-[300px] shrink-0 rounded-md border bg-background p-2">
+                              {renderSlotPreviewCard({
+                                locale: locale.value,
+                                slotId: slot.value,
+                                slotLabel: slot.label
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
+                  ))}
             </div>
           </CardContent>
         </Card>

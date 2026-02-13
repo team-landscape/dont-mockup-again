@@ -1552,7 +1552,6 @@ export function App() {
     };
   }, [doc.template.main.background, doc.template.main.slotBackgrounds, selectedSlotData]);
   const previewPath = previewMatrixPaths[selectedLocale]?.[selectedSlot] || slotPreviewPaths[selectedSlot] || '';
-  const previewDataUrl = previewMatrixUrls[selectedLocale]?.[selectedSlot] || slotPreviewUrls[selectedSlot] || '';
   const onboardingReady = doc.project.locales.length > 0
     && doc.project.platforms.length > 0
     && doc.project.devices.length > 0;
@@ -1640,6 +1639,62 @@ export function App() {
     if (!selectedSubtitleKey) return;
     updateCopyByKey(selectedSubtitleKey, selectedLocale, value);
   }, [selectedLocale, selectedSubtitleKey, updateCopyByKey]);
+
+  const renderPreviewSlotCard = useCallback((params: {
+    locale: string;
+    slotId: string;
+    slotLabel: string;
+  }) => {
+    const { locale, slotId, slotLabel } = params;
+    const titleValue = doc.copy.keys[fieldKey(slotId, 'title')]?.[locale] || '';
+    const subtitleValue = doc.copy.keys[fieldKey(slotId, 'subtitle')]?.[locale] || '';
+    const renderedPreviewUrl = previewMatrixUrls[locale]?.[slotId] || slotPreviewUrls[slotId];
+    const sourceImageUrl = slotSourceUrls[slotId];
+    const template = {
+      ...deferredTemplateMain,
+      background: {
+        ...deferredTemplateMain.background,
+        ...(deferredTemplateMain.slotBackgrounds[slotId] || {})
+      }
+    };
+    const isCurrentSelection = selectedLocale === locale && selectedSlot === slotId;
+
+    return (
+      <button
+        type="button"
+        className="w-full text-left"
+        onClick={() => {
+          setSelectedLocale(locale);
+          handleSelectSlot(slotId);
+        }}
+      >
+        <p className="mb-1 text-xs font-semibold text-muted-foreground">{slotLabel}</p>
+        <div className={isCurrentSelection ? 'rounded-md ring-2 ring-primary/35' : 'rounded-md'}>
+          <SlotRenderPreview
+            slotId={slotId}
+            title={titleValue}
+            subtitle={subtitleValue}
+            renderedPreviewUrl={renderedPreviewUrl}
+            sourceImageUrl={sourceImageUrl}
+            template={template}
+            templateImageUrls={templateImageUrls}
+            device={selectedDeviceSpec}
+          />
+        </div>
+      </button>
+    );
+  }, [
+    deferredTemplateMain,
+    doc.copy.keys,
+    handleSelectSlot,
+    previewMatrixUrls,
+    selectedDeviceSpec,
+    selectedLocale,
+    selectedSlot,
+    slotPreviewUrls,
+    slotSourceUrls,
+    templateImageUrls
+  ]);
 
   useEffect(() => {
     if (activeStep !== 'preview' || !isTauriRuntime()) {
@@ -2422,11 +2477,8 @@ export function App() {
               isBusy={isBusy}
               expectedPreviewPath={expectedPreviewPath}
               previewPath={previewPath}
-              previewDataUrl={previewDataUrl}
-              previewMatrixDataUrls={previewMatrixUrls}
-              slotSourceDataUrls={slotSourceUrls}
               issues={issues}
-              getCopyValue={(key, locale) => doc.copy.keys[key]?.[locale] || ''}
+              renderSlotPreviewCard={renderPreviewSlotCard}
               onSelectDevice={setSelectedDevice}
               onSelectLocale={setSelectedLocale}
               onSelectSlot={handleSelectSlot}
