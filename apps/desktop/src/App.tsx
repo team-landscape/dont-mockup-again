@@ -21,8 +21,8 @@ import { useExportAction } from './hooks/useExportAction';
 import { useProjectFileActions } from './hooks/useProjectFileActions';
 import { useProjectImageUploadHandlers } from './hooks/useProjectImageUploadHandlers';
 import { usePipelineActions } from './hooks/usePipelineActions';
+import { usePreviewLoaders } from './hooks/usePreviewLoaders';
 import { resolveOutputDir as resolveOutputDirPath } from './lib/output-dir';
-import { loadPreviewMatrixFromDir, loadSlotPreviewMapFromDir } from './lib/preview-file-loaders';
 import {
   applyAddSlot,
   applyMoveSlot,
@@ -237,6 +237,19 @@ export function App() {
     slots: doc.project.slots,
     templateMain: doc.template.main
   });
+  const { loadSlotPreviewMap, loadPreviewMatrix } = usePreviewLoaders({
+    slots: doc.project.slots,
+    locales: doc.project.locales,
+    previewRenderDir,
+    selectedPlatform,
+    selectedDevice,
+    selectedLocale,
+    selectedSlot,
+    setSlotPreviewUrls,
+    setSlotPreviewPaths,
+    setPreviewMatrixUrls,
+    setPreviewMatrixPaths
+  });
   const previewMatrixLoadKey = useMemo(
     () => [
       previewRenderDir,
@@ -427,47 +440,6 @@ export function App() {
     setExportStatus,
     setExportError
   });
-
-  async function loadSlotPreviewMap() {
-    const result = await loadSlotPreviewMapFromDir({
-      slots: doc.project.slots,
-      previewRenderDir,
-      selectedPlatform,
-      selectedDevice,
-      selectedLocale,
-      selectedSlot
-    });
-
-    setSlotPreviewUrls(result.urls);
-    setSlotPreviewPaths(result.paths);
-
-    return {
-      loaded: result.loaded,
-      total: result.total,
-      selectedPath: result.selectedPath
-    };
-  }
-
-  async function loadPreviewMatrix() {
-    const locales = [...doc.project.locales];
-    try {
-      const result = await loadPreviewMatrixFromDir({
-        slots: doc.project.slots,
-        locales,
-        previewRenderDir,
-        selectedPlatform,
-        selectedDevice
-      });
-
-      setPreviewMatrixUrls(result.urlsByLocale);
-      setPreviewMatrixPaths(result.pathsByLocale);
-      return result.urlsByLocale;
-    } catch {
-      setPreviewMatrixUrls({});
-      setPreviewMatrixPaths({});
-      return {};
-    }
-  }
 
   const { handleRunLocalization, handleRender, handleValidate, handleRefreshPreview } = usePipelineActions({
     projectPath,
