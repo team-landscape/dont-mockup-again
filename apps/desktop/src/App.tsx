@@ -37,6 +37,20 @@ import {
   writeTextFile
 } from './lib/desktop-runtime';
 import {
+  type Align,
+  type Device,
+  type LlmCliConfig,
+  type Platform,
+  type Slot,
+  type SlotCanvasPosition,
+  type StoreShotDoc,
+  type TemplateBackground,
+  type TemplateElement,
+  type TemplateElementKind,
+  type TemplateImageElement,
+  type TemplateMain,
+  type TemplateTextElement,
+  type TemplateTextSource,
   appendPathSegment,
   asNumber,
   buildProjectSnapshotForPersistence,
@@ -83,174 +97,6 @@ import {
 } from './lib/project-model';
 
 type StepId = 'screens' | 'localization' | 'preview' | 'export';
-type Platform = 'ios' | 'android';
-type Align = 'left' | 'center' | 'right';
-type TemplateElementKind = 'text' | 'image';
-type TemplateTextSource = 'title' | 'subtitle' | 'custom';
-
-interface Device {
-  id: string;
-  width: number;
-  height: number;
-  pixelRatio: number;
-  platform?: Platform;
-}
-
-interface Slot {
-  id: string;
-  name: string;
-  order: number;
-  sourceImagePath: string;
-}
-
-interface TextBox {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  font: string;
-  size: number;
-  weight: number;
-  align: Align;
-}
-
-interface ShotPlacement {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  fit: 'cover' | 'contain';
-  cornerRadius: number;
-}
-
-interface TemplateElementBase {
-  id: string;
-  name: string;
-  kind: TemplateElementKind;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  z: number;
-  visible: boolean;
-  opacity: number;
-  rotation: number;
-}
-
-interface TemplateTextElement extends TemplateElementBase {
-  kind: 'text';
-  textSource: TemplateTextSource;
-  customText: string;
-  font: string;
-  size: number;
-  lineHeight: number;
-  weight: number;
-  align: Align;
-  autoSize: boolean;
-  widthPercent: number;
-  color: string;
-  backgroundColor: string;
-  padding: number;
-  cornerRadius: number;
-}
-
-interface TemplateImageElement extends TemplateElementBase {
-  kind: 'image';
-  source: 'image' | 'color';
-  imagePath: string;
-  fillColor: string;
-  fit: 'cover' | 'contain';
-  cornerRadius: number;
-  deviceFrame: boolean;
-  frameInset: number;
-  frameRadius: number;
-  frameColor: string;
-  frameWidth: number;
-}
-
-type TemplateElement = TemplateTextElement | TemplateImageElement;
-type TemplateBackground = {
-  type: 'solid' | 'gradient';
-  value?: string;
-  from?: string;
-  to?: string;
-  direction?: string;
-};
-
-interface TemplateMain {
-  background: TemplateBackground;
-  slotBackgrounds: Record<string, TemplateBackground>;
-  slotElements: Record<string, TemplateElement[]>;
-  frame: {
-    type: 'simpleRounded';
-    enabled: boolean;
-    inset: number;
-    radius: number;
-  };
-  text: {
-    title: TextBox;
-    subtitle: TextBox;
-  };
-  shotPlacement: ShotPlacement;
-  elements: TemplateElement[];
-}
-
-interface TemplateInstance {
-  deviceId?: string;
-  locale?: string;
-  overrides: Record<string, unknown>;
-}
-
-interface LlmCliConfig {
-  command: string;
-  argsTemplate: string[];
-  timeoutSec: number;
-  promptVersion: string;
-  prompt?: string;
-  cachePath?: string;
-  sourceLocale?: string;
-  targetLocales?: string[];
-}
-
-interface StoreShotDoc {
-  schemaVersion: number;
-  project: {
-    name: string;
-    bundleId: string;
-    packageName: string;
-    platforms: Platform[];
-    locales: string[];
-    devices: Device[];
-    slots: Slot[];
-  };
-  template: {
-    main: TemplateMain;
-    instances: TemplateInstance[];
-  };
-  copy: {
-    keys: Record<string, Record<string, string>>;
-  };
-  pipelines: {
-    localization: {
-      mode: 'llm-cli';
-      sourceLocale?: string;
-      llmCli?: LlmCliConfig;
-    };
-    export: {
-      outputDir: string;
-      formats: string[];
-      zip: boolean;
-      metadataCsv: boolean;
-    };
-    upload: {
-      enabled: boolean;
-      fastlane: {
-        iosLane: string;
-        androidLane: string;
-      };
-    };
-  };
-}
 
 interface ValidateIssue {
   level: 'error' | 'warning';
@@ -262,11 +108,6 @@ interface BusyRunOptions {
   action?: string;
   title?: string;
   detail?: string;
-}
-
-interface SlotCanvasPosition {
-  x: number;
-  y: number;
 }
 
 const steps: Array<{ id: StepId; title: string }> = [
