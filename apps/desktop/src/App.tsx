@@ -4,6 +4,7 @@ import { ExportStepPanel } from './workflows/ExportStepPanel';
 import { LocalizationStepPanel } from './workflows/LocalizationStepPanel';
 import { PreviewStepPanel } from './workflows/PreviewStepPanel';
 import { ScreensStepPanel } from './workflows/ScreensStepPanel';
+import { HiddenImageInputs } from './components/form/HiddenImageInputs';
 import { TemplateInspectorSection } from './components/inspector/TemplateInspectorSection';
 import { OnboardingOverlay } from './components/onboarding/OnboardingOverlay';
 import { BusyOverlay } from './components/overlay/BusyOverlay';
@@ -449,20 +450,11 @@ export function App() {
 
   return (
     <div className="grid min-h-screen w-full max-w-none gap-4 p-4 lg:p-6">
-      <input
-        ref={slotImageInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        className="hidden"
-        onChange={(event) => { void handleSlotImageFileChange(event); }}
-      />
-
-      <input
-        ref={templateImageInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        className="hidden"
-        onChange={(event) => { void handleTemplateImageFileChange(event); }}
+      <HiddenImageInputs
+        slotImageInputRef={slotImageInputRef}
+        templateImageInputRef={templateImageInputRef}
+        onSlotImageFileChange={handleSlotImageFileChange}
+        onTemplateImageFileChange={handleTemplateImageFileChange}
       />
 
       <div className="relative">
