@@ -1,6 +1,5 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react';
 import { flushSync } from 'react-dom';
-import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import { ArrowDown, ArrowUp, ChevronDown, FolderDown, FolderUp, Loader2, Plus, Save, Trash2 } from 'lucide-react';
 
 import { Badge } from './components/ui/badge';
@@ -22,6 +21,21 @@ import { ExportWorkflowPage } from './workflows/ExportWorkflowPage';
 import { LocalizationWorkflowPage } from './workflows/LocalizationWorkflowPage';
 import { PreviewWorkflowPage } from './workflows/PreviewWorkflowPage';
 import { ScreensWorkflowPage } from './workflows/ScreensWorkflowPage';
+import {
+  browserFileToBase64,
+  getDefaultExportDir,
+  isTauriRuntime,
+  listPngFiles,
+  listSystemFonts,
+  pickOutputDir,
+  pickProjectFile,
+  pickProjectSavePath,
+  readFileBase64,
+  readTextFile,
+  runPipeline,
+  writeFileBase64,
+  writeTextFile
+} from './lib/desktop-runtime';
 
 type StepId = 'screens' | 'localization' | 'preview' | 'export';
 type Platform = 'ios' | 'android';
@@ -308,80 +322,6 @@ const PINCH_ZOOM_ACCELERATION = 1.35;
 const TEMPLATE_REFERENCE_WIDTH = 1290;
 const TEMPLATE_REFERENCE_HEIGHT = 2796;
 const DEFAULT_PROJECT_FILE_NAME = 'project.storeshot.json';
-
-async function runPipeline(command: string, args: string[]) {
-  return invokeCommand<string>('run_pipeline', { command, args });
-}
-
-async function readTextFile(path: string) {
-  return invokeCommand<string>('read_text_file', { path });
-}
-
-async function writeTextFile(path: string, content: string) {
-  return invokeCommand<void>('write_text_file', { path, content });
-}
-
-async function listPngFiles(path: string) {
-  return invokeCommand<string[]>('list_png_files', { path });
-}
-
-async function readFileBase64(path: string) {
-  return invokeCommand<string>('read_file_base64', { path });
-}
-
-async function listSystemFonts() {
-  return invokeCommand<string[]>('list_system_fonts', {});
-}
-
-async function writeFileBase64(path: string, dataBase64: string) {
-  return invokeCommand<void>('write_file_base64', { path, dataBase64 });
-}
-
-async function getDefaultExportDir() {
-  return invokeCommand<string | null>('get_default_export_dir', {});
-}
-
-async function pickOutputDir() {
-  return invokeCommand<string | null>('pick_output_dir', {});
-}
-
-async function pickProjectFile(preferredDir?: string) {
-  return invokeCommand<string | null>('pick_project_file', { preferredDir });
-}
-
-async function pickProjectSavePath(defaultFileName: string, preferredDir?: string) {
-  return invokeCommand<string | null>('pick_project_save_path', { defaultFileName, preferredDir });
-}
-
-function browserFileToBase64(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.onload = () => {
-      if (typeof reader.result !== 'string') {
-        reject(new Error('Invalid file read result'));
-        return;
-      }
-
-      const base64 = reader.result.split(',')[1] || '';
-      resolve(base64);
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function isTauriRuntime() {
-  return typeof window !== 'undefined'
-    && typeof (window as { __TAURI_INTERNALS__?: { invoke?: unknown } }).__TAURI_INTERNALS__?.invoke === 'function';
-}
-
-async function invokeCommand<T>(command: string, payload: Record<string, unknown>) {
-  if (!isTauriRuntime()) {
-    throw new Error('Tauri runtime is not detected. Run `npm --prefix apps/desktop run tauri:dev`.');
-  }
-
-  return tauriInvoke<T>(command, payload);
-}
 
 function clone<T>(value: T): T {
   if (typeof structuredClone === 'function') {

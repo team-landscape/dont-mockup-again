@@ -1,23 +1,8 @@
-import type { ReactNode } from 'react';
-
+import { LabeledField } from '../components/form/LabeledField';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Switch } from '../components/ui/switch';
-
-interface LabeledFieldProps {
-  label: string;
-  children: ReactNode;
-}
-
-function LabeledField({ label, children }: LabeledFieldProps) {
-  return (
-    <div className="space-y-1">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      {children}
-    </div>
-  );
-}
 
 interface ExportWorkflowPageProps {
   outputDir: string;

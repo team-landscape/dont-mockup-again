@@ -5,3 +5,4 @@ dist/
 *.log
 coverage/
 apps/desktop/src-tauri/target/
+examples/assets/source/uploads/

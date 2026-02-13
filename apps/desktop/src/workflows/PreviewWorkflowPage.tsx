@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { SelectOption } from '../types/ui';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import {
   Select,
@@ -7,11 +8,6 @@ import {
   SelectTrigger,
   SelectValue
 } from '../components/ui/select';
-
-interface SelectOption {
-  value: string;
-  label: string;
-}
 
 interface PreviewWorkflowPageProps {
   deviceOptions: SelectOption[];

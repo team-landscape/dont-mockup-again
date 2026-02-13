@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { Plus } from 'lucide-react';
 
+import { LabeledField } from '../components/form/LabeledField';
+import type { SelectOption } from '../types/ui';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -12,25 +14,6 @@ import {
   SelectTrigger,
   SelectValue
 } from '../components/ui/select';
-
-interface SelectOption {
-  value: string;
-  label: string;
-}
-
-interface LabeledFieldProps {
-  label: string;
-  children: ReactNode;
-}
-
-function LabeledField({ label, children }: LabeledFieldProps) {
-  return (
-    <div className="space-y-1">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      {children}
-    </div>
-  );
-}
 
 interface ScreensWorkflowPageProps {
   canvasNode: ReactNode;
