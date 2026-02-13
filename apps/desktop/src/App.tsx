@@ -24,6 +24,7 @@ import { usePipelineActions } from './hooks/usePipelineActions';
 import { useOnboardingActions } from './hooks/useOnboardingActions';
 import { useProjectSlotActions } from './hooks/useProjectSlotActions';
 import { usePreviewLoaders } from './hooks/usePreviewLoaders';
+import { useTemplateEditorActions } from './hooks/useTemplateEditorActions';
 import { resolveOutputDir as resolveOutputDirPath } from './lib/output-dir';
 import {
   isTauriRuntime,
@@ -612,164 +613,26 @@ export function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeStep, previewMatrixLoadKey]);
 
-  const updateTemplateMain = useCallback((mutator: (main: TemplateMain) => void) => {
-    const slotWidth = Math.max(1, selectedDeviceSpec.width || 1290);
-    startTemplateTransition(() => {
-      setDoc((current) => {
-        const nextMain = clone(current.template.main);
-        mutator(nextMain);
-
-        return {
-          ...current,
-          template: {
-            ...current.template,
-            main: syncTemplateLegacyFields(nextMain, slotWidth)
-          }
-        };
-      });
-    });
-  }, [selectedDeviceSpec.width, startTemplateTransition]);
-
-  const updateTemplateBackground = useCallback((patch: Partial<TemplateMain['background']>) => {
-    updateTemplateMain((main) => {
-      const slotId = selectedSlotData?.id || selectedSlot;
-      const current = main.slotBackgrounds[slotId] || main.background;
-      main.slotBackgrounds[slotId] = {
-        ...current,
-        ...patch
-      };
-    });
-  }, [selectedSlot, selectedSlotData, updateTemplateMain]);
-
-  const updateTemplateElement = useCallback((elementId: string, mutator: (element: TemplateElement) => TemplateElement) => {
-    updateTemplateMain((main) => {
-      const slotId = selectedSlotData?.id || selectedSlot;
-      const sourceElements = resolveTemplateElementsForSlot(main, slotId);
-      const index = sourceElements.findIndex((item) => item.id === elementId);
-      if (index < 0) return;
-      const nextElements = cloneTemplateElements(sourceElements);
-      nextElements[index] = mutator(nextElements[index]);
-      main.slotElements[slotId] = normalizeTemplateElementOrder(nextElements);
-    });
-  }, [selectedSlot, selectedSlotData, updateTemplateMain]);
-
-  const moveTemplateElement = useCallback((elementId: string, x: number, y: number) => {
-    const slotWidth = Math.max(1, selectedDeviceSpec.width || 1290);
-    updateTemplateElement(elementId, (current) => {
-      const nextXRaw = Math.round(x);
-      const nextY = Math.round(y);
-      const nextX = current.kind === 'text'
-        ? clampNumber(nextXRaw, 0, Math.max(0, slotWidth - resolveTextWidthFromPercent(current.widthPercent, slotWidth)))
-        : nextXRaw;
-      if (current.x === nextX && current.y === nextY) {
-        return current;
-      }
-
-      return {
-        ...current,
-        x: nextX,
-        y: nextY
-      };
-    });
-  }, [selectedDeviceSpec.width, updateTemplateElement]);
-
-  const addTemplateElement = useCallback((kind: TemplateElementKind) => {
-    let createdId = '';
-
-    updateTemplateMain((main) => {
-      const slotId = selectedSlotData?.id || selectedSlot;
-      const sourceElements = resolveTemplateElementsForSlot(main, slotId);
-      const slotElements = cloneTemplateElements(sourceElements);
-      const existingIds = new Set(slotElements.map((item) => item.id));
-      let nextNumber = 1;
-      while (existingIds.has(`${kind}-${nextNumber}`)) {
-        nextNumber += 1;
-      }
-      createdId = `${kind}-${nextNumber}`;
-
-      const topZ = slotElements.reduce((max, item) => Math.max(max, item.z), 0);
-      if (kind === 'text') {
-        const slotWidth = Math.max(1, selectedDeviceSpec.width || 1290);
-        const newTextElement: TemplateTextElement = {
-          id: createdId,
-          name: `Text ${nextNumber}`,
-          kind: 'text',
-          x: 0,
-          y: 120,
-          w: slotWidth,
-          h: 200,
-          z: topZ + 10,
-          visible: true,
-          opacity: 100,
-          rotation: 0,
-          textSource: 'custom',
-          customText: 'New text',
-          font: availableFonts[0] || 'SF Pro',
-          size: 64,
-          lineHeight: 1.2,
-          weight: 700,
-          align: 'center',
-          autoSize: true,
-          widthPercent: 100,
-          color: '#f9fafb',
-          backgroundColor: 'transparent',
-          padding: 0,
-          cornerRadius: 0
-        };
-        slotElements.push(newTextElement);
-        main.slotElements[slotId] = normalizeTemplateElementOrder(slotElements);
-        return;
-      }
-
-      const newImageElement: TemplateImageElement = {
-        id: createdId,
-        name: `Image ${nextNumber}`,
-        kind: 'image',
-        x: 120,
-        y: 560,
-        w: 1000,
-        h: 2000,
-        z: topZ + 10,
-        visible: true,
-        opacity: 100,
-        rotation: 0,
-        source: 'image',
-        imagePath: '',
-        fillColor: '#111827',
-        fit: 'cover',
-        cornerRadius: 48,
-        deviceFrame: false,
-        frameInset: 0,
-        frameRadius: 72,
-        frameColor: '#ffffff',
-        frameWidth: 3
-      };
-      slotElements.push(newImageElement);
-      main.slotElements[slotId] = normalizeTemplateElementOrder(slotElements);
-    });
-
-    if (createdId) {
-      setSelectedTemplateElementId(createdId);
-    }
-  }, [availableFonts, selectedDeviceSpec.width, selectedSlot, selectedSlotData, updateTemplateMain]);
-
-  const removeTemplateElement = useCallback((elementId: string) => {
-    updateTemplateMain((main) => {
-      const slotId = selectedSlotData?.id || selectedSlot;
-      const sourceElements = resolveTemplateElementsForSlot(main, slotId);
-      if (sourceElements.length <= 1) return;
-
-      const nextElements = sourceElements.filter((item) => item.id !== elementId);
-      if (nextElements.length === sourceElements.length || nextElements.length === 0) return;
-
-      main.slotElements[slotId] = normalizeTemplateElementOrder(cloneTemplateElements(nextElements));
-    });
-  }, [selectedSlot, selectedSlotData, updateTemplateMain]);
-
-  const openTemplateImagePicker = useCallback((elementId: string) => {
-    templateImageTargetRef.current = elementId;
-    templateImageInputRef.current?.click();
-  }, []);
+  const {
+    selectedTemplateSlotId,
+    updateTemplateMain,
+    updateTemplateBackground,
+    updateTemplateElement,
+    moveTemplateElement,
+    addTemplateElement,
+    removeTemplateElement,
+    openTemplateImagePicker
+  } = useTemplateEditorActions({
+    setDoc,
+    startTemplateTransition,
+    selectedSlot,
+    selectedSlotDataId: selectedSlotData?.id,
+    selectedDeviceWidth: selectedDeviceSpec.width,
+    availableFonts,
+    templateImageInputRef,
+    templateImageTargetRef,
+    setSelectedTemplateElementId
+  });
 
   const { handleSlotImageFileChange, handleTemplateImageFileChange } = useProjectImageUploadHandlers({
     runWithBusy,
@@ -779,7 +642,7 @@ export function App() {
     setTemplateImageUrls,
     slotImageTargetRef,
     templateImageTargetRef,
-    selectedTemplateSlotId: selectedSlotData?.id || selectedSlot
+    selectedTemplateSlotId
   });
 
   const templateInspectorSection = (

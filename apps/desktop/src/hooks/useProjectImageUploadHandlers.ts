@@ -13,17 +13,7 @@ import {
   type StoreShotDoc,
   type TemplateElement
 } from '../lib/project-model';
-
-interface BusyHelpers {
-  setTitle: (value: string) => void;
-  setDetail: (value: string) => void;
-}
-
-interface BusyRunOptions {
-  action?: string;
-  title?: string;
-  detail?: string;
-}
+import type { BusyHelpers, BusyRunOptions } from './useBusyRunner';
 
 interface UseProjectImageUploadHandlersArgs {
   runWithBusy: (action: (helpers: BusyHelpers) => Promise<void>, options?: BusyRunOptions) => Promise<void>;
