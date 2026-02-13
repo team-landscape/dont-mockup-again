@@ -204,7 +204,6 @@ export function useTemplateEditorActions({
 
   return {
     selectedTemplateSlotId,
-    updateTemplateMain,
     updateTemplateBackground,
     updateTemplateElement,
     moveTemplateElement,

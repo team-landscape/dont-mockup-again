@@ -1,14 +1,11 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
-import { Badge } from './components/ui/badge';
-import { Button } from './components/ui/button';
 import { LocaleSelector } from './components/form/InspectorControls';
 import { ExportWorkflowPage } from './workflows/ExportWorkflowPage';
 import { LocalizationWorkflowPage } from './workflows/LocalizationWorkflowPage';
 import { PreviewWorkflowPage } from './workflows/PreviewWorkflowPage';
 import { ScreensWorkflowPage } from './workflows/ScreensWorkflowPage';
-import { SlotRenderPreview } from './components/preview/SlotPreview';
-import { InfiniteSlotCanvas, type CanvasSlotItem } from './components/canvas/InfiniteSlotCanvas';
+import { InfiniteSlotCanvas } from './components/canvas/InfiniteSlotCanvas';
 import { SelectedScreenInspector } from './components/inspector/SelectedScreenInspector';
 import { TemplateInspectorSection } from './components/inspector/TemplateInspectorSection';
 import { OnboardingOverlay } from './components/onboarding/OnboardingOverlay';
@@ -24,6 +21,7 @@ import { usePipelineActions } from './hooks/usePipelineActions';
 import { useOnboardingActions } from './hooks/useOnboardingActions';
 import { useProjectSlotActions } from './hooks/useProjectSlotActions';
 import { usePreviewLoaders } from './hooks/usePreviewLoaders';
+import { useScreenWorkflowState } from './hooks/useScreenWorkflowState';
 import { useTemplateEditorActions } from './hooks/useTemplateEditorActions';
 import { resolveOutputDir as resolveOutputDirPath } from './lib/output-dir';
 import {
@@ -35,42 +33,18 @@ import {
 import {
   type Device,
   type Platform,
-  type Slot,
-  type SlotCanvasPosition,
   type StoreShotDoc,
-  type TemplateBackground,
-  type TemplateElement,
-  type TemplateElementKind,
-  type TemplateImageElement,
-  type TemplateMain,
-  type TemplateTextElement,
-  asNumber,
   buildProjectSnapshotForPersistence,
-  clampNumber,
   clone,
-  cloneTemplateElements,
   createDefaultProject,
-  defaultSlotCanvasPosition,
   defaultLlmConfig,
   defaultSystemFonts,
   detectPlatformFromDeviceId,
   fieldKey,
-  getSlotCanvasCardSize,
-  getSlotPreviewCanvasSize,
-  imageMimeTypeFromPath,
   localePresets,
-  normalizeProject,
   normalizeTemplateElementOrder,
-  reorderSlots,
-  resolveImageLayerForPreview,
-  resolveNextSlotIdentity,
   resolveTemplateElementsForSlot,
-  resolveTextWidthFromPercent,
-  resolveTextLayerWithinSlot,
   serializeProjectSignature,
-  sortSlotsByOrder,
-  syncTemplateLegacyFields,
-  TEMPLATE_REFERENCE_HEIGHT,
   TEMPLATE_REFERENCE_WIDTH
 } from './lib/project-model';
 
@@ -115,7 +89,7 @@ export function App() {
   const [previewMatrixUrls, setPreviewMatrixUrls] = useState<Record<string, Record<string, string>>>({});
   const [previewMatrixPaths, setPreviewMatrixPaths] = useState<Record<string, Record<string, string>>>({});
   const [availableFonts, setAvailableFonts] = useState<string[]>(defaultSystemFonts);
-  const [issues, setIssues] = useState<ValidateIssue[]>([]);
+  const [, setIssues] = useState<ValidateIssue[]>([]);
   const [exportStatus, setExportStatus] = useState('');
   const [exportError, setExportError] = useState('');
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(() => {
@@ -216,11 +190,6 @@ export function App() {
     if (found) return found;
     return { id: selectedDevice, width: 1290, height: 2796, pixelRatio: 1, platform: selectedPlatform };
   }, [doc.project.devices, selectedDevice, selectedPlatform]);
-
-  const expectedPreviewPath = useMemo(
-    () => `${previewRenderDir}/${selectedPlatform}/${selectedDevice}/${selectedLocale}/${selectedSlot}.png`,
-    [previewRenderDir, selectedPlatform, selectedDevice, selectedLocale, selectedSlot]
-  );
 
   const llmConfig = doc.pipelines.localization.llmCli || clone(defaultLlmConfig);
   const deferredTemplateMain = useDeferredValue(doc.template.main);
@@ -377,7 +346,7 @@ export function App() {
     setExportError
   });
 
-  const { handleRunLocalization, handleRender, handleValidate, handleRefreshPreview } = usePipelineActions({
+  const { handleRunLocalization } = usePipelineActions({
     projectPath,
     previewRenderDir,
     runWithBusy,
@@ -403,44 +372,39 @@ export function App() {
     }
   }, []);
 
-  const slots = useMemo(
-    () => sortSlotsByOrder(doc.project.slots),
-    [doc.project.slots]
-  );
-  const selectedSlotData = useMemo(
-    () => slots.find((slot) => slot.id === selectedSlot) || null,
-    [slots, selectedSlot]
-  );
-  useEffect(() => {
-    setSelectedSlotNameDraft(selectedSlotData?.name || '');
-  }, [selectedSlotData?.id, selectedSlotData?.name]);
-  const commitSelectedSlotName = useCallback(() => {
-    if (!selectedSlotData) return;
-
-    const normalizedName = selectedSlotNameDraft.trim();
-    if (!normalizedName) {
-      setSelectedSlotNameDraft(selectedSlotData.name);
-      return;
-    }
-
-    renameSlot(selectedSlotData.id, normalizedName);
-    setSelectedSlotNameDraft(normalizedName);
-  }, [renameSlot, selectedSlotData, selectedSlotNameDraft]);
-  const selectedTitleKey = useMemo(
-    () => (selectedSlotData ? fieldKey(selectedSlotData.id, 'title') : ''),
-    [selectedSlotData]
-  );
-  const selectedSubtitleKey = useMemo(
-    () => (selectedSlotData ? fieldKey(selectedSlotData.id, 'subtitle') : ''),
-    [selectedSlotData]
-  );
-  const selectedSlotBackground = useMemo<TemplateBackground>(() => {
-    if (!selectedSlotData) return doc.template.main.background;
-    return {
-      ...doc.template.main.background,
-      ...(doc.template.main.slotBackgrounds[selectedSlotData.id] || {})
-    };
-  }, [doc.template.main.background, doc.template.main.slotBackgrounds, selectedSlotData]);
+  const {
+    slots,
+    selectedSlotData,
+    selectedSlotBackground,
+    slotCanvasCardSize,
+    slotCanvasPositions,
+    screenCanvasSlots,
+    commitSelectedSlotName,
+    handleSelectSlot,
+    reorderSlotByDrag,
+    updateCopyByKey,
+    handleSelectedTitleChange,
+    handleSelectedSubtitleChange,
+    renderPreviewSlotCard
+  } = useScreenWorkflowState({
+    doc,
+    selectedSlot,
+    selectedLocale,
+    selectedSlotNameDraft,
+    selectedDeviceSpec,
+    deferredTemplateMain,
+    slotPreviewUrls,
+    slotSourceUrls,
+    previewMatrixUrls,
+    templateImageUrls,
+    setDoc,
+    setSelectedSlot,
+    setSelectedLocale,
+    setSelectedSlotNameDraft,
+    startSlotTransition,
+    renameSlot,
+    updateDoc
+  });
   const previewPath = previewMatrixPaths[selectedLocale]?.[selectedSlot] || slotPreviewPaths[selectedSlot] || '';
   const onboardingReady = doc.project.locales.length > 0
     && doc.project.platforms.length > 0
@@ -454,155 +418,6 @@ export function App() {
     setSelectedDevice,
     setIsOnboardingOpen
   });
-  const slotCanvasCardSize = useMemo(
-    () => getSlotCanvasCardSize(selectedDeviceSpec),
-    [selectedDeviceSpec]
-  );
-
-  const slotCanvasPositions = useMemo<Record<string, SlotCanvasPosition>>(() => {
-    const next: Record<string, SlotCanvasPosition> = {};
-    slots.forEach((slot, index) => {
-      next[slot.id] = defaultSlotCanvasPosition(index, slotCanvasCardSize.width);
-    });
-    return next;
-  }, [slotCanvasCardSize.height, slotCanvasCardSize.width, slots]);
-
-  const reorderSlotByDrag = useCallback((slotId: string, targetIndex: number) => {
-    updateDoc((next) => {
-      const ordered = sortSlotsByOrder(next.project.slots);
-      const fromIndex = ordered.findIndex((slot) => slot.id === slotId);
-      if (fromIndex < 0) return;
-
-      const clampedTargetIndex = Math.max(0, Math.min(ordered.length - 1, targetIndex));
-      if (clampedTargetIndex === fromIndex) return;
-
-      const [moved] = ordered.splice(fromIndex, 1);
-      ordered.splice(clampedTargetIndex, 0, moved);
-      next.project.slots = reorderSlots(ordered);
-    });
-  }, []);
-
-  const screenCanvasSlots = useMemo<CanvasSlotItem[]>(() => (
-    slots.map((slot) => ({
-      slot,
-      titleValue: doc.copy.keys[fieldKey(slot.id, 'title')]?.[selectedLocale] || '',
-      subtitleValue: doc.copy.keys[fieldKey(slot.id, 'subtitle')]?.[selectedLocale] || '',
-      renderedPreviewUrl: slotPreviewUrls[slot.id],
-      sourceImageUrl: slotSourceUrls[slot.id],
-      template: {
-        ...deferredTemplateMain,
-        elements: resolveTemplateElementsForSlot(deferredTemplateMain, slot.id),
-        background: {
-          ...deferredTemplateMain.background,
-          ...(deferredTemplateMain.slotBackgrounds[slot.id] || {})
-        }
-      }
-    }))
-  ), [
-    doc.copy.keys,
-    deferredTemplateMain,
-    selectedLocale,
-    slotPreviewUrls,
-    slotSourceUrls,
-    slots
-  ]);
-
-  const updateCopyByKey = useCallback((key: string, locale: string, value: string) => {
-    setDoc((current) => {
-      const currentLocaleMap = current.copy.keys[key] || {};
-      if (currentLocaleMap[locale] === value) {
-        return current;
-      }
-
-      return {
-        ...current,
-        copy: {
-          ...current.copy,
-          keys: {
-            ...current.copy.keys,
-            [key]: {
-              ...currentLocaleMap,
-              [locale]: value
-            }
-          }
-        }
-      };
-    });
-  }, []);
-
-  const handleSelectedTitleChange = useCallback((value: string) => {
-    if (!selectedTitleKey) return;
-    updateCopyByKey(selectedTitleKey, selectedLocale, value);
-  }, [selectedLocale, selectedTitleKey, updateCopyByKey]);
-
-  const handleSelectedSubtitleChange = useCallback((value: string) => {
-    if (!selectedSubtitleKey) return;
-    updateCopyByKey(selectedSubtitleKey, selectedLocale, value);
-  }, [selectedLocale, selectedSubtitleKey, updateCopyByKey]);
-
-  const handleSelectSlot = useCallback((slotId: string) => {
-    startSlotTransition(() => {
-      setSelectedSlot(slotId);
-    });
-  }, [startSlotTransition]);
-
-  const renderPreviewSlotCard = useCallback((params: {
-    locale: string;
-    slotId: string;
-    slotLabel: string;
-  }) => {
-    const { locale, slotId, slotLabel } = params;
-    const titleValue = doc.copy.keys[fieldKey(slotId, 'title')]?.[locale] || '';
-    const subtitleValue = doc.copy.keys[fieldKey(slotId, 'subtitle')]?.[locale] || '';
-    const renderedPreviewUrl = previewMatrixUrls[locale]?.[slotId] || slotPreviewUrls[slotId];
-    const sourceImageUrl = slotSourceUrls[slotId];
-    const template = {
-      ...deferredTemplateMain,
-      elements: resolveTemplateElementsForSlot(deferredTemplateMain, slotId),
-      background: {
-        ...deferredTemplateMain.background,
-        ...(deferredTemplateMain.slotBackgrounds[slotId] || {})
-      }
-    };
-    const isCurrentSelection = selectedLocale === locale && selectedSlot === slotId;
-
-    return (
-      <button
-        type="button"
-        className="w-full text-left"
-        onClick={() => {
-          setSelectedLocale(locale);
-          handleSelectSlot(slotId);
-        }}
-      >
-        <p className="mb-1 text-xs font-semibold text-muted-foreground">{slotLabel}</p>
-        <div className={isCurrentSelection ? 'rounded-md ring-2 ring-primary/35' : 'rounded-md'}>
-          <SlotRenderPreview
-            slotId={slotId}
-            title={titleValue}
-            subtitle={subtitleValue}
-            renderedPreviewUrl={renderedPreviewUrl}
-            sourceImageUrl={sourceImageUrl}
-            template={template}
-            templateImageUrls={templateImageUrls}
-            device={selectedDeviceSpec}
-            scaleImageToDevice
-          />
-        </div>
-      </button>
-    );
-  }, [
-    deferredTemplateMain,
-    doc.copy.keys,
-    handleSelectSlot,
-    previewMatrixUrls,
-    selectedDeviceSpec,
-    selectedLocale,
-    selectedSlot,
-    slotPreviewUrls,
-    slotSourceUrls,
-    templateImageUrls
-  ]);
 
   useEffect(() => {
     if (activeStep !== 'preview' || !isTauriRuntime()) {
@@ -615,7 +430,6 @@ export function App() {
 
   const {
     selectedTemplateSlotId,
-    updateTemplateMain,
     updateTemplateBackground,
     updateTemplateElement,
     moveTemplateElement,
