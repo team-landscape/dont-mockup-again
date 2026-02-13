@@ -334,8 +334,8 @@ async function writeFileBase64(path: string, dataBase64: string) {
   return invokeCommand<void>('write_file_base64', { path, dataBase64 });
 }
 
-async function getDefaultDownloadDir() {
-  return invokeCommand<string | null>('get_default_download_dir', {});
+async function getDefaultExportDir() {
+  return invokeCommand<string | null>('get_default_export_dir', {});
 }
 
 async function pickOutputDir() {
@@ -820,7 +820,7 @@ function createDefaultProject(): StoreShotDoc {
   return {
     schemaVersion: 1,
     project: {
-      name: 'StoreShot Studio Project',
+      name: 'Store Metadata Studio Project',
       bundleId: 'com.example.app',
       packageName: 'com.example.app',
       platforms: ['ios', 'android'],
@@ -1021,7 +1021,7 @@ export function App() {
   const projectPath = 'examples/sample.storeshot.json';
   const [doc, setDoc] = useState<StoreShotDoc>(() => createDefaultProject());
   const [outputDir, setOutputDir] = useState('dist');
-  const [defaultDownloadDir, setDefaultDownloadDir] = useState('');
+  const [defaultExportDir, setDefaultExportDir] = useState('');
   const [isBusy, setIsBusy] = useState(false);
   const [busyAction, setBusyAction] = useState('');
   const [busyTitle, setBusyTitle] = useState('');
@@ -1059,10 +1059,10 @@ export function App() {
   const resolveOutputDir = useCallback((value: string | undefined) => {
     const normalized = typeof value === 'string' ? value.trim() : '';
     if (!normalized || normalized === 'dist') {
-      return defaultDownloadDir || 'dist';
+      return defaultExportDir || 'dist';
     }
     return normalized;
-  }, [defaultDownloadDir]);
+  }, [defaultExportDir]);
 
   const renderDir = useMemo(() => `${outputDir}-render`, [outputDir]);
 
@@ -1299,10 +1299,10 @@ export function App() {
       return;
     }
 
-    getDefaultDownloadDir()
+    getDefaultExportDir()
       .then((path) => {
         if (!path || !path.trim()) return;
-        setDefaultDownloadDir(path);
+        setDefaultExportDir(path);
         setOutputDir((current) => {
           const normalized = current.trim();
           if (!normalized || normalized === 'dist') {
@@ -1312,7 +1312,7 @@ export function App() {
         });
       })
       .catch(() => {
-        // Fallback to static default when system download path lookup fails.
+        // Fallback to static default when system export path lookup fails.
       });
   }, []);
 
@@ -2856,7 +2856,7 @@ export function App() {
           <div className="pointer-events-auto space-y-2">
             <Card className="border bg-card/95 shadow-xl backdrop-blur">
               <CardHeader className="gap-1 pb-2">
-                <CardTitle className="text-sm tracking-tight">StoreShot Studio</CardTitle>
+                <CardTitle className="text-sm tracking-tight">Store Metadata Studio</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-2 pt-0">
                 <Button size="sm" disabled={isBusy} variant="outline" onClick={handleLoadProject}><FolderDown className="mr-1 h-3.5 w-3.5" />Load</Button>
@@ -3022,7 +3022,7 @@ export function App() {
         <div className="fixed inset-0 z-50 grid place-items-center bg-background/90 p-4 backdrop-blur-sm">
           <Card className="w-full max-w-[760px] shadow-2xl">
             <CardHeader>
-              <CardTitle>Welcome to StoreShot Studio</CardTitle>
+              <CardTitle>Welcome to Store Metadata Studio</CardTitle>
               <CardDescription>첫 실행 설정입니다. 로케일/플랫폼/디바이스를 먼저 선택하세요.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
