@@ -941,9 +941,6 @@ export function App() {
     () => Math.max(steps.findIndex((item) => item.id === activeStep), 0),
     [activeStep]
   );
-  const activeStepDescription = useMemo(() => {
-    return steps.find((item) => item.id === activeStep)?.description || '';
-  }, [activeStep]);
   const isFirstStep = activeStepIndex === 0;
   const isLastStep = activeStepIndex === steps.length - 1;
 
@@ -2240,7 +2237,6 @@ export function App() {
             <Card className="border bg-card/95 shadow-xl backdrop-blur">
               <CardHeader className="gap-1 pb-2">
                 <CardTitle className="text-sm tracking-tight">StoreShot Studio</CardTitle>
-                <CardDescription className="text-xs">{activeStepDescription}</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-2 pt-0">
                 <Button size="sm" disabled={isBusy} variant="outline" onClick={handleLoadProject}><FolderDown className="mr-1 h-3.5 w-3.5" />Load</Button>
