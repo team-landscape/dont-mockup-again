@@ -16,6 +16,7 @@ import { OnboardingOverlay } from './components/onboarding/OnboardingOverlay';
 import { BusyOverlay } from './components/overlay/BusyOverlay';
 import { WorkflowSidebar } from './components/sidebar/WorkflowSidebar';
 import { useProjectImageUploadHandlers } from './hooks/useProjectImageUploadHandlers';
+import { resolveOutputDir as resolveOutputDirPath } from './lib/output-dir';
 import {
   getDefaultExportDir,
   isTauriRuntime,
@@ -174,33 +175,9 @@ export function App() {
   const [, startSlotTransition] = useTransition();
   const [, startTemplateTransition] = useTransition();
 
-  const homeDir = useMemo(() => {
-    const marker = '/Store Metadata Studio';
-    if (!defaultExportDir || !defaultExportDir.endsWith(marker)) {
-      return '';
-    }
-    return defaultExportDir.slice(0, -marker.length);
-  }, [defaultExportDir]);
-
   const resolveOutputDir = useCallback((value: string | undefined) => {
-    let normalized = typeof value === 'string' ? value.trim() : '';
-    if (homeDir) {
-      if (normalized === '~') {
-        normalized = homeDir;
-      } else if (normalized.startsWith('~/')) {
-        normalized = `${homeDir}/${normalized.slice(2)}`;
-      }
-
-      const legacySuffix = '/유저/Store Metadata Studio';
-      if (normalized.endsWith(legacySuffix)) {
-        normalized = `${homeDir}/Store Metadata Studio`;
-      }
-    }
-    if (!normalized || normalized === 'dist') {
-      return defaultExportDir || 'dist';
-    }
-    return normalized;
-  }, [defaultExportDir, homeDir]);
+    return resolveOutputDirPath(value, defaultExportDir);
+  }, [defaultExportDir]);
 
   const currentProjectSignature = useMemo(() => {
     const resolvedOutputDir = resolveOutputDir(outputDir);
