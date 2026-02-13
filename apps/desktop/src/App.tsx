@@ -1592,10 +1592,12 @@ export function App() {
     });
   }, []);
 
-  const persistProjectSnapshot = useCallback(async () => {
+  const persistProjectSnapshot = useCallback(async (options?: { syncTemplateMain?: boolean }) => {
     const next = clone(doc);
     next.project.slots = reorderSlots(next.project.slots);
-    next.template.main = syncTemplateLegacyFields(next.template.main, Math.max(1, selectedDeviceSpec.width || 1290));
+    if (options?.syncTemplateMain !== false) {
+      next.template.main = syncTemplateLegacyFields(next.template.main, Math.max(1, selectedDeviceSpec.width || 1290));
+    }
     next.pipelines.export.outputDir = resolveOutputDir(outputDir);
     const sourceLocale = next.pipelines.localization.sourceLocale || next.project.locales[0] || 'en-US';
     next.pipelines.localization.sourceLocale = next.project.locales.includes(sourceLocale)
@@ -1839,7 +1841,7 @@ export function App() {
         }
 
         setDetail('Saving project config...');
-        const snapshot = await persistProjectSnapshot();
+        const snapshot = await persistProjectSnapshot({ syncTemplateMain: false });
         const expectedSuffixes = collectExpectedRenderSuffixes(snapshot);
         if (expectedSuffixes.length === 0) {
           throw new Error('No export targets found. Check slots/locales/devices/platforms.');
