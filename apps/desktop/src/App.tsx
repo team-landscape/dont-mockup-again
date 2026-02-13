@@ -24,14 +24,13 @@ import {
   renderExportImagesFromSnapshot
 } from './lib/export-preview-renderer';
 import { resolveOutputDir as resolveOutputDirPath } from './lib/output-dir';
+import { loadPreviewMatrixFromDir, loadSlotPreviewMapFromDir } from './lib/preview-file-loaders';
 import {
   isTauriRuntime,
-  listPngFiles,
   listSystemFonts,
   pickOutputDir,
   pickProjectFile,
   pickProjectSavePath,
-  readFileBase64,
   readTextFile,
   runPipeline,
   writeTextFile
@@ -650,64 +649,44 @@ export function App() {
   }
 
   async function loadSlotPreviewMap() {
-    const sortedSlots = sortSlotsByOrder(doc.project.slots);
-    const files = await listPngFiles(previewRenderDir);
-    const urls: Record<string, string> = {};
-    const paths: Record<string, string> = {};
+    const result = await loadSlotPreviewMapFromDir({
+      slots: doc.project.slots,
+      previewRenderDir,
+      selectedPlatform,
+      selectedDevice,
+      selectedLocale,
+      selectedSlot
+    });
 
-    for (const slot of sortedSlots) {
-      const suffix = `${selectedPlatform}/${selectedDevice}/${selectedLocale}/${slot.id}.png`;
-      const picked = files.find((entry) => entry.endsWith(suffix));
-      if (!picked) continue;
-
-      const base64 = await readFileBase64(picked);
-      urls[slot.id] = `data:image/png;base64,${base64}`;
-      paths[slot.id] = picked;
-    }
-
-    setSlotPreviewUrls(urls);
-    setSlotPreviewPaths(paths);
+    setSlotPreviewUrls(result.urls);
+    setSlotPreviewPaths(result.paths);
 
     return {
-      loaded: Object.keys(paths).length,
-      total: sortedSlots.length,
-      selectedPath: paths[selectedSlot] || ''
+      loaded: result.loaded,
+      total: result.total,
+      selectedPath: result.selectedPath
     };
   }
 
   async function loadPreviewMatrix() {
-    const sortedSlots = sortSlotsByOrder(doc.project.slots);
     const locales = [...doc.project.locales];
-    let files: string[] = [];
     try {
-      files = await listPngFiles(previewRenderDir);
+      const result = await loadPreviewMatrixFromDir({
+        slots: doc.project.slots,
+        locales,
+        previewRenderDir,
+        selectedPlatform,
+        selectedDevice
+      });
+
+      setPreviewMatrixUrls(result.urlsByLocale);
+      setPreviewMatrixPaths(result.pathsByLocale);
+      return result.urlsByLocale;
     } catch {
       setPreviewMatrixUrls({});
       setPreviewMatrixPaths({});
       return {};
     }
-
-    const urlsByLocale: Record<string, Record<string, string>> = {};
-    const pathsByLocale: Record<string, Record<string, string>> = {};
-
-    for (const locale of locales) {
-      urlsByLocale[locale] = {};
-      pathsByLocale[locale] = {};
-
-      for (const slot of sortedSlots) {
-        const suffix = `${selectedPlatform}/${selectedDevice}/${locale}/${slot.id}.png`;
-        const picked = files.find((entry) => entry.endsWith(suffix));
-        if (!picked) continue;
-
-        const base64 = await readFileBase64(picked);
-        urlsByLocale[locale][slot.id] = `data:image/png;base64,${base64}`;
-        pathsByLocale[locale][slot.id] = picked;
-      }
-    }
-
-    setPreviewMatrixUrls(urlsByLocale);
-    setPreviewMatrixPaths(pathsByLocale);
-    return urlsByLocale;
   }
 
   async function handleRender() {
