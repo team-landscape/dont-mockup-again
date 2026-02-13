@@ -8,6 +8,7 @@ import { renderProject } from '../packages/renderer/src/index.ts';
 import { loadProject, layoutTextBox, validateCopyCoverage } from '../packages/core/src/index.ts';
 import { mergeByoyCopy, assertPlaceholdersPreserved, localizeProjectCopy } from '../packages/localization/src/index.ts';
 import { exportProject } from '../packages/exporter/src/index.ts';
+import { createDefaultProject } from '../apps/desktop/src/lib/project-model.ts';
 
 const rootDir = path.resolve('.');
 const sampleProjectPath = path.join(rootDir, 'examples', 'sample.storeshot.json');
@@ -46,6 +47,21 @@ test('long text stays inside box with wrap and ellipsis', () => {
   assert.equal(layout.lines.length > 0, true);
   assert.equal(layout.truncated, true);
   assert.equal(layout.text.includes('...'), true);
+});
+
+test('new project defaults to generic section placeholders', () => {
+  const doc = createDefaultProject();
+
+  assert.equal(doc.copy.keys['app.title']?.['en-US'], 'This is title section');
+  assert.equal(doc.copy.keys['app.subtitle']?.['en-US'], 'This is subtitle section');
+  assert.equal(doc.copy.keys['app.description']?.['en-US'], 'This is description section.');
+  assert.equal(doc.copy.keys['app.patchNote']?.['en-US'], 'This is patch note section.');
+  assert.equal(doc.copy.keys['slot1.title']?.['en-US'], 'This is title section');
+  assert.equal(doc.copy.keys['slot1.subtitle']?.['en-US'], 'This is subtitle section');
+  assert.equal(doc.copy.keys['slot2.title']?.['en-US'], 'This is title section');
+  assert.equal(doc.copy.keys['slot2.subtitle']?.['en-US'], 'This is subtitle section');
+  assert.equal(doc.copy.keys['slot3.title']?.['en-US'], 'This is title section');
+  assert.equal(doc.copy.keys['slot3.subtitle']?.['en-US'], 'This is subtitle section');
 });
 
 test('BYOY import detects missing keys/locales', async () => {

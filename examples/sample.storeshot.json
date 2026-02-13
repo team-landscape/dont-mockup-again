@@ -33,12 +33,16 @@
   },
   "copy": {
     "keys": {
-      "slot1.title": { "en-US": "Clean in 5 minutes", "es-ES": "Clean in 5 minutes" },
-      "slot1.subtitle": { "en-US": "Stay on track daily", "es-ES": "Stay on track daily" },
-      "slot2.title": { "en-US": "Build better habits", "es-ES": "Build better habits" },
-      "slot2.subtitle": { "en-US": "Track goals with ease", "es-ES": "Track goals with ease" },
-      "slot3.title": { "en-US": "Insights you can use", "es-ES": "Insights you can use" },
-      "slot3.subtitle": { "en-US": "Know what really works", "es-ES": "Know what really works" }
+      "app.title": { "en-US": "This is title section", "es-ES": "This is title section" },
+      "app.subtitle": { "en-US": "This is subtitle section", "es-ES": "This is subtitle section" },
+      "app.description": { "en-US": "This is description section.", "es-ES": "This is description section." },
+      "app.patchNote": { "en-US": "This is patch note section.", "es-ES": "This is patch note section." },
+      "slot1.title": { "en-US": "This is title section", "es-ES": "This is title section" },
+      "slot1.subtitle": { "en-US": "This is subtitle section", "es-ES": "This is subtitle section" },
+      "slot2.title": { "en-US": "This is title section", "es-ES": "This is title section" },
+      "slot2.subtitle": { "en-US": "This is subtitle section", "es-ES": "This is subtitle section" },
+      "slot3.title": { "en-US": "This is title section", "es-ES": "This is title section" },
+      "slot3.subtitle": { "en-US": "This is subtitle section", "es-ES": "This is subtitle section" }
     }
   },
   "pipelines": {
