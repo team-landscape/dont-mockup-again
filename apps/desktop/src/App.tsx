@@ -84,8 +84,10 @@ interface TemplateTextElement extends TemplateElementBase {
   customText: string;
   font: string;
   size: number;
+  lineHeight: number;
   weight: number;
   align: Align;
+  autoSize: boolean;
   color: string;
   backgroundColor: string;
   padding: number;
@@ -483,8 +485,10 @@ function createDefaultTemplateElements(main: Pick<TemplateMain, 'frame' | 'text'
       customText: '',
       font: main.text.title.font,
       size: main.text.title.size,
+      lineHeight: 1.2,
       weight: main.text.title.weight,
       align: main.text.title.align,
+      autoSize: true,
       color: '#f9fafb',
       backgroundColor: 'transparent',
       padding: 0,
@@ -506,8 +510,10 @@ function createDefaultTemplateElements(main: Pick<TemplateMain, 'frame' | 'text'
       customText: '',
       font: main.text.subtitle.font,
       size: main.text.subtitle.size,
+      lineHeight: 1.2,
       weight: main.text.subtitle.weight,
       align: main.text.subtitle.align,
+      autoSize: true,
       color: '#f9fafb',
       backgroundColor: 'transparent',
       padding: 0,
@@ -562,8 +568,10 @@ function normalizeTemplateElements(raw: unknown, defaults: TemplateElement[]): T
           customText: typeof source.customText === 'string' ? source.customText : '',
           font: typeof source.font === 'string' && source.font.trim() ? source.font : 'SF Pro',
           size: Math.max(1, asNumber(source.size, 48)),
+          lineHeight: Math.max(0.5, asNumber(source.lineHeight, 1.2)),
           weight: Math.max(100, asNumber(source.weight, 600)),
           align,
+          autoSize: typeof source.autoSize === 'boolean' ? source.autoSize : true,
           color: typeof source.color === 'string' && source.color.trim() ? source.color : '#f9fafb',
           backgroundColor: typeof source.backgroundColor === 'string' && source.backgroundColor.trim()
             ? source.backgroundColor
@@ -1900,8 +1908,10 @@ export function App() {
           customText: 'New text',
           font: availableFonts[0] || 'SF Pro',
           size: 64,
+          lineHeight: 1.2,
           weight: 700,
           align: 'left',
+          autoSize: true,
           color: '#f9fafb',
           backgroundColor: 'transparent',
           padding: 0,
@@ -2092,6 +2102,14 @@ export function App() {
             </LabeledField>
           ) : null}
 
+          <SwitchRow
+            label="Auto Size (Text Wrap)"
+            checked={textElement.autoSize}
+            onCheckedChange={(checked) => updateTemplateElement(textElement.id, (current) => (
+              current.kind === 'text' ? { ...current, autoSize: checked } : current
+            ))}
+          />
+
           <div className="grid gap-3 sm:grid-cols-2">
             <LabeledField label="Font">
               <FontSelector
@@ -2107,6 +2125,13 @@ export function App() {
               value={textElement.size}
               onValueChange={(value) => updateTemplateElement(textElement.id, (current) => (
                 current.kind === 'text' ? { ...current, size: value } : current
+              ))}
+            />
+            <NumberField
+              label="Line Height"
+              value={textElement.lineHeight}
+              onValueChange={(value) => updateTemplateElement(textElement.id, (current) => (
+                current.kind === 'text' ? { ...current, lineHeight: Math.max(0.5, value || 1) } : current
               ))}
             />
             <NumberField
@@ -2396,11 +2421,13 @@ export function App() {
                 <NumberField
                   label="Width"
                   value={selectedTemplateElement.w}
+                  disabled={selectedTemplateElement.kind === 'text' && selectedTemplateElement.autoSize}
                   onValueChange={(value) => updateTemplateElement(selectedTemplateElement.id, (current) => ({ ...current, w: value }))}
                 />
                 <NumberField
                   label="Height"
                   value={selectedTemplateElement.h}
+                  disabled={selectedTemplateElement.kind === 'text' && selectedTemplateElement.autoSize}
                   onValueChange={(value) => updateTemplateElement(selectedTemplateElement.id, (current) => ({ ...current, h: value }))}
                 />
                 <NumberField
@@ -2800,13 +2827,15 @@ interface NumberFieldProps {
   label: string;
   value: number;
   onValueChange: (value: number) => void;
+  disabled?: boolean;
 }
 
-function NumberField({ label, value, onValueChange }: NumberFieldProps) {
+function NumberField({ label, value, onValueChange, disabled = false }: NumberFieldProps) {
   return (
     <LabeledField label={label}>
       <Input
         type="number"
+        disabled={disabled}
         value={Number.isFinite(value) ? String(value) : ''}
         onChange={(event) => onValueChange(Number(event.target.value))}
       />
@@ -4384,6 +4413,76 @@ function wrapLines(
   return lines;
 }
 
+function getTextValueBySource(layer: TemplateTextElement, title: string, subtitle: string) {
+  if (layer.textSource === 'title') return title;
+  if (layer.textSource === 'subtitle') return subtitle;
+  return layer.customText;
+}
+
+function splitTextLines(text: string) {
+  const normalized = String(text || '').replace(/\r/g, '');
+  const lines = normalized.split('\n');
+  return lines.length > 0 ? lines : [''];
+}
+
+function getTextLineHeightPx(layer: TemplateTextElement) {
+  const ratio = Math.max(0.5, layer.lineHeight || 1.2);
+  return Math.max(1, layer.size || 48) * ratio;
+}
+
+function resolveAutoTextSize(
+  context: CanvasRenderingContext2D,
+  layer: TemplateTextElement,
+  text: string
+) {
+  const size = Math.max(1, layer.size || 48);
+  const weight = layer.weight || 600;
+  const family = layer.font || 'SF Pro';
+  const padding = Math.max(0, layer.padding || 0);
+  const lineHeightPx = getTextLineHeightPx(layer);
+  const lines = splitTextLines(text);
+
+  context.save();
+  context.font = `${weight} ${size}px "${family}", "Apple SD Gothic Neo", sans-serif`;
+  let maxLineWidth = 0;
+  for (const line of lines) {
+    maxLineWidth = Math.max(maxLineWidth, context.measureText(line).width);
+  }
+  context.restore();
+
+  const contentWidth = Math.max(1, Math.ceil(maxLineWidth));
+  const contentHeight = Math.max(1, Math.ceil(lines.length * lineHeightPx));
+
+  return {
+    width: Math.max(1, contentWidth + Math.ceil(padding * 2)),
+    height: Math.max(1, contentHeight + Math.ceil(padding * 2))
+  };
+}
+
+function resolvePreviewLayer(
+  context: CanvasRenderingContext2D,
+  layer: TemplateElement,
+  title: string,
+  subtitle: string
+): TemplateElement {
+  if (layer.kind !== 'text' || !layer.autoSize) {
+    return layer;
+  }
+
+  const text = getTextValueBySource(layer, title, subtitle);
+  const { width, height } = resolveAutoTextSize(context, layer, text);
+
+  if (layer.w === width && layer.h === height) {
+    return layer;
+  }
+
+  return {
+    ...layer,
+    w: width,
+    h: height
+  };
+}
+
 function drawTextBlock(
   context: CanvasRenderingContext2D,
   layer: TemplateTextElement,
@@ -4396,7 +4495,7 @@ function drawTextBlock(
   const contentX = layer.x + padding;
   const contentY = layer.y + padding;
   const contentWidth = Math.max(1, layer.w - padding * 2);
-  const lineHeight = size * 1.2;
+  const lineHeight = getTextLineHeightPx(layer);
 
   if (layer.backgroundColor && layer.backgroundColor !== 'transparent') {
     context.save();
@@ -4478,6 +4577,19 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
       .sort((a, b) => a.z - b.z),
     [template.elements]
   );
+  const previewLayers = useMemo(() => {
+    if (typeof document === 'undefined') {
+      return editableLayers;
+    }
+
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return editableLayers;
+    }
+
+    return editableLayers.map((layer) => resolvePreviewLayer(context, layer, title, subtitle));
+  }, [editableLayers, subtitle, title]);
 
   const handleLayerPointerDown = useCallback((
     event: ReactPointerEvent<HTMLDivElement>,
@@ -4618,8 +4730,8 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
     const worldX = (relativeX / rect.width) * width;
     const worldY = (relativeY / rect.height) * height;
 
-    for (let index = editableLayers.length - 1; index >= 0; index -= 1) {
-      const layer = editableLayers[index];
+    for (let index = previewLayers.length - 1; index >= 0; index -= 1) {
+      const layer = previewLayers[index];
       if (
         worldX >= layer.x
         && worldX <= layer.x + layer.w
@@ -4632,7 +4744,7 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
     }
 
     return false;
-  }, [editable, editableLayers, height, onSelectElement, width]);
+  }, [editable, height, onSelectElement, previewLayers, width]);
 
   const handlePreviewDoubleClick = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     const selected = selectLayerAtClientPoint(event.clientX, event.clientY);
@@ -4646,7 +4758,7 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
     if (!dragLayerPosition) return;
     if (layerDragRef.current) return;
 
-    const layer = editableLayers.find((entry) => entry.id === dragLayerPosition.elementId);
+    const layer = previewLayers.find((entry) => entry.id === dragLayerPosition.elementId);
     if (!layer) {
       setDragLayerPosition(null);
       return;
@@ -4657,7 +4769,7 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
     if (isSynced) {
       setDragLayerPosition(null);
     }
-  }, [dragLayerPosition, editableLayers]);
+  }, [dragLayerPosition, previewLayers]);
 
   useEffect(() => {
     let cancelled = false;
@@ -4700,11 +4812,7 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
       }
       context.fillRect(0, 0, width, height);
 
-      const layers = [...template.elements]
-        .filter((item) => item.visible !== false)
-        .sort((a, b) => a.z - b.z);
-
-      for (const layer of layers) {
+      for (const layer of previewLayers) {
         const activeLayer = dragLayerPosition?.elementId === layer.id
           ? {
             ...layer,
@@ -4811,7 +4919,7 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
     return () => {
       cancelled = true;
     };
-  }, [dragLayerPosition, height, previewSize.height, previewSize.renderScale, previewSize.width, renderedPreviewUrl, sourceImageUrl, subtitle, template, templateImageUrls, title, width]);
+  }, [dragLayerPosition, height, previewLayers, previewSize.height, previewSize.renderScale, previewSize.width, renderedPreviewUrl, sourceImageUrl, templateImageUrls, width]);
 
   useEffect(() => {
     return () => {
@@ -4835,7 +4943,7 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
 
       {editable ? (
         <div className="pointer-events-none absolute inset-0">
-          {editableLayers
+          {previewLayers
             .filter((layer) => layer.id === selectedElementId)
             .map((layer) => {
               const currentX = dragLayerPosition?.elementId === layer.id ? dragLayerPosition.x : layer.x;
