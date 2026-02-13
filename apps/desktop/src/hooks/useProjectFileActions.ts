@@ -159,7 +159,7 @@ export function useProjectFileActions({
     if (hasUnsavedChanges) {
       const shouldSave = typeof window === 'undefined' || typeof window.confirm !== 'function'
         ? true
-        : window.confirm('저장되지 않은 변경사항이 있습니다. New 전에 먼저 저장할까요?');
+        : window.confirm('You have unsaved changes. Save before creating a new project?');
 
       if (!shouldSave) {
         setProjectStatus('New cancelled.');

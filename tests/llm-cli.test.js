@@ -55,7 +55,7 @@ process.stdout.write(JSON.stringify({ entries }));
 function createDoc(argsTemplate) {
   return {
     project: {
-      locales: ['en-US', 'ko-KR']
+      locales: ['en-US', 'es-ES']
     },
     copy: {
       keys: {
@@ -85,9 +85,9 @@ test('llm-cli retries legacy gemini args with prompt mode', async () => {
     const result = await localizeProjectCopy(doc, { projectDir });
 
     assert.equal(result.mode, 'llm-cli');
-    assert.equal(result.byLocale['ko-KR'], 2);
-    assert.equal(doc.copy.keys['slot1.title']['ko-KR'], 'Clean in 5 minutes [ko-KR]');
-    assert.equal(doc.copy.keys['slot1.subtitle']['ko-KR'], 'Stay on track daily [ko-KR]');
+    assert.equal(result.byLocale['es-ES'], 2);
+    assert.equal(doc.copy.keys['slot1.title']['es-ES'], 'Clean in 5 minutes [es-ES]');
+    assert.equal(doc.copy.keys['slot1.subtitle']['es-ES'], 'Stay on track daily [es-ES]');
   });
 });
 
@@ -97,7 +97,7 @@ test('llm-cli uses prompt mode for gemini when argsTemplate is empty', async () 
     const result = await localizeProjectCopy(doc, { projectDir });
 
     assert.equal(result.mode, 'llm-cli');
-    assert.equal(result.byLocale['ko-KR'], 2);
-    assert.equal(doc.copy.keys['slot1.title']['ko-KR'], 'Clean in 5 minutes [ko-KR]');
+    assert.equal(result.byLocale['es-ES'], 2);
+    assert.equal(doc.copy.keys['slot1.title']['es-ES'], 'Clean in 5 minutes [es-ES]');
   });
 });

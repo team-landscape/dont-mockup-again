@@ -1,4 +1,4 @@
-# dont mockup again
+# Don't Mockup Again
 
 Store screenshot automation toolkit with a desktop UI (Tauri + React) and reusable pipeline modules.
 

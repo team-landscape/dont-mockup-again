@@ -573,7 +573,7 @@ export function App() {
       <BusyOverlay
         open={isBusy}
         title={busyTitle || 'Processing'}
-        detail={busyDetail || '작업을 실행하고 있습니다. 잠시만 기다려 주세요.'}
+        detail={busyDetail || 'Running task. Please wait.'}
       />
 
       <OnboardingOverlay

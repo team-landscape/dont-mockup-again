@@ -328,7 +328,7 @@ export function TemplateInspectorSection({
           <CardHeader>
             <CardTitle>Background</CardTitle>
             <CardDescription>
-              {selectedSlotData ? `${selectedSlotData.id} 배경 설정` : '슬롯별 배경 설정'}
+              {selectedSlotData ? `${selectedSlotData.id} background settings` : 'Background settings per slot'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -377,7 +377,7 @@ export function TemplateInspectorSection({
         <Card className="border-dashed">
           <CardHeader>
             <CardTitle>Layers</CardTitle>
-            <CardDescription>선택한 슬롯에만 적용되는 텍스트/이미지 요소를 편집합니다.</CardDescription>
+            <CardDescription>Edit text/image layers applied only to the selected slot.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-wrap gap-2">

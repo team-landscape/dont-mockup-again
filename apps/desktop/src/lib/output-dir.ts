@@ -1,5 +1,5 @@
-const SERVICE_DIR_SUFFIX = '/dont mockup again';
-const LEGACY_DIR_SUFFIXES = ['/Store Metadata Studio', '/유저/Store Metadata Studio'];
+const SERVICE_DIR_SUFFIX = "/Don't Mockup Again";
+const LEGACY_DIR_SUFFIXES = ['/dont mockup again', '/Store Metadata Studio'];
 
 export function deriveHomeDir(defaultExportDir: string): string {
   if (!defaultExportDir || !defaultExportDir.endsWith(SERVICE_DIR_SUFFIX)) {

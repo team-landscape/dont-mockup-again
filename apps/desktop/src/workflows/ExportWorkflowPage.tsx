@@ -39,7 +39,7 @@ export function ExportWorkflowPage({
         <Card>
           <CardHeader>
             <CardTitle>Export</CardTitle>
-            <CardDescription>dist/zip layout 생성</CardDescription>
+            <CardDescription>Create dist/zip layout</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <LabeledField label="Output Dir">

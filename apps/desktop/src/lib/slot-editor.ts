@@ -63,7 +63,7 @@ export function applyAddSlot(next: StoreShotDoc): string {
   const nextIndex = next.project.slots.length + 1;
   const newSlot = {
     id: nextId,
-    name: `슬롯 ${nextNumber}`,
+    name: `Slot ${nextNumber}`,
     order: nextIndex,
     sourceImagePath: ''
   };

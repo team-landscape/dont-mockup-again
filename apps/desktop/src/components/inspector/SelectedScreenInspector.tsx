@@ -52,7 +52,7 @@ export function SelectedScreenInspector({
         <CardHeader>
           <CardTitle>Selected Screen Inspector</CardTitle>
           <CardDescription>
-            {selectedSlotData ? `${selectedSlotData.name} · ${selectedLocale}` : '선택된 슬롯이 없습니다.'}
+            {selectedSlotData ? `${selectedSlotData.name} · ${selectedLocale}` : 'No slot selected.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -123,7 +123,7 @@ export function SelectedScreenInspector({
               </div>
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">슬롯을 추가하거나 선택해 주세요.</p>
+            <p className="text-sm text-muted-foreground">Add or select a slot to continue.</p>
           )}
         </CardContent>
       </Card>

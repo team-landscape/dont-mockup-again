@@ -7,7 +7,7 @@
 
 ### 0) 프로젝트 이름
 
-**dont mockup again**
+**Don't Mockup Again**
 
 ---
 

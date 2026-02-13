@@ -51,7 +51,7 @@ export function ScreensWorkflowPage({
           <CardHeader className="gap-3 pb-2">
             <div className="space-y-2">
               <CardTitle>Screens Composer</CardTitle>
-              <CardDescription>캔버스 위에서 슬롯을 배치하고 바로 편집합니다.</CardDescription>
+              <CardDescription>Arrange slots on canvas and edit instantly.</CardDescription>
               <div className="flex flex-wrap gap-2">
                 <Badge variant="secondary">{selectedDevice}</Badge>
                 <Badge variant="outline">{slotCount} slots</Badge>

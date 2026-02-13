@@ -69,7 +69,7 @@ export function LocalizationWorkflowPage({
         <Card>
           <CardHeader>
             <CardTitle>Localization Pipeline</CardTitle>
-            <CardDescription>Local LLM CLI 설정</CardDescription>
+            <CardDescription>Configure local LLM CLI</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <LabeledField label="Source Locale">

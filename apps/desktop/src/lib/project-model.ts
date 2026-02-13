@@ -183,7 +183,6 @@ export const devicePresets: Array<{ label: string; value: Device }> = [
 
 export const localePresets = [
   'en-US',
-  'ko-KR',
   'ja-JP',
   'zh-CN',
   'zh-TW',
@@ -752,9 +751,9 @@ export function syncTemplateLegacyFields(main: TemplateMain, slotWidth = 1290): 
 
 export function createDefaultProject(): StoreShotDoc {
   const defaultSlots: Slot[] = [
-    { id: 'slot1', name: '슬롯 1', order: 1, sourceImagePath: 'examples/assets/source/shot1.png' },
-    { id: 'slot2', name: '슬롯 2', order: 2, sourceImagePath: 'examples/assets/source/shot2.png' },
-    { id: 'slot3', name: '슬롯 3', order: 3, sourceImagePath: 'examples/assets/source/shot3.png' }
+    { id: 'slot1', name: 'Slot 1', order: 1, sourceImagePath: 'examples/assets/source/shot1.png' },
+    { id: 'slot2', name: 'Slot 2', order: 2, sourceImagePath: 'examples/assets/source/shot2.png' },
+    { id: 'slot3', name: 'Slot 3', order: 3, sourceImagePath: 'examples/assets/source/shot3.png' }
   ];
 
   const defaultBackground: TemplateBackground = { type: 'gradient', from: '#111827', to: '#1f2937', direction: '180deg' };
@@ -779,11 +778,11 @@ export function createDefaultProject(): StoreShotDoc {
   return {
     schemaVersion: 1,
     project: {
-      name: 'dont mockup again project',
+      name: "Don't Mockup Again Project",
       bundleId: 'com.example.app',
       packageName: 'com.example.app',
       platforms: ['ios', 'android'],
-      locales: ['en-US', 'ko-KR'],
+      locales: ['en-US'],
       devices: clone(devicePresets.map((preset) => preset.value)),
       slots: defaultSlots
     },
@@ -793,22 +792,16 @@ export function createDefaultProject(): StoreShotDoc {
     },
     copy: {
       keys: {
-        'app.title': { 'en-US': 'Focus Habit Tracker', 'ko-KR': '포커스 습관 트래커' },
-        'app.subtitle': { 'en-US': 'Build better routines daily', 'ko-KR': '매일 더 나은 루틴 만들기' },
-        'app.description': {
-          'en-US': 'Build routines with simple daily actions, progress insights, and reminders that keep your momentum going.',
-          'ko-KR': '간단한 일일 액션, 진행 지표, 리마인더로 루틴을 만들고 꾸준함을 이어가세요.'
-        },
-        'app.patchNote': {
-          'en-US': 'Bug fixes and performance improvements for a smoother onboarding and faster loading.',
-          'ko-KR': '온보딩 안정성과 로딩 속도를 개선하기 위한 버그 수정 및 성능 향상이 포함되었습니다.'
-        },
-        'slot1.title': { 'en-US': 'Clean in 5 minutes', 'ko-KR': '하루 5분이면 충분해요' },
-        'slot1.subtitle': { 'en-US': 'Stay on track daily', 'ko-KR': '매일 작게 시작해도 루틴이 됩니다' },
-        'slot2.title': { 'en-US': 'Build better habits', 'ko-KR': '작은 습관으로 큰 변화를' },
-        'slot2.subtitle': { 'en-US': 'Track goals with ease', 'ko-KR': '목표 진행 상황을 한눈에 관리' },
-        'slot3.title': { 'en-US': 'Insights you can use', 'ko-KR': '지표로 보는 성장 흐름' },
-        'slot3.subtitle': { 'en-US': 'Know what really works', 'ko-KR': '무엇이 효과적인지 바로 확인' }
+        'app.title': { 'en-US': 'This is title section' },
+        'app.subtitle': { 'en-US': 'This is subtitle section' },
+        'app.description': { 'en-US': 'This is description section.' },
+        'app.patchNote': { 'en-US': 'This is patch note section.' },
+        'slot1.title': { 'en-US': 'This is title section' },
+        'slot1.subtitle': { 'en-US': 'This is subtitle section' },
+        'slot2.title': { 'en-US': 'This is title section' },
+        'slot2.subtitle': { 'en-US': 'This is subtitle section' },
+        'slot3.title': { 'en-US': 'This is title section' },
+        'slot3.subtitle': { 'en-US': 'This is subtitle section' }
       }
     },
     pipelines: {
@@ -842,7 +835,7 @@ export function normalizeProject(raw: unknown): StoreShotDoc {
   const normalizedSlots = (doc.project?.slots || base.project.slots)
     .map((slot, index) => ({
       ...slot,
-      name: typeof slot.name === 'string' && slot.name.trim() ? slot.name : `슬롯 ${index + 1}`,
+      name: typeof slot.name === 'string' && slot.name.trim() ? slot.name : `Slot ${index + 1}`,
       order: slot.order || index + 1
     }))
     .sort((a, b) => a.order - b.order);

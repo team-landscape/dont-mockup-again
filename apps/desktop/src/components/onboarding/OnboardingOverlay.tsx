@@ -36,8 +36,8 @@ export function OnboardingOverlay({
     <div className="fixed inset-0 z-50 grid place-items-center bg-background/90 p-4 backdrop-blur-sm">
       <Card className="w-full max-w-[760px] shadow-2xl">
         <CardHeader>
-          <CardTitle>Welcome to dont mockup again</CardTitle>
-          <CardDescription>첫 실행 설정입니다. 로케일/플랫폼/디바이스를 먼저 선택하세요.</CardDescription>
+          <CardTitle>Welcome to Don't Mockup Again</CardTitle>
+          <CardDescription>First-run setup. Select locale, platform, and device.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2 rounded-lg border p-3">
@@ -75,7 +75,7 @@ export function OnboardingOverlay({
 
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
-              {ready ? 'Ready to start.' : '최소 1개 locale, 1개 platform, 1개 device가 필요합니다.'}
+              {ready ? 'Ready to start.' : 'At least 1 locale, 1 platform, and 1 device are required.'}
             </p>
             <Button disabled={!ready} onClick={onStart}>
               Start

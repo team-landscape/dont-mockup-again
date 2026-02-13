@@ -38,8 +38,8 @@ test('renders 12 outputs for 3 slots x 2 locales x 2 devices', async () => {
   }
 });
 
-test('ko-KR long text stays inside box with wrap and ellipsis', () => {
-  const longText = '하루 5분만 투자해도 루틴이 만들어지고 꾸준함이 성과로 이어지는 경험을 지금 바로 시작해 보세요';
+test('long text stays inside box with wrap and ellipsis', () => {
+  const longText = 'Spend just five minutes a day to build a routine and maintain momentum without feeling overwhelmed.';
   const layout = layoutTextBox(longText, 420, 120, 36, { ellipsis: true });
 
   assert.equal(layout.lines.length <= layout.maxLines, true);
@@ -54,25 +54,25 @@ test('BYOY import detects missing keys/locales', async () => {
   doc.copy = { keys: {} };
 
   mergeByoyCopy(doc, {
-    'slot1.title': { 'en-US': 'Clean in 5 minutes', 'ko-KR': '하루 5분이면 충분해요' },
+    'slot1.title': { 'en-US': 'Clean in 5 minutes', 'es-ES': 'Clean in 5 minutes' },
     'slot1.subtitle': { 'en-US': 'Stay on track daily' }
   });
 
   const coverage = validateCopyCoverage(doc);
 
   assert.equal(coverage.ok, false);
-  assert.equal(coverage.missing.some((item) => item.key === 'slot1.subtitle' && item.locale === 'ko-KR'), true);
+  assert.equal(coverage.missing.some((item) => item.key === 'slot1.subtitle' && item.locale === 'es-ES'), true);
   assert.equal(coverage.missing.some((item) => item.key === 'slot2.title' && item.locale === 'en-US'), true);
 });
 
 test('placeholder protection rejects broken translation', () => {
   assert.doesNotThrow(() => {
-    assertPlaceholdersPreserved('Welcome {app_name} %@ {{count}}', '환영합니다 {app_name} %@ {{count}}', 'sample');
+    assertPlaceholdersPreserved('Welcome {app_name} %@ {{count}}', 'Welcome {app_name} %@ {{count}}', 'sample');
   });
 
   let failed = false;
   try {
-    assertPlaceholdersPreserved('Welcome {app_name} %@', '환영합니다 app_name', 'broken');
+    assertPlaceholdersPreserved('Welcome {app_name} %@', 'Welcome app_name', 'broken');
   } catch (error) {
     failed = true;
     assert.equal(error.code, 'PLACEHOLDER_MISMATCH');
