@@ -154,13 +154,13 @@ export function LocalizationWorkflowPage({
           </CardContent>
         </Card>
 
-        <Card className="xl:min-h-[780px]">
+        <Card className="min-h-[calc(100vh-220px)]">
           <CardHeader>
             <CardTitle>Copy Editor</CardTitle>
             <CardDescription>{slots.length} slot(s) · {locales.length} locale(s)</CardDescription>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-[620px] xl:h-[700px] pr-2">
+            <ScrollArea className="h-[calc(100vh-320px)] pr-2">
               <div className="space-y-2">
                 {slots.map((slot) => (
                   <div key={slot.id} className="rounded-md border p-3">

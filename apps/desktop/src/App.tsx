@@ -1158,6 +1158,10 @@ export function App() {
     setBusyTitle(options.title || 'Processing');
     setBusyDetail(options.detail || 'Please wait...');
     setIsBusy(true);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    if (typeof window !== 'undefined') {
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    }
     try {
       await action({ setTitle: updateTitle, setDetail: updateDetail });
     } finally {
