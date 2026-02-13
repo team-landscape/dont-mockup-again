@@ -1748,6 +1748,32 @@ export function App() {
     }
   }, [templateImageUrls]);
 
+  const collectExpectedRenderSuffixes = useCallback((snapshot: StoreShotDoc) => {
+    const suffixes: string[] = [];
+    const slots = sortSlotsByOrder(snapshot.project.slots || []);
+    const locales = snapshot.project.locales || [];
+    const platforms = snapshot.project.platforms || [];
+    const devices = snapshot.project.devices || [];
+
+    for (const device of devices) {
+      const platform = detectDevicePlatform(device, platforms);
+      if (platforms.length > 0 && !platforms.includes(platform)) continue;
+      for (const locale of locales) {
+        for (const slot of slots) {
+          suffixes.push(`${platform}/${device.id}/${locale}/${slot.id}.png`);
+        }
+      }
+    }
+
+    return suffixes;
+  }, []);
+
+  const findMissingRenderedFiles = useCallback(async (baseDir: string, expectedSuffixes: string[]) => {
+    const files = await listPngFiles(baseDir);
+    const missing = expectedSuffixes.filter((suffix) => !files.some((entry) => entry.endsWith(suffix)));
+    return { files, missing };
+  }, []);
+
   async function handleRender() {
     await runWithBusy(async ({ setDetail }) => {
       setDetail('Saving project config...');
@@ -1791,9 +1817,26 @@ export function App() {
 
         setDetail('Saving project config...');
         const snapshot = await persistProjectSnapshot();
+        const expectedSuffixes = collectExpectedRenderSuffixes(snapshot);
+        if (expectedSuffixes.length === 0) {
+          throw new Error('No export targets found. Check slots/locales/devices/platforms.');
+        }
+
         await renderExportImagesFromPreview(snapshot, previewRenderDir, setDetail);
+        setDetail('Verifying preview renders...');
+        const previewCheck = await findMissingRenderedFiles(previewRenderDir, expectedSuffixes);
+        if (previewCheck.missing.length > 0) {
+          throw new Error(`Preview render missing ${previewCheck.missing.length} file(s). Example: ${previewCheck.missing[0]}`);
+        }
+
         setDetail('Exporting preview renders...');
         await runPipeline('export', [projectPath, previewRenderDir, resolvedOutputDir, ...flags]);
+
+        setDetail('Verifying exported files...');
+        const exportCheck = await findMissingRenderedFiles(resolvedOutputDir, expectedSuffixes);
+        if (exportCheck.missing.length > 0) {
+          throw new Error(`Export output missing ${exportCheck.missing.length} file(s). Example: ${exportCheck.missing[0]}`);
+        }
       }, {
         action: 'export',
         title: 'Exporting',
