@@ -4447,6 +4447,13 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
     scaleX: number;
     scaleY: number;
   } | null>(null);
+  const [dragLayerPosition, setDragLayerPosition] = useState<{
+    elementId: string;
+    x: number;
+    y: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
   const width = Math.max(1, device.width || 1290);
   const height = Math.max(1, device.height || 2796);
   const previewSize = useMemo(
@@ -4473,6 +4480,13 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
     const scaleY = rect.height > 0 ? rect.height / height : 1;
 
     onSelectElement(layer.id);
+    setDragLayerPosition({
+      elementId: layer.id,
+      x: layer.x,
+      y: layer.y,
+      originX: layer.x,
+      originY: layer.y
+    });
     layerDragRef.current = {
       pointerId: event.pointerId,
       elementId: layer.id,
@@ -4494,7 +4508,6 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
   const handleLayerPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const state = layerDragRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
-    if (!onMoveElement) return;
 
     const nextX = clampNumber(
       state.originX + ((event.clientX - state.startClientX) / Math.max(0.001, state.scaleX)),
@@ -4507,23 +4520,53 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
       Math.max(0, height - state.elementH)
     );
 
-    onMoveElement(state.elementId, nextX, nextY);
+    setDragLayerPosition((current) => {
+      if (!current || current.elementId !== state.elementId) {
+        return {
+          elementId: state.elementId,
+          x: nextX,
+          y: nextY,
+          originX: state.originX,
+          originY: state.originY
+        };
+      }
+
+      if (Math.abs(current.x - nextX) < 0.01 && Math.abs(current.y - nextY) < 0.01) {
+        return current;
+      }
+
+      return {
+        ...current,
+        x: nextX,
+        y: nextY
+      };
+    });
 
     event.stopPropagation();
     event.preventDefault();
-  }, [height, onMoveElement, width]);
+  }, [height, width]);
 
   const handleLayerPointerEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const state = layerDragRef.current;
     if (!state || state.pointerId !== event.pointerId) return;
 
+    const finalX = dragLayerPosition?.elementId === state.elementId ? dragLayerPosition.x : state.originX;
+    const finalY = dragLayerPosition?.elementId === state.elementId ? dragLayerPosition.y : state.originY;
+    if (
+      onMoveElement
+      && (Math.abs(finalX - state.originX) >= 0.01 || Math.abs(finalY - state.originY) >= 0.01)
+    ) {
+      onMoveElement(state.elementId, finalX, finalY);
+    }
+
     layerDragRef.current = null;
+    setDragLayerPosition(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     event.stopPropagation();
     event.preventDefault();
-  }, []);
+  }, [dragLayerPosition, onMoveElement]);
 
   const selectLayerAtClientPoint = useCallback((clientX: number, clientY: number) => {
     if (!editable || !onSelectElement) return false;
@@ -4612,10 +4655,17 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
         .sort((a, b) => a.z - b.z);
 
       for (const layer of layers) {
-        const opacity = clampNumber(layer.opacity, 0, 100) / 100;
-        const centerX = layer.x + layer.w / 2;
-        const centerY = layer.y + layer.h / 2;
-        const radians = (layer.rotation * Math.PI) / 180;
+        const activeLayer = dragLayerPosition?.elementId === layer.id
+          ? {
+            ...layer,
+            x: dragLayerPosition.x,
+            y: dragLayerPosition.y
+          }
+          : layer;
+        const opacity = clampNumber(activeLayer.opacity, 0, 100) / 100;
+        const centerX = activeLayer.x + activeLayer.w / 2;
+        const centerY = activeLayer.y + activeLayer.h / 2;
+        const radians = (activeLayer.rotation * Math.PI) / 180;
 
         context.save();
         context.translate(centerX, centerY);
@@ -4623,27 +4673,27 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
         context.translate(-centerX, -centerY);
         context.globalAlpha = context.globalAlpha * opacity;
 
-        if (layer.kind === 'text') {
-          const textValue = layer.textSource === 'title'
+        if (activeLayer.kind === 'text') {
+          const textValue = activeLayer.textSource === 'title'
             ? title
-            : layer.textSource === 'subtitle'
+            : activeLayer.textSource === 'subtitle'
               ? subtitle
-              : layer.customText;
-          drawTextBlock(context, layer, textValue);
+              : activeLayer.customText;
+          drawTextBlock(context, activeLayer, textValue);
           context.restore();
           continue;
         }
 
         context.save();
-        drawRoundedRectPath(context, layer.x, layer.y, layer.w, layer.h, layer.cornerRadius || 0);
+        drawRoundedRectPath(context, activeLayer.x, activeLayer.y, activeLayer.w, activeLayer.h, activeLayer.cornerRadius || 0);
         context.fillStyle = 'rgba(15,23,42,0.7)';
         context.fill();
         context.restore();
 
-        const imageSource = layer.source === 'customImage'
+        const imageSource = activeLayer.source === 'customImage'
           ? (
-            templateImageUrls[slotTemplateImageKey(slotId, layer.id)]
-            || templateImageUrls[globalTemplateImageKey(layer.id)]
+            templateImageUrls[slotTemplateImageKey(slotId, activeLayer.id)]
+            || templateImageUrls[globalTemplateImageKey(activeLayer.id)]
             || sourceImageUrl
             || renderedPreviewUrl
           )
@@ -4656,27 +4706,27 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
 
             const imageWidth = Math.max(1, image.naturalWidth || image.width);
             const imageHeight = Math.max(1, image.naturalHeight || image.height);
-            const scale = layer.fit === 'contain'
-              ? Math.min(layer.w / imageWidth, layer.h / imageHeight)
-              : Math.max(layer.w / imageWidth, layer.h / imageHeight);
+            const scale = activeLayer.fit === 'contain'
+              ? Math.min(activeLayer.w / imageWidth, activeLayer.h / imageHeight)
+              : Math.max(activeLayer.w / imageWidth, activeLayer.h / imageHeight);
             const drawWidth = imageWidth * scale;
             const drawHeight = imageHeight * scale;
-            const drawX = layer.x + (layer.w - drawWidth) / 2;
-            const drawY = layer.y + (layer.h - drawHeight) / 2;
+            const drawX = activeLayer.x + (activeLayer.w - drawWidth) / 2;
+            const drawY = activeLayer.y + (activeLayer.h - drawHeight) / 2;
 
             context.save();
-            drawRoundedRectPath(context, layer.x, layer.y, layer.w, layer.h, layer.cornerRadius || 0);
+            drawRoundedRectPath(context, activeLayer.x, activeLayer.y, activeLayer.w, activeLayer.h, activeLayer.cornerRadius || 0);
             context.clip();
             context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
             context.restore();
           } catch {
-            drawCheckerPattern(context, layer.x, layer.y, layer.w, layer.h, 28);
+            drawCheckerPattern(context, activeLayer.x, activeLayer.y, activeLayer.w, activeLayer.h, 28);
           }
         } else {
           context.save();
-          drawRoundedRectPath(context, layer.x, layer.y, layer.w, layer.h, layer.cornerRadius || 0);
+          drawRoundedRectPath(context, activeLayer.x, activeLayer.y, activeLayer.w, activeLayer.h, activeLayer.cornerRadius || 0);
           context.clip();
-          drawCheckerPattern(context, layer.x, layer.y, layer.w, layer.h, 28);
+          drawCheckerPattern(context, activeLayer.x, activeLayer.y, activeLayer.w, activeLayer.h, 28);
           context.restore();
 
           context.save();
@@ -4684,20 +4734,20 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
           context.font = `${Math.max(20, Math.round(width * 0.024))}px "SF Pro", sans-serif`;
           context.textAlign = 'center';
           context.textBaseline = 'middle';
-          context.fillText('Select image', layer.x + layer.w / 2, layer.y + layer.h / 2);
+          context.fillText('Select image', activeLayer.x + activeLayer.w / 2, activeLayer.y + activeLayer.h / 2);
           context.restore();
         }
 
-        if (layer.deviceFrame) {
-          const frameX = layer.x + layer.frameInset;
-          const frameY = layer.y + layer.frameInset;
-          const frameW = Math.max(0, layer.w - layer.frameInset * 2);
-          const frameH = Math.max(0, layer.h - layer.frameInset * 2);
+        if (activeLayer.deviceFrame) {
+          const frameX = activeLayer.x + activeLayer.frameInset;
+          const frameY = activeLayer.y + activeLayer.frameInset;
+          const frameW = Math.max(0, activeLayer.w - activeLayer.frameInset * 2);
+          const frameH = Math.max(0, activeLayer.h - activeLayer.frameInset * 2);
           if (frameW > 0 && frameH > 0) {
             context.save();
-            drawRoundedRectPath(context, frameX, frameY, frameW, frameH, layer.frameRadius);
-            context.lineWidth = layer.frameWidth;
-            context.strokeStyle = layer.frameColor || '#ffffff';
+            drawRoundedRectPath(context, frameX, frameY, frameW, frameH, activeLayer.frameRadius);
+            context.lineWidth = activeLayer.frameWidth;
+            context.strokeStyle = activeLayer.frameColor || '#ffffff';
             context.stroke();
             context.restore();
           }
@@ -4711,7 +4761,7 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
     return () => {
       cancelled = true;
     };
-  }, [height, previewSize.height, previewSize.renderScale, previewSize.width, renderedPreviewUrl, sourceImageUrl, subtitle, template, templateImageUrls, title, width]);
+  }, [dragLayerPosition, height, previewSize.height, previewSize.renderScale, previewSize.width, renderedPreviewUrl, sourceImageUrl, subtitle, template, templateImageUrls, title, width]);
 
   useEffect(() => {
     return () => {
@@ -4737,22 +4787,27 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
         <div className="pointer-events-none absolute inset-0">
           {editableLayers
             .filter((layer) => layer.id === selectedElementId)
-            .map((layer) => (
-              <div
-                key={layer.id}
-                className="pointer-events-auto absolute cursor-move rounded-md border border-primary bg-transparent shadow-[0_0_0_1px_rgba(14,165,233,0.45)]"
-                style={{
-                  left: `${(layer.x / width) * 100}%`,
-                  top: `${(layer.y / height) * 100}%`,
-                  width: `${(layer.w / width) * 100}%`,
-                  height: `${(layer.h / height) * 100}%`
-                }}
-                onPointerDown={(event) => handleLayerPointerDown(event, layer)}
-                onPointerMove={handleLayerPointerMove}
-                onPointerUp={handleLayerPointerEnd}
-                onPointerCancel={handleLayerPointerEnd}
-              />
-            ))}
+            .map((layer) => {
+              const currentX = dragLayerPosition?.elementId === layer.id ? dragLayerPosition.x : layer.x;
+              const currentY = dragLayerPosition?.elementId === layer.id ? dragLayerPosition.y : layer.y;
+
+              return (
+                <div
+                  key={layer.id}
+                  className="pointer-events-auto absolute cursor-move rounded-md border border-primary bg-transparent shadow-[0_0_0_1px_rgba(14,165,233,0.45)]"
+                  style={{
+                    left: `${(currentX / width) * 100}%`,
+                    top: `${(currentY / height) * 100}%`,
+                    width: `${(layer.w / width) * 100}%`,
+                    height: `${(layer.h / height) * 100}%`
+                  }}
+                  onPointerDown={(event) => handleLayerPointerDown(event, layer)}
+                  onPointerMove={handleLayerPointerMove}
+                  onPointerUp={handleLayerPointerEnd}
+                  onPointerCancel={handleLayerPointerEnd}
+                />
+              );
+            })}
         </div>
       ) : null}
     </div>
