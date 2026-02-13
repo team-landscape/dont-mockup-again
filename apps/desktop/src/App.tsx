@@ -21,6 +21,7 @@ import { useExportAction } from './hooks/useExportAction';
 import { useProjectFileActions } from './hooks/useProjectFileActions';
 import { useProjectImageUploadHandlers } from './hooks/useProjectImageUploadHandlers';
 import { usePipelineActions } from './hooks/usePipelineActions';
+import { useOnboardingActions } from './hooks/useOnboardingActions';
 import { useProjectSlotActions } from './hooks/useProjectSlotActions';
 import { usePreviewLoaders } from './hooks/usePreviewLoaders';
 import { resolveOutputDir as resolveOutputDirPath } from './lib/output-dir';
@@ -401,31 +402,6 @@ export function App() {
     }
   }, []);
 
-  function handleOpenOnboarding() {
-    setIsOnboardingOpen(true);
-  }
-
-  function handleCompleteOnboarding() {
-    if (!onboardingReady) {
-      return;
-    }
-
-    setSelectedLocale((current) => (
-      doc.project.locales.includes(current) ? current : doc.project.locales[0]
-    ));
-    setSelectedDevice((current) => (
-      doc.project.devices.some((device) => device.id === current)
-        ? current
-        : (doc.project.devices[0]?.id || 'ios_phone')
-    ));
-
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(ONBOARDING_STORAGE_KEY, '1');
-    }
-
-    setIsOnboardingOpen(false);
-  }
-
   const slots = useMemo(
     () => sortSlotsByOrder(doc.project.slots),
     [doc.project.slots]
@@ -468,6 +444,15 @@ export function App() {
   const onboardingReady = doc.project.locales.length > 0
     && doc.project.platforms.length > 0
     && doc.project.devices.length > 0;
+  const { handleOpenOnboarding, handleCompleteOnboarding } = useOnboardingActions({
+    onboardingReady,
+    locales: doc.project.locales,
+    devices: doc.project.devices,
+    onboardingStorageKey: ONBOARDING_STORAGE_KEY,
+    setSelectedLocale,
+    setSelectedDevice,
+    setIsOnboardingOpen
+  });
   const slotCanvasCardSize = useMemo(
     () => getSlotCanvasCardSize(selectedDeviceSpec),
     [selectedDeviceSpec]
