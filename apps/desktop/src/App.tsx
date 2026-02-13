@@ -141,10 +141,10 @@ interface LlmCliConfig {
   argsTemplate: string[];
   timeoutSec: number;
   promptVersion: string;
+  prompt?: string;
   cachePath?: string;
   sourceLocale?: string;
   targetLocales?: string[];
-  styleGuidePath?: string;
 }
 
 interface StoreShotDoc {
@@ -278,7 +278,16 @@ const defaultLlmConfig: LlmCliConfig = {
   argsTemplate: [],
   timeoutSec: 120,
   promptVersion: 'v1',
-  styleGuidePath: 'style.md'
+  prompt: [
+    'You are an expert ASO localization copywriter for app store screenshots.',
+    'Translate naturally for the target locale while preserving conversion intent and mobile-first readability.',
+    'Keep the tone benefit-driven, concise, and action-oriented.',
+    'Prefer wording that improves discoverability and relevance for app-store users in that locale.',
+    'Do not add unnecessary punctuation or emojis unless the source already uses them.',
+    'Never alter placeholders such as {app_name}, %@, {{count}}, or %d.',
+    'Keep brand names and product terms consistent.',
+    'Return strict JSON only with this format: {"entries":{"key":"translated"}}.'
+  ].join('\n')
 };
 const XL_MEDIA_QUERY = '(min-width: 1280px)';
 const ONBOARDING_STORAGE_KEY = 'storeshot.desktop.onboarding.v1.completed';
@@ -2364,7 +2373,7 @@ export function App() {
               onLlmArgsTemplateChange={(value) => upsertLlmConfig((cfg) => { cfg.argsTemplate = value; })}
               onLlmTimeoutSecChange={(value) => upsertLlmConfig((cfg) => { cfg.timeoutSec = value; })}
               onLlmPromptVersionChange={(value) => upsertLlmConfig((cfg) => { cfg.promptVersion = value; })}
-              onLlmStyleGuidePathChange={(value) => upsertLlmConfig((cfg) => { cfg.styleGuidePath = value; })}
+              onLlmPromptChange={(value) => upsertLlmConfig((cfg) => { cfg.prompt = value; })}
               getCopyValue={(key, locale) => doc.copy.keys[key]?.[locale] || ''}
               onCopyChange={updateCopyByKey}
             />

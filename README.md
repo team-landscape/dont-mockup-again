@@ -46,7 +46,7 @@ Project config example (`pipelines.localization.llmCli`):
   "argsTemplate": [],
   "timeoutSec": 120,
   "promptVersion": "v1",
-  "styleGuidePath": "style.md"
+  "prompt": "You are an expert ASO localization copywriter for app store screenshots..."
 }
 ```
 
@@ -60,6 +60,7 @@ Adapter behavior:
 
 - Sends translation payload JSON into CLI input (stdin).
 - For `gemini`/`gemini-cli`, automatically uses prompt mode and parses JSON output.
+- Uses `llmCli.prompt` as direct localization prompt input.
 - Supports file-placeholder args templates (`{INPUT}`, `{OUTPUT}`, `{LOCALE}`) for custom wrappers.
 - Reads JSON output and applies to `copy.keys`.
 - Validates placeholder preservation (`{app_name}`, `%@`, `{{count}}`).

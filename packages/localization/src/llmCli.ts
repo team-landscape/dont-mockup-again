@@ -67,12 +67,19 @@ function shouldUseGeminiPromptMode(command, argsTemplate) {
 }
 
 function buildGeminiPrompt(payload) {
-  return [
+  const customPrompt = typeof payload.prompt === 'string' ? payload.prompt.trim() : '';
+  const basePrompt = [
     'You are a localization engine for app store screenshots.',
     `Translate each entry from ${payload.sourceLocale} to ${payload.targetLocale}.`,
     'Do not modify placeholders like {app_name}, %@, {{count}}.',
     'Return strict JSON only with this shape: {"entries":{"key":"translated"}}.'
   ].join(' ');
+
+  if (!customPrompt) {
+    return basePrompt;
+  }
+
+  return `${customPrompt}\n\n${basePrompt}`;
 }
 
 function tryParseJson(text) {
@@ -248,6 +255,7 @@ export async function translateWithCli(options) {
     targetLocale,
     entries,
     promptVersion = 'v1',
+    prompt = null,
     glossary = null,
     styleGuide = null,
     timeoutSec = 120,
@@ -273,8 +281,9 @@ export async function translateWithCli(options) {
     const payload = {
       sourceLocale,
       targetLocale,
+      prompt: typeof prompt === 'string' ? prompt : null,
       glossary,
-      styleGuide,
+      styleGuide: typeof prompt === 'string' && prompt.trim() ? prompt : styleGuide,
       entries: pending
     };
 

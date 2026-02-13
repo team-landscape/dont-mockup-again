@@ -69,6 +69,20 @@ async function readOptionalTextFile(filePath, projectDir) {
   }
 }
 
+async function resolvePromptText(config, projectDir) {
+  const directPrompt = typeof config?.prompt === 'string' ? config.prompt.trim() : '';
+  if (directPrompt) {
+    return directPrompt;
+  }
+
+  // Backward compatibility: read old styleGuidePath if present in saved projects.
+  if (typeof config?.styleGuidePath === 'string' && config.styleGuidePath.trim()) {
+    return readOptionalTextFile(config.styleGuidePath, projectDir);
+  }
+
+  return null;
+}
+
 function ensureCopyKeys(projectDoc) {
   projectDoc.copy = projectDoc.copy || {};
   projectDoc.copy.keys = projectDoc.copy.keys || {};
@@ -117,7 +131,7 @@ export async function localizeProjectCopy(projectDoc, options = {}) {
     ...(localization.llmCli || {})
   };
 
-  const llmStyleGuide = await readOptionalTextFile(llmCliConfig.styleGuidePath, projectDir);
+  const llmPrompt = await resolvePromptText(llmCliConfig, projectDir);
 
   for (const targetLocale of targetLocales) {
     const translatedEntries = await translateWithCli({
@@ -127,7 +141,7 @@ export async function localizeProjectCopy(projectDoc, options = {}) {
       targetLocale,
       entries: sourceEntries,
       promptVersion: llmCliConfig.promptVersion,
-      styleGuide: llmStyleGuide,
+      prompt: llmPrompt,
       timeoutSec: parsePositiveInt(llmCliConfig.timeoutSec, 120),
       cachePath: resolvePath(llmCliConfig.cachePath, projectDir),
       cwd: projectDir

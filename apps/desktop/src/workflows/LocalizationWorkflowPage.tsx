@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Input } from '../components/ui/input';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Textarea } from '../components/ui/textarea';
 
 interface LabeledFieldProps {
   label: string;
@@ -26,7 +27,7 @@ interface LlmConfigValue {
   argsTemplate: string[];
   timeoutSec: number;
   promptVersion: string;
-  styleGuidePath?: string;
+  prompt?: string;
 }
 
 interface LocalizationWorkflowPageProps {
@@ -47,7 +48,7 @@ interface LocalizationWorkflowPageProps {
   onLlmArgsTemplateChange: (value: string[]) => void;
   onLlmTimeoutSecChange: (value: number) => void;
   onLlmPromptVersionChange: (value: string) => void;
-  onLlmStyleGuidePathChange: (value: string) => void;
+  onLlmPromptChange: (value: string) => void;
   getCopyValue: (key: string, locale: string) => string;
   onCopyChange: (key: string, locale: string, value: string) => void;
 }
@@ -70,7 +71,7 @@ export function LocalizationWorkflowPage({
   onLlmArgsTemplateChange,
   onLlmTimeoutSecChange,
   onLlmPromptVersionChange,
-  onLlmStyleGuidePathChange,
+  onLlmPromptChange,
   getCopyValue,
   onCopyChange
 }: LocalizationWorkflowPageProps) {
@@ -146,8 +147,12 @@ export function LocalizationWorkflowPage({
                     }}
                   />
                 </LabeledField>
-                <LabeledField label="Style Guide Path">
-                  <Input value={llmConfig.styleGuidePath || ''} onChange={(event) => onLlmStyleGuidePathChange(event.target.value)} />
+                <LabeledField label="Translation Prompt">
+                  <Textarea
+                    value={llmConfig.prompt || ''}
+                    onChange={(event) => onLlmPromptChange(event.target.value)}
+                    className="min-h-[140px]"
+                  />
                 </LabeledField>
               </div>
             </div>
