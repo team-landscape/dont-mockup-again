@@ -21,6 +21,7 @@ import { useOnboardingActions } from './hooks/useOnboardingActions';
 import { useProjectSelectionSync } from './hooks/useProjectSelectionSync';
 import { useProjectSlotActions } from './hooks/useProjectSlotActions';
 import { useProjectWorkflowActions } from './hooks/useProjectWorkflowActions';
+import { useWorkflowNavigation } from './hooks/useWorkflowNavigation';
 import { usePreviewLoaders } from './hooks/usePreviewLoaders';
 import { useScreenWorkflowState } from './hooks/useScreenWorkflowState';
 import { useTemplateEditorActions } from './hooks/useTemplateEditorActions';
@@ -65,6 +66,7 @@ const steps: Array<{ id: StepId; title: string }> = [
 const XL_MEDIA_QUERY = '(min-width: 1280px)';
 const ONBOARDING_STORAGE_KEY = 'storeshot.desktop.onboarding.v1.completed';
 const DEFAULT_PROJECT_FILE_NAME = 'project.storeshot.json';
+const PREVIEW_RENDER_DIR = 'dist-render';
 
 export function App() {
   const [activeStep, setActiveStep] = useState<StepId>('screens');
@@ -181,14 +183,11 @@ export function App() {
     setProjectStatus
   });
 
-  const previewRenderDir = 'dist-render';
-
-  const activeStepIndex = useMemo(
-    () => Math.max(steps.findIndex((item) => item.id === activeStep), 0),
-    [activeStep]
-  );
-  const isFirstStep = activeStepIndex === 0;
-  const isLastStep = activeStepIndex === steps.length - 1;
+  const { activeStepIndex, isFirstStep, isLastStep, goPrevStep, goNextStep } = useWorkflowNavigation({
+    steps,
+    activeStep,
+    setActiveStep
+  });
 
   const selectedPlatform = useMemo<Platform>(() => {
     const device = doc.project.devices.find((entry) => entry.id === selectedDevice);
@@ -232,7 +231,7 @@ export function App() {
   const { loadSlotPreviewMap, loadPreviewMatrix } = usePreviewLoaders({
     slots: doc.project.slots,
     locales: doc.project.locales,
-    previewRenderDir,
+    previewRenderDir: PREVIEW_RENDER_DIR,
     selectedPlatform,
     selectedDevice,
     selectedLocale,
@@ -244,29 +243,19 @@ export function App() {
   });
   const previewMatrixLoadKey = useMemo(
     () => [
-      previewRenderDir,
+      PREVIEW_RENDER_DIR,
       selectedPlatform,
       selectedDevice,
       doc.project.locales.join(','),
       doc.project.slots.map((slot) => slot.id).join(',')
     ].join('|'),
-    [doc.project.locales, doc.project.slots, previewRenderDir, selectedDevice, selectedPlatform]
+    [doc.project.locales, doc.project.slots, selectedDevice, selectedPlatform]
   );
 
   useEffect(() => {
     if (activeStep !== 'screens') return;
     setScreenFocusTrigger((current) => current + 1);
   }, [activeStep]);
-
-  const goPrevStep = useCallback(() => {
-    if (activeStepIndex === 0) return;
-    setActiveStep(steps[activeStepIndex - 1].id);
-  }, [activeStepIndex]);
-
-  const goNextStep = useCallback(() => {
-    if (activeStepIndex >= steps.length - 1) return;
-    setActiveStep(steps[activeStepIndex + 1].id);
-  }, [activeStepIndex]);
 
   useProjectSelectionSync({
     locales: doc.project.locales,
@@ -301,7 +290,7 @@ export function App() {
   const handleExport = useExportAction({
     doc,
     outputDir,
-    previewRenderDir,
+    previewRenderDir: PREVIEW_RENDER_DIR,
     projectPath,
     templateImageUrls,
     resolveOutputDir,
@@ -314,7 +303,7 @@ export function App() {
 
   const { handleRunLocalization } = usePipelineActions({
     projectPath,
-    previewRenderDir,
+    previewRenderDir: PREVIEW_RENDER_DIR,
     runWithBusy,
     persistProjectSnapshot,
     loadSlotPreviewMap,
