@@ -1590,21 +1590,6 @@ export function App() {
     });
   }, [updateTemplateMain]);
 
-  const moveTemplateElement = useCallback((elementId: string, direction: -1 | 1) => {
-    updateTemplateMain((main) => {
-      const ordered = [...main.elements].sort((a, b) => a.z - b.z);
-      const fromIndex = ordered.findIndex((item) => item.id === elementId);
-      if (fromIndex < 0) return;
-
-      const toIndex = fromIndex + direction;
-      if (toIndex < 0 || toIndex >= ordered.length) return;
-
-      const [picked] = ordered.splice(fromIndex, 1);
-      ordered.splice(toIndex, 0, picked);
-      main.elements = ordered.map((item, index) => ({ ...item, z: (index + 1) * 10 }));
-    });
-  }, [updateTemplateMain]);
-
   const handleSelectSlot = useCallback((slotId: string) => {
     startSlotTransition(() => {
       setSelectedSlot(slotId);
@@ -1941,7 +1926,7 @@ export function App() {
         <Card className="border-dashed">
           <CardHeader>
             <CardTitle>Layers</CardTitle>
-            <CardDescription>텍스트/이미지 요소를 추가하고 순서를 조정합니다.</CardDescription>
+            <CardDescription>텍스트/이미지 요소를 추가합니다.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-wrap gap-2">
@@ -1954,7 +1939,7 @@ export function App() {
             </div>
 
             <div className="space-y-2">
-              {templateElements.map((element, index) => (
+              {templateElements.map((element) => (
                 <div key={element.id} className="flex items-center gap-2">
                   <button
                     type="button"
@@ -1965,12 +1950,6 @@ export function App() {
                     <span className="font-medium">{element.name}</span>
                     <span className="ml-2 text-xs text-muted-foreground">{element.kind}</span>
                   </button>
-                  <Button size="sm" variant="outline" disabled={index === 0} onClick={() => moveTemplateElement(element.id, -1)}>
-                    <ArrowUp className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="outline" disabled={index === templateElements.length - 1} onClick={() => moveTemplateElement(element.id, 1)}>
-                    <ArrowDown className="h-4 w-4" />
-                  </Button>
                   <Button size="sm" variant="destructive" disabled={templateElements.length <= 1} onClick={() => removeTemplateElement(element.id)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -2044,7 +2023,6 @@ export function App() {
     );
   }, [
     addTemplateElement,
-    moveTemplateElement,
     openTemplateImagePicker,
     removeTemplateElement,
     selectedElementFontOptions,
