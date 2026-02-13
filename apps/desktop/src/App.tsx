@@ -117,6 +117,7 @@ type TemplateBackground = {
 interface TemplateMain {
   background: TemplateBackground;
   slotBackgrounds: Record<string, TemplateBackground>;
+  slotElements: Record<string, TemplateElement[]>;
   frame: {
     type: 'simpleRounded';
     enabled: boolean;
@@ -375,6 +376,14 @@ function fieldKey(slotId: string, kind: 'title' | 'subtitle') {
   return `${slotId}.${kind}`;
 }
 
+function globalTemplateImageKey(elementId: string) {
+  return `*:${elementId}`;
+}
+
+function slotTemplateImageKey(slotId: string, elementId: string) {
+  return `${slotId}:${elementId}`;
+}
+
 function getSlotPreviewCanvasSize(device: Device) {
   const width = Math.max(1, device.width || 1290);
   const height = Math.max(1, device.height || 2796);
@@ -620,6 +629,41 @@ function normalizeSlotBackgrounds(
   return next;
 }
 
+function cloneTemplateElements(elements: TemplateElement[]): TemplateElement[] {
+  return elements.map((item) => ({ ...item }));
+}
+
+function normalizeTemplateElementOrder(elements: TemplateElement[]): TemplateElement[] {
+  return [...elements]
+    .sort((a, b) => a.z - b.z)
+    .map((item, index) => ({ ...item, z: (index + 1) * 10 }));
+}
+
+function resolveTemplateElementsForSlot(main: Pick<TemplateMain, 'elements' | 'slotElements'>, slotId: string): TemplateElement[] {
+  return main.slotElements[slotId] || main.elements;
+}
+
+function normalizeSlotElements(
+  slots: Slot[],
+  slotElements: unknown,
+  fallback: TemplateElement[]
+): Record<string, TemplateElement[]> {
+  const next: Record<string, TemplateElement[]> = {};
+  if (!slotElements || typeof slotElements !== 'object') {
+    return next;
+  }
+
+  const source = slotElements as Record<string, unknown>;
+  for (const slot of slots) {
+    const raw = source[slot.id];
+    if (!Array.isArray(raw)) continue;
+
+    next[slot.id] = normalizeTemplateElements(raw, fallback);
+  }
+
+  return next;
+}
+
 function syncTemplateLegacyFields(main: TemplateMain): TemplateMain {
   const sortedElements = [...main.elements].sort((a, b) => a.z - b.z);
   const firstImage = sortedElements.find((item): item is TemplateImageElement => item.kind === 'image');
@@ -692,7 +736,7 @@ function createDefaultProject(): StoreShotDoc {
 
   const defaultBackground: TemplateBackground = { type: 'gradient', from: '#111827', to: '#1f2937', direction: '180deg' };
 
-  const defaultMainBase: Omit<TemplateMain, 'elements'> = {
+  const defaultMainBase: Omit<TemplateMain, 'elements' | 'slotElements'> = {
     background: defaultBackground,
     slotBackgrounds: normalizeSlotBackgrounds(defaultSlots, {}, defaultBackground),
     frame: { type: 'simpleRounded', enabled: true, inset: 80, radius: 80 },
@@ -705,6 +749,7 @@ function createDefaultProject(): StoreShotDoc {
 
   const defaultMain = syncTemplateLegacyFields({
     ...defaultMainBase,
+    slotElements: {},
     elements: createDefaultTemplateElements(defaultMainBase)
   });
 
@@ -778,6 +823,17 @@ function normalizeProject(raw: unknown): StoreShotDoc {
     }))
     .sort((a, b) => a.order - b.order);
   const mergedBackground = { ...base.template.main.background, ...doc.template?.main?.background };
+  const normalizedElements = normalizeTemplateElements(
+    doc.template?.main?.elements,
+    createDefaultTemplateElements({
+      frame: { ...base.template.main.frame, ...doc.template?.main?.frame },
+      text: {
+        title: { ...base.template.main.text.title, ...doc.template?.main?.text?.title },
+        subtitle: { ...base.template.main.text.subtitle, ...doc.template?.main?.text?.subtitle }
+      },
+      shotPlacement: { ...base.template.main.shotPlacement, ...doc.template?.main?.shotPlacement }
+    })
+  );
   const normalizedMain = syncTemplateLegacyFields({
     ...base.template.main,
     ...doc.template?.main,
@@ -787,23 +843,18 @@ function normalizeProject(raw: unknown): StoreShotDoc {
       doc.template?.main?.slotBackgrounds as Record<string, TemplateBackground> | undefined,
       mergedBackground
     ),
+    slotElements: normalizeSlotElements(
+      normalizedSlots,
+      doc.template?.main?.slotElements,
+      normalizedElements
+    ),
     frame: { ...base.template.main.frame, ...doc.template?.main?.frame },
     text: {
       title: { ...base.template.main.text.title, ...doc.template?.main?.text?.title },
       subtitle: { ...base.template.main.text.subtitle, ...doc.template?.main?.text?.subtitle }
     },
     shotPlacement: { ...base.template.main.shotPlacement, ...doc.template?.main?.shotPlacement },
-    elements: normalizeTemplateElements(
-      doc.template?.main?.elements,
-      createDefaultTemplateElements({
-        frame: { ...base.template.main.frame, ...doc.template?.main?.frame },
-        text: {
-          title: { ...base.template.main.text.title, ...doc.template?.main?.text?.title },
-          subtitle: { ...base.template.main.text.subtitle, ...doc.template?.main?.text?.subtitle }
-        },
-        shotPlacement: { ...base.template.main.shotPlacement, ...doc.template?.main?.shotPlacement }
-      })
-    )
+    elements: normalizedElements
   });
   const mergedLocales = doc.project?.locales || base.project.locales;
   const sourceLocaleFromDoc = doc.pipelines?.localization?.sourceLocale || mergedLocales[0] || base.project.locales[0];
@@ -966,8 +1017,8 @@ export function App() {
   const llmConfig = doc.pipelines.localization.llmCli || clone(defaultLlmConfig);
   const deferredTemplateMain = useDeferredValue(doc.template.main);
   const templateElements = useMemo(
-    () => [...doc.template.main.elements].sort((a, b) => a.z - b.z),
-    [doc.template.main.elements]
+    () => normalizeTemplateElementOrder(resolveTemplateElementsForSlot(doc.template.main, selectedSlot)),
+    [doc.template.main, selectedSlot]
   );
   const selectedTemplateElement = useMemo(
     () => templateElements.find((item) => item.id === selectedTemplateElementId) || templateElements[0] || null,
@@ -986,13 +1037,24 @@ export function App() {
     slotSourceEntriesRef.current = entries;
     return entries.map((entry) => `${entry.id}:${entry.sourceImagePath}`).join('|');
   }, [doc.project.slots]);
-  const templateImageLoadKey = useMemo(
-    () => doc.template.main.elements
-      .filter((item): item is TemplateImageElement => item.kind === 'image')
-      .map((item) => `${item.id}:${item.imagePath}`)
-      .join('|'),
-    [doc.template.main.elements]
-  );
+  const templateImageLoadKey = useMemo(() => {
+    const signatures: string[] = [];
+
+    for (const item of doc.template.main.elements) {
+      if (item.kind !== 'image') continue;
+      signatures.push(`*:${item.id}:${item.imagePath}`);
+    }
+
+    for (const [slotId, elements] of Object.entries(doc.template.main.slotElements)) {
+      for (const item of elements) {
+        if (item.kind !== 'image') continue;
+        signatures.push(`${slotId}:${item.id}:${item.imagePath}`);
+      }
+    }
+
+    signatures.sort();
+    return signatures.join('|');
+  }, [doc.template.main.elements, doc.template.main.slotElements]);
   const previewMatrixLoadKey = useMemo(
     () => [
       renderDir,
@@ -1124,9 +1186,24 @@ export function App() {
         try {
           const base64 = await readFileBase64(element.imagePath);
           const mime = imageMimeTypeFromPath(element.imagePath);
-          next[element.id] = `data:${mime};base64,${base64}`;
+          next[globalTemplateImageKey(element.id)] = `data:${mime};base64,${base64}`;
         } catch {
           // Missing custom image is allowed while editing.
+        }
+      }
+
+      for (const [slotId, elements] of Object.entries(doc.template.main.slotElements)) {
+        const slotImageElements = elements.filter((item): item is TemplateImageElement => item.kind === 'image');
+        for (const element of slotImageElements) {
+          if (!element.imagePath) continue;
+
+          try {
+            const base64 = await readFileBase64(element.imagePath);
+            const mime = imageMimeTypeFromPath(element.imagePath);
+            next[slotTemplateImageKey(slotId, element.id)] = `data:${mime};base64,${base64}`;
+          } catch {
+            // Missing custom image is allowed while editing.
+          }
         }
       }
 
@@ -1139,7 +1216,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [doc.template.main.elements, templateImageLoadKey]);
+  }, [doc.template.main.elements, doc.template.main.slotElements, templateImageLoadKey]);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -1301,6 +1378,9 @@ export function App() {
       const referenceBackground = referenceSlot
         ? (next.template.main.slotBackgrounds[referenceSlot.id] || next.template.main.background)
         : next.template.main.background;
+      const referenceElements = referenceSlot
+        ? resolveTemplateElementsForSlot(next.template.main, referenceSlot.id)
+        : next.template.main.elements;
 
       next.project.slots.push(newSlot);
       next.copy.keys[fieldKey(newSlot.id, 'title')] = { ...referenceTitleCopy };
@@ -1308,6 +1388,7 @@ export function App() {
       next.template.main.slotBackgrounds[newSlot.id] = {
         ...referenceBackground
       };
+      next.template.main.slotElements[newSlot.id] = cloneTemplateElements(referenceElements);
     });
   }
 
@@ -1317,6 +1398,7 @@ export function App() {
       delete next.copy.keys[fieldKey(slotId, 'title')];
       delete next.copy.keys[fieldKey(slotId, 'subtitle')];
       delete next.template.main.slotBackgrounds[slotId];
+      delete next.template.main.slotElements[slotId];
     });
   }
 
@@ -1592,6 +1674,7 @@ export function App() {
       sourceImageUrl: slotSourceUrls[slot.id],
       template: {
         ...deferredTemplateMain,
+        elements: resolveTemplateElementsForSlot(deferredTemplateMain, slot.id),
         background: {
           ...deferredTemplateMain.background,
           ...(deferredTemplateMain.slotBackgrounds[slot.id] || {})
@@ -1658,6 +1741,7 @@ export function App() {
     const sourceImageUrl = slotSourceUrls[slotId];
     const template = {
       ...deferredTemplateMain,
+      elements: resolveTemplateElementsForSlot(deferredTemplateMain, slotId),
       background: {
         ...deferredTemplateMain.background,
         ...(deferredTemplateMain.slotBackgrounds[slotId] || {})
@@ -1741,24 +1825,31 @@ export function App() {
 
   const updateTemplateElement = useCallback((elementId: string, mutator: (element: TemplateElement) => TemplateElement) => {
     updateTemplateMain((main) => {
-      const index = main.elements.findIndex((item) => item.id === elementId);
+      const slotId = selectedSlotData?.id || selectedSlot;
+      const sourceElements = resolveTemplateElementsForSlot(main, slotId);
+      const index = sourceElements.findIndex((item) => item.id === elementId);
       if (index < 0) return;
-      main.elements[index] = mutator(main.elements[index]);
+      const nextElements = cloneTemplateElements(sourceElements);
+      nextElements[index] = mutator(nextElements[index]);
+      main.slotElements[slotId] = normalizeTemplateElementOrder(nextElements);
     });
-  }, [updateTemplateMain]);
+  }, [selectedSlot, selectedSlotData, updateTemplateMain]);
 
   const addTemplateElement = useCallback((kind: TemplateElementKind) => {
     let createdId = '';
 
     updateTemplateMain((main) => {
-      const existingIds = new Set(main.elements.map((item) => item.id));
+      const slotId = selectedSlotData?.id || selectedSlot;
+      const sourceElements = resolveTemplateElementsForSlot(main, slotId);
+      const slotElements = cloneTemplateElements(sourceElements);
+      const existingIds = new Set(slotElements.map((item) => item.id));
       let nextNumber = 1;
       while (existingIds.has(`${kind}-${nextNumber}`)) {
         nextNumber += 1;
       }
       createdId = `${kind}-${nextNumber}`;
 
-      const topZ = main.elements.reduce((max, item) => Math.max(max, item.z), 0);
+      const topZ = slotElements.reduce((max, item) => Math.max(max, item.z), 0);
       if (kind === 'text') {
         const newTextElement: TemplateTextElement = {
           id: createdId,
@@ -1783,7 +1874,8 @@ export function App() {
           padding: 0,
           cornerRadius: 0
         };
-        main.elements.push(newTextElement);
+        slotElements.push(newTextElement);
+        main.slotElements[slotId] = normalizeTemplateElementOrder(slotElements);
         return;
       }
 
@@ -1809,20 +1901,27 @@ export function App() {
         frameColor: '#ffffff',
         frameWidth: 3
       };
-      main.elements.push(newImageElement);
+      slotElements.push(newImageElement);
+      main.slotElements[slotId] = normalizeTemplateElementOrder(slotElements);
     });
 
     if (createdId) {
       setSelectedTemplateElementId(createdId);
     }
-  }, [availableFonts, updateTemplateMain]);
+  }, [availableFonts, selectedSlot, selectedSlotData, updateTemplateMain]);
 
   const removeTemplateElement = useCallback((elementId: string) => {
     updateTemplateMain((main) => {
-      if (main.elements.length <= 1) return;
-      main.elements = main.elements.filter((item) => item.id !== elementId);
+      const slotId = selectedSlotData?.id || selectedSlot;
+      const sourceElements = resolveTemplateElementsForSlot(main, slotId);
+      if (sourceElements.length <= 1) return;
+
+      const nextElements = sourceElements.filter((item) => item.id !== elementId);
+      if (nextElements.length === sourceElements.length || nextElements.length === 0) return;
+
+      main.slotElements[slotId] = normalizeTemplateElementOrder(cloneTemplateElements(nextElements));
     });
-  }, [updateTemplateMain]);
+  }, [selectedSlot, selectedSlotData, updateTemplateMain]);
 
   const openTemplateImagePicker = useCallback((elementId: string) => {
     templateImageTargetRef.current = elementId;
@@ -1863,7 +1962,7 @@ export function App() {
 
         setTemplateImageUrls((current) => ({
           ...current,
-          [elementId]: `data:${mime};base64,${base64}`
+          [slotTemplateImageKey(selectedSlotData?.id || selectedSlot, elementId)]: `data:${mime};base64,${base64}`
         }));
       }, {
         action: 'upload-template-image',
@@ -2152,7 +2251,7 @@ export function App() {
         <Card className="border-dashed">
           <CardHeader>
             <CardTitle>Layers</CardTitle>
-            <CardDescription>텍스트/이미지 요소를 추가합니다.</CardDescription>
+            <CardDescription>선택한 슬롯에만 적용되는 텍스트/이미지 요소를 편집합니다.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-wrap gap-2">
@@ -4273,7 +4372,12 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
         context.restore();
 
         const imageSource = layer.source === 'customImage'
-          ? (templateImageUrls[layer.id] || sourceImageUrl || renderedPreviewUrl)
+          ? (
+            templateImageUrls[slotTemplateImageKey(slotId, layer.id)]
+            || templateImageUrls[globalTemplateImageKey(layer.id)]
+            || sourceImageUrl
+            || renderedPreviewUrl
+          )
           : (sourceImageUrl || renderedPreviewUrl);
 
         if (imageSource) {
