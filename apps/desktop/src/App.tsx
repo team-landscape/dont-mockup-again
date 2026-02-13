@@ -1,4 +1,4 @@
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition, type CSSProperties, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react';
 import { flushSync } from 'react-dom';
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import { ArrowDown, ArrowUp, ChevronDown, FolderDown, FolderUp, Loader2, Plus, Save, Trash2 } from 'lucide-react';
@@ -4525,6 +4525,47 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
     event.preventDefault();
   }, []);
 
+  const selectLayerAtClientPoint = useCallback((clientX: number, clientY: number) => {
+    if (!editable || !onSelectElement) return false;
+    const overlay = overlayRef.current;
+    if (!overlay) return false;
+
+    const rect = overlay.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+
+    const relativeX = clientX - rect.left;
+    const relativeY = clientY - rect.top;
+    if (relativeX < 0 || relativeY < 0 || relativeX > rect.width || relativeY > rect.height) {
+      return false;
+    }
+
+    const worldX = (relativeX / rect.width) * width;
+    const worldY = (relativeY / rect.height) * height;
+
+    for (let index = editableLayers.length - 1; index >= 0; index -= 1) {
+      const layer = editableLayers[index];
+      if (
+        worldX >= layer.x
+        && worldX <= layer.x + layer.w
+        && worldY >= layer.y
+        && worldY <= layer.y + layer.h
+      ) {
+        onSelectElement(layer.id);
+        return true;
+      }
+    }
+
+    return false;
+  }, [editable, editableLayers, height, onSelectElement, width]);
+
+  const handlePreviewDoubleClick = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    const selected = selectLayerAtClientPoint(event.clientX, event.clientY);
+    if (!selected) return;
+
+    event.stopPropagation();
+    event.preventDefault();
+  }, [selectLayerAtClientPoint]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -4683,6 +4724,7 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
       ref={overlayRef}
       className="relative w-full"
       style={{ maxWidth: `${previewSize.width}px`, aspectRatio: `${previewSize.width} / ${previewSize.height}` }}
+      onDoubleClick={handlePreviewDoubleClick}
     >
       <canvas
         ref={canvasRef}
