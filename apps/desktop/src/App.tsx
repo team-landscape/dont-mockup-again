@@ -4923,6 +4923,47 @@ function resolveAutoTextSize(
   };
 }
 
+function resolveTextLayerForPreview(
+  layer: TemplateTextElement,
+  slotWidth: number,
+  scaleTextToDevice: boolean
+): TemplateTextElement {
+  const resolvedLayer = resolveTextLayerWithinSlot(layer, slotWidth);
+  if (!scaleTextToDevice) {
+    return resolvedLayer;
+  }
+
+  const safeSlotWidth = Math.max(1, slotWidth);
+  if (safeSlotWidth === TEMPLATE_REFERENCE_WIDTH) {
+    return resolvedLayer;
+  }
+
+  const scale = Math.max(0.0001, safeSlotWidth / TEMPLATE_REFERENCE_WIDTH);
+  const scaledSize = Math.max(1, Math.round(resolvedLayer.size * scale));
+  const scaledPadding = Math.max(0, Math.round(resolvedLayer.padding * scale));
+  const scaledCornerRadius = Math.max(0, Math.round(resolvedLayer.cornerRadius * scale));
+  const scaledHeight = resolvedLayer.autoSize
+    ? resolvedLayer.h
+    : Math.max(1, Math.round(resolvedLayer.h * scale));
+
+  if (
+    resolvedLayer.size === scaledSize
+    && resolvedLayer.padding === scaledPadding
+    && resolvedLayer.cornerRadius === scaledCornerRadius
+    && resolvedLayer.h === scaledHeight
+  ) {
+    return resolvedLayer;
+  }
+
+  return {
+    ...resolvedLayer,
+    size: scaledSize,
+    padding: scaledPadding,
+    cornerRadius: scaledCornerRadius,
+    h: scaledHeight
+  };
+}
+
 function resolvePreviewLayer(
   context: CanvasRenderingContext2D,
   layer: TemplateElement,
@@ -4932,6 +4973,7 @@ function resolvePreviewLayer(
   slotHeight: number,
   options?: {
     scaleImageToDevice?: boolean;
+    scaleTextToDevice?: boolean;
   }
 ): TemplateElement {
   if (layer.kind === 'image') {
@@ -4945,12 +4987,16 @@ function resolvePreviewLayer(
     return layer;
   }
 
-  const resolvedLayer = resolveTextLayerWithinSlot(layer, slotWidth);
+  const resolvedLayer = resolveTextLayerForPreview(layer, slotWidth, Boolean(options?.scaleTextToDevice));
   if (!resolvedLayer.autoSize) {
     if (
       resolvedLayer.x === layer.x
       && resolvedLayer.w === layer.w
+      && resolvedLayer.h === layer.h
       && resolvedLayer.widthPercent === layer.widthPercent
+      && resolvedLayer.size === layer.size
+      && resolvedLayer.padding === layer.padding
+      && resolvedLayer.cornerRadius === layer.cornerRadius
     ) {
       return layer;
     }
@@ -4964,6 +5010,9 @@ function resolvePreviewLayer(
     && resolvedLayer.w === layer.w
     && resolvedLayer.h === height
     && resolvedLayer.widthPercent === layer.widthPercent
+    && resolvedLayer.size === layer.size
+    && resolvedLayer.padding === layer.padding
+    && resolvedLayer.cornerRadius === layer.cornerRadius
   ) {
     return layer;
   }
@@ -5049,7 +5098,8 @@ async function renderTemplatePreviewBase64(params: {
     .filter((item) => item.visible !== false)
     .sort((a, b) => a.z - b.z);
   const previewLayers = visibleLayers.map((layer) => resolvePreviewLayer(context, layer, title, subtitle, width, height, {
-    scaleImageToDevice: true
+    scaleImageToDevice: true,
+    scaleTextToDevice: true
   }));
 
   context.setTransform(1, 0, 0, 1, 0, 0);
@@ -5231,7 +5281,10 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
       return editableLayers;
     }
 
-    return editableLayers.map((layer) => resolvePreviewLayer(context, layer, title, subtitle, width, height, { scaleImageToDevice }));
+    return editableLayers.map((layer) => resolvePreviewLayer(context, layer, title, subtitle, width, height, {
+      scaleImageToDevice,
+      scaleTextToDevice: scaleImageToDevice
+    }));
   }, [editableLayers, height, scaleImageToDevice, subtitle, title, width]);
 
   const handleLayerPointerDown = useCallback((
