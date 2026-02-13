@@ -1,6 +1,6 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition, type CSSProperties, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react';
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
-import { ArrowDown, ArrowUp, ChevronDown, FolderDown, FolderUp, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, FolderDown, FolderUp, Loader2, Plus, Save, Trash2 } from 'lucide-react';
 
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
@@ -206,6 +206,12 @@ interface ValidateIssue {
   message: string;
 }
 
+interface BusyRunOptions {
+  action?: string;
+  title?: string;
+  detail?: string;
+}
+
 interface SlotCanvasPosition {
   x: number;
   y: number;
@@ -292,8 +298,8 @@ const defaultByokConfig: ByokConfig = {
 };
 
 const defaultLlmConfig: LlmCliConfig = {
-  command: 'gemini-cli',
-  argsTemplate: ['translate', '--in', '{INPUT}', '--out', '{OUTPUT}', '--to', '{LOCALE}'],
+  command: 'gemini',
+  argsTemplate: [],
   timeoutSec: 120,
   promptVersion: 'v1',
   styleGuidePath: 'style.md'
@@ -911,6 +917,9 @@ export function App() {
   const [doc, setDoc] = useState<StoreShotDoc>(() => createDefaultProject());
   const [outputDir, setOutputDir] = useState('dist');
   const [isBusy, setIsBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState('');
+  const [busyTitle, setBusyTitle] = useState('');
+  const [busyDetail, setBusyDetail] = useState('');
   const [byoyPath, setByoyPath] = useState('examples/byoy.sample.json');
   const [selectedDevice, setSelectedDevice] = useState('ios_phone');
   const [selectedLocale, setSelectedLocale] = useState('en-US');
@@ -1164,12 +1173,27 @@ export function App() {
     });
   }
 
-  async function runWithBusy(action: () => Promise<void>) {
+  async function runWithBusy(
+    action: (helpers: {
+      setTitle: (value: string) => void;
+      setDetail: (value: string) => void;
+    }) => Promise<void>,
+    options: BusyRunOptions = {}
+  ) {
+    const updateTitle = (value: string) => setBusyTitle(value);
+    const updateDetail = (value: string) => setBusyDetail(value);
+
+    setBusyAction(options.action || '');
+    setBusyTitle(options.title || 'Processing');
+    setBusyDetail(options.detail || 'Please wait...');
     setIsBusy(true);
     try {
-      await action();
+      await action({ setTitle: updateTitle, setDetail: updateDetail });
     } finally {
       setIsBusy(false);
+      setBusyAction('');
+      setBusyTitle('');
+      setBusyDetail('');
     }
   }
 
@@ -1180,6 +1204,10 @@ export function App() {
       const normalized = normalizeProject(parsed);
       setDoc(normalized);
       setOutputDir(normalized.pipelines.export.outputDir || 'dist');
+    }, {
+      action: 'load-project',
+      title: 'Loading Project',
+      detail: 'Reading project file...'
     });
   }
 
@@ -1194,6 +1222,10 @@ export function App() {
         ? sourceLocale
         : (next.project.locales[0] || 'en-US');
       await writeTextFile(projectPath, JSON.stringify(next, null, 2));
+    }, {
+      action: 'save-project',
+      title: 'Saving Project',
+      detail: 'Writing project changes...'
     });
   }
 
@@ -1328,11 +1360,16 @@ export function App() {
           }
         }
       });
+    }, {
+      action: 'import-byoy',
+      title: 'Importing BYOY',
+      detail: 'Reading translation seed JSON...'
     });
   }
 
   async function handleRunLocalization() {
-    await runWithBusy(async () => {
+    await runWithBusy(async ({ setDetail }) => {
+      setDetail('Saving project config...');
       const next = clone(doc);
       next.project.slots = reorderSlots(next.project.slots);
       next.template.main = syncTemplateLegacyFields(next.template.main);
@@ -1343,12 +1380,18 @@ export function App() {
         : (next.project.locales[0] || 'en-US');
       await writeTextFile(projectPath, JSON.stringify(next, null, 2));
 
+      setDetail('Running localization pipeline...');
       await runPipeline('localize', [projectPath, '--write']);
 
+      setDetail('Reloading localized copy...');
       const text = await readTextFile(projectPath);
       const parsed = extractJson(text);
       const normalized = normalizeProject(parsed);
       setDoc(normalized);
+    }, {
+      action: 'localize',
+      title: 'Localization Processing',
+      detail: 'Preparing localization run...'
     });
   }
 
@@ -1382,6 +1425,10 @@ export function App() {
     await runWithBusy(async () => {
       await runPipeline('render', [projectPath, renderDir]);
       await loadSlotPreviewMap();
+    }, {
+      action: 'render',
+      title: 'Rendering',
+      detail: 'Generating preview images...'
     });
   }
 
@@ -1390,6 +1437,10 @@ export function App() {
       const output = await runPipeline('validate', [projectPath]);
       const parsed = extractJson(output) as { issues?: ValidateIssue[] } | null;
       setIssues(parsed?.issues || []);
+    }, {
+      action: 'validate',
+      title: 'Validation',
+      detail: 'Checking project rules...'
     });
   }
 
@@ -1399,12 +1450,20 @@ export function App() {
       if (doc.pipelines.export.zip) flags.push('--zip');
 
       await runPipeline('export', [projectPath, renderDir, outputDir, ...flags]);
+    }, {
+      action: 'export',
+      title: 'Exporting',
+      detail: 'Creating output package...'
     });
   }
 
   async function handleRefreshPreview() {
     await runWithBusy(async () => {
       await loadSlotPreviewMap();
+    }, {
+      action: 'refresh-preview',
+      title: 'Refreshing Preview',
+      detail: 'Loading latest rendered images...'
     });
   }
 
@@ -1735,6 +1794,10 @@ export function App() {
           ...current,
           [elementId]: `data:${mime};base64,${base64}`
         }));
+      }, {
+        action: 'upload-template-image',
+        title: 'Uploading Image',
+        detail: 'Saving template image asset...'
       });
     } catch {
       // Keep file picker UX resilient if writing image fails.
@@ -2309,6 +2372,8 @@ export function App() {
               sourceLocale={doc.pipelines.localization.sourceLocale || doc.project.locales[0] || 'en-US'}
               byoyPath={byoyPath}
               isBusy={isBusy}
+              isRunningLocalization={isBusy && busyAction === 'localize'}
+              localizationBusyLabel={isBusy && busyAction === 'localize' ? busyDetail : ''}
               byokConfig={byokConfig}
               llmConfig={llmConfig}
               slots={slots.map((slot) => ({ id: slot.id, name: slot.name }))}
@@ -2385,6 +2450,20 @@ export function App() {
 
         </div>
       </div>
+
+      {isBusy ? (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-background/70 p-4 backdrop-blur-sm">
+          <Card className="w-full max-w-[440px] shadow-2xl">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {busyTitle || 'Processing'}
+              </CardTitle>
+              <CardDescription>{busyDetail || '작업을 실행하고 있습니다. 잠시만 기다려 주세요.'}</CardDescription>
+            </CardHeader>
+          </Card>
+        </div>
+      ) : null}
 
       {isOnboardingOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-background/90 p-4 backdrop-blur-sm">

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Loader2 } from 'lucide-react';
 
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -49,6 +50,8 @@ interface LocalizationWorkflowPageProps {
   sourceLocale: string;
   byoyPath: string;
   isBusy: boolean;
+  isRunningLocalization: boolean;
+  localizationBusyLabel: string;
   byokConfig: ByokConfigValue;
   llmConfig: LlmConfigValue;
   slots: Array<{ id: string; name: string }>;
@@ -80,6 +83,8 @@ export function LocalizationWorkflowPage({
   sourceLocale,
   byoyPath,
   isBusy,
+  isRunningLocalization,
+  localizationBusyLabel,
   byokConfig,
   llmConfig,
   slots,
@@ -140,7 +145,14 @@ export function LocalizationWorkflowPage({
             </LabeledField>
 
             <div className="flex flex-wrap gap-2">
-              <Button disabled={isBusy} onClick={onRunLocalization}>Run Localization</Button>
+              <Button disabled={isBusy} onClick={onRunLocalization}>
+                {isRunningLocalization ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {localizationBusyLabel || 'Processing...'}
+                  </>
+                ) : 'Run Localization'}
+              </Button>
             </div>
 
             <LabeledField label="JSON Import Path (optional seed)">
