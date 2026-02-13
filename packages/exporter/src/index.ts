@@ -51,6 +51,40 @@ async function writeMetadata(projectDoc, outputDir) {
   }
 }
 
+function escapeCsvField(value) {
+  const raw = String(value ?? '');
+  if (/[",\n\r]/.test(raw)) {
+    return `"${raw.replaceAll('"', '""')}"`;
+  }
+  return raw;
+}
+
+async function writeMetadataCsv(projectDoc, outputDir) {
+  const copyMap = projectDoc.copy?.keys || {};
+  const locales = projectDoc.project?.locales || [];
+  const platforms = projectDoc.project?.platforms || [];
+  const rows = ['platform,locale,key,value'];
+
+  const keys = Object.keys(copyMap).sort();
+  for (const platform of platforms) {
+    for (const locale of locales) {
+      for (const key of keys) {
+        const value = copyMap[key]?.[locale] || '';
+        rows.push([
+          escapeCsvField(platform),
+          escapeCsvField(locale),
+          escapeCsvField(key),
+          escapeCsvField(value)
+        ].join(','));
+      }
+    }
+  }
+
+  const csvPath = path.join(outputDir, 'metadata.csv');
+  await fs.writeFile(csvPath, `${rows.join('\n')}\n`, 'utf8');
+  return csvPath;
+}
+
 async function writeFastlaneLayout(projectDoc, outputDir) {
   const platforms = projectDoc.project?.platforms || [];
   const locales = projectDoc.project?.locales || [];
@@ -142,10 +176,12 @@ export async function exportProject(projectPath, options = {}) {
   const outputDir = options.outputDir || path.join(path.dirname(projectPath), 'dist');
   const zipEnabled = options.zip !== false;
   const fastlaneLayout = options.fastlaneLayout === true;
+  const metadataCsvEnabled = options.metadataCsv === true;
 
   await fs.mkdir(outputDir, { recursive: true });
   await copyRenderedAssets(renderDir, outputDir);
   await writeMetadata(doc, outputDir);
+  const metadataCsvPath = metadataCsvEnabled ? await writeMetadataCsv(doc, outputDir) : null;
 
   if (fastlaneLayout) {
     await writeFastlaneLayout(doc, outputDir);
@@ -160,6 +196,7 @@ export async function exportProject(projectPath, options = {}) {
 
   return {
     outputDir,
-    zipPath
+    zipPath,
+    metadataCsvPath
   };
 }

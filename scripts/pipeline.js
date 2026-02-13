@@ -10,7 +10,7 @@ function usage() {
   node scripts/pipeline.js render <projectPath> [renderDir]
   node scripts/pipeline.js localize <projectPath> [--write] [--source=<locale>] [--targets=<locale1,locale2>]
   node scripts/pipeline.js validate <projectPath>
-  node scripts/pipeline.js export <projectPath> <renderDir> [outputDir] [--zip] [--fastlane]
+  node scripts/pipeline.js export <projectPath> <renderDir> [outputDir] [--zip] [--fastlane] [--metadata-csv]
   node scripts/pipeline.js upload <exportDir> [iosLane] [androidLane]
   node scripts/pipeline.js all <projectPath> [workDir]`);
 }
@@ -103,7 +103,8 @@ async function run() {
       renderDir,
       outputDir,
       zip: flags.includes('--zip'),
-      fastlaneLayout: flags.includes('--fastlane')
+      fastlaneLayout: flags.includes('--fastlane'),
+      metadataCsv: flags.includes('--metadata-csv')
     });
 
     console.log(JSON.stringify({ action, ...result }, null, 2));

@@ -181,6 +181,7 @@ interface StoreShotDoc {
       outputDir: string;
       formats: string[];
       zip: boolean;
+      metadataCsv: boolean;
     };
     upload: {
       enabled: boolean;
@@ -860,7 +861,8 @@ function createDefaultProject(): StoreShotDoc {
       export: {
         outputDir: 'dist',
         formats: ['png'],
-        zip: true
+        zip: true,
+        metadataCsv: true
       },
       upload: {
         enabled: false,
@@ -1631,6 +1633,69 @@ export function App() {
     return urlsByLocale;
   }
 
+  const renderExportImagesFromPreview = useCallback(async (snapshot: StoreShotDoc) => {
+    const slots = sortSlotsByOrder(snapshot.project.slots || []);
+    const locales = snapshot.project.locales || [];
+    const platforms = snapshot.project.platforms || [];
+    const devices = snapshot.project.devices || [];
+    const templateMain = snapshot.template.main;
+    const imageUrls = { ...templateImageUrls };
+
+    const imageTargets: Array<{ key: string; path: string }> = [];
+    for (const element of templateMain.elements) {
+      if (element.kind !== 'image' || !element.imagePath) continue;
+      imageTargets.push({ key: globalTemplateImageKey(element.id), path: element.imagePath });
+    }
+    for (const [slotId, elements] of Object.entries(templateMain.slotElements || {})) {
+      for (const element of elements) {
+        if (element.kind !== 'image' || !element.imagePath) continue;
+        imageTargets.push({ key: slotTemplateImageKey(slotId, element.id), path: element.imagePath });
+      }
+    }
+
+    for (const target of imageTargets) {
+      if (imageUrls[target.key]) continue;
+      try {
+        const base64 = await readFileBase64(target.path);
+        const mime = imageMimeTypeFromPath(target.path);
+        imageUrls[target.key] = `data:${mime};base64,${base64}`;
+      } catch {
+        // Missing image path is allowed; renderer will keep placeholder.
+      }
+    }
+
+    for (const device of devices) {
+      const platform = detectDevicePlatform(device, platforms);
+      if (platforms.length > 0 && !platforms.includes(platform)) continue;
+
+      for (const locale of locales) {
+        for (const slot of slots) {
+          const title = snapshot.copy.keys[fieldKey(slot.id, 'title')]?.[locale] || '';
+          const subtitle = snapshot.copy.keys[fieldKey(slot.id, 'subtitle')]?.[locale] || '';
+          const template: TemplateMain = {
+            ...templateMain,
+            elements: resolveTemplateElementsForSlot(templateMain, slot.id),
+            background: {
+              ...templateMain.background,
+              ...(templateMain.slotBackgrounds[slot.id] || {})
+            }
+          };
+          const pngBase64 = await renderTemplatePreviewBase64({
+            slotId: slot.id,
+            title,
+            subtitle,
+            template,
+            templateImageUrls: imageUrls,
+            device
+          });
+
+          const outPath = `${renderDir}/${platform}/${device.id}/${locale}/${slot.id}.png`;
+          await writeFileBase64(outPath, pngBase64);
+        }
+      }
+    }
+  }, [renderDir, templateImageUrls]);
+
   async function handleRender() {
     await runWithBusy(async ({ setDetail }) => {
       setDetail('Saving project config...');
@@ -1662,18 +1727,21 @@ export function App() {
   }
 
   async function handleExport() {
-    await runWithBusy(async () => {
+    await runWithBusy(async ({ setDetail }) => {
       const flags: string[] = [];
       if (doc.pipelines.export.zip) flags.push('--zip');
+      if (doc.pipelines.export.metadataCsv) flags.push('--metadata-csv');
 
-      await persistProjectSnapshot();
-      // Ensure export always uses fresh renders for the currently selected output folder.
-      await runPipeline('render', [projectPath, renderDir]);
+      setDetail('Saving project config...');
+      const snapshot = await persistProjectSnapshot();
+      setDetail('Rendering images from Preview...');
+      await renderExportImagesFromPreview(snapshot);
+      setDetail('Creating output package...');
       await runPipeline('export', [projectPath, renderDir, outputDir, ...flags]);
     }, {
       action: 'export',
       title: 'Exporting',
-      detail: 'Rendering and creating output package...'
+      detail: 'Preparing export...'
     });
   }
 
@@ -2921,12 +2989,14 @@ export function App() {
             <ExportWorkflowPage
               outputDir={outputDir}
               zipEnabled={doc.pipelines.export.zip}
+              metadataCsvEnabled={doc.pipelines.export.metadataCsv}
               renderDir={renderDir}
               isBusy={isBusy}
               onOutputDirChange={setOutputDir}
               onPickOutputDir={handlePickOutputDir}
               canPickOutputDir={isTauriRuntime()}
               onZipEnabledChange={(checked) => updateDoc((next) => { next.pipelines.export.zip = checked; })}
+              onMetadataCsvEnabledChange={(checked) => updateDoc((next) => { next.pipelines.export.metadataCsv = checked; })}
               onExport={handleExport}
             />
           ) : null}
@@ -4744,6 +4814,155 @@ function drawTextBlock(
   }
 
   context.restore();
+}
+
+async function renderTemplatePreviewBase64(params: {
+  slotId: string;
+  title: string;
+  subtitle: string;
+  template: TemplateMain;
+  templateImageUrls: Record<string, string>;
+  device: Device;
+}) {
+  if (typeof document === 'undefined') {
+    throw new Error('Preview renderer is unavailable outside browser runtime.');
+  }
+
+  const { slotId, title, subtitle, template, templateImageUrls, device } = params;
+  const width = Math.max(1, device.width || 1290);
+  const height = Math.max(1, device.height || 2796);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Unable to create canvas context.');
+  }
+
+  const visibleLayers = [...template.elements]
+    .filter((item) => item.visible !== false)
+    .sort((a, b) => a.z - b.z);
+  const previewLayers = visibleLayers.map((layer) => resolvePreviewLayer(context, layer, title, subtitle, width));
+
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.clearRect(0, 0, width, height);
+
+  if (template.background.type === 'gradient') {
+    const parsed = Number.parseFloat(template.background.direction || '180');
+    const degrees = Number.isFinite(parsed) ? parsed : 180;
+    const radians = (degrees * Math.PI) / 180;
+    const dx = Math.sin(radians);
+    const dy = -Math.cos(radians);
+    const x1 = width / 2 - dx * width / 2;
+    const y1 = height / 2 - dy * height / 2;
+    const x2 = width / 2 + dx * width / 2;
+    const y2 = height / 2 + dy * height / 2;
+    const gradient = context.createLinearGradient(x1, y1, x2, y2);
+    gradient.addColorStop(0, template.background.from || '#111827');
+    gradient.addColorStop(1, template.background.to || '#030712');
+    context.fillStyle = gradient;
+  } else {
+    context.fillStyle = template.background.value || '#111827';
+  }
+  context.fillRect(0, 0, width, height);
+
+  for (const activeLayer of previewLayers) {
+    const opacity = clampNumber(activeLayer.opacity, 0, 100) / 100;
+    const centerX = activeLayer.x + activeLayer.w / 2;
+    const centerY = activeLayer.y + activeLayer.h / 2;
+    const radians = (activeLayer.rotation * Math.PI) / 180;
+
+    context.save();
+    context.translate(centerX, centerY);
+    context.rotate(radians);
+    context.translate(-centerX, -centerY);
+    context.globalAlpha = context.globalAlpha * opacity;
+
+    if (activeLayer.kind === 'text') {
+      const textValue = activeLayer.textSource === 'title'
+        ? title
+        : activeLayer.textSource === 'subtitle'
+          ? subtitle
+          : activeLayer.customText;
+      drawTextBlock(context, activeLayer, textValue);
+      context.restore();
+      continue;
+    }
+
+    context.save();
+    drawRoundedRectPath(context, activeLayer.x, activeLayer.y, activeLayer.w, activeLayer.h, activeLayer.cornerRadius || 0);
+    context.fillStyle = activeLayer.source === 'color'
+      ? (activeLayer.fillColor || '#111827')
+      : 'rgba(15,23,42,0.7)';
+    context.fill();
+    context.restore();
+
+    if (activeLayer.source === 'color') {
+      context.restore();
+      continue;
+    }
+
+    const imageSource = templateImageUrls[slotTemplateImageKey(slotId, activeLayer.id)]
+      || templateImageUrls[globalTemplateImageKey(activeLayer.id)];
+
+    if (imageSource) {
+      try {
+        const image = await loadPreviewImage(imageSource);
+        const imageWidth = Math.max(1, image.naturalWidth || image.width);
+        const imageHeight = Math.max(1, image.naturalHeight || image.height);
+        const scale = activeLayer.fit === 'contain'
+          ? Math.min(activeLayer.w / imageWidth, activeLayer.h / imageHeight)
+          : Math.max(activeLayer.w / imageWidth, activeLayer.h / imageHeight);
+        const drawWidth = imageWidth * scale;
+        const drawHeight = imageHeight * scale;
+        const drawX = activeLayer.x + (activeLayer.w - drawWidth) / 2;
+        const drawY = activeLayer.y + (activeLayer.h - drawHeight) / 2;
+
+        context.save();
+        drawRoundedRectPath(context, activeLayer.x, activeLayer.y, activeLayer.w, activeLayer.h, activeLayer.cornerRadius || 0);
+        context.clip();
+        context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+        context.restore();
+      } catch {
+        drawCheckerPattern(context, activeLayer.x, activeLayer.y, activeLayer.w, activeLayer.h, 28);
+      }
+    } else {
+      context.save();
+      drawRoundedRectPath(context, activeLayer.x, activeLayer.y, activeLayer.w, activeLayer.h, activeLayer.cornerRadius || 0);
+      context.clip();
+      drawCheckerPattern(context, activeLayer.x, activeLayer.y, activeLayer.w, activeLayer.h, 28);
+      context.restore();
+
+      context.save();
+      context.fillStyle = '#475569';
+      context.font = `${Math.max(20, Math.round(width * 0.024))}px "SF Pro", sans-serif`;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText('Choose image', activeLayer.x + activeLayer.w / 2, activeLayer.y + activeLayer.h / 2);
+      context.restore();
+    }
+
+    if (activeLayer.deviceFrame) {
+      const frameX = activeLayer.x + activeLayer.frameInset;
+      const frameY = activeLayer.y + activeLayer.frameInset;
+      const frameW = Math.max(0, activeLayer.w - activeLayer.frameInset * 2);
+      const frameH = Math.max(0, activeLayer.h - activeLayer.frameInset * 2);
+      if (frameW > 0 && frameH > 0) {
+        context.save();
+        drawRoundedRectPath(context, frameX, frameY, frameW, frameH, activeLayer.frameRadius);
+        context.lineWidth = activeLayer.frameWidth;
+        context.strokeStyle = activeLayer.frameColor || '#ffffff';
+        context.stroke();
+        context.restore();
+      }
+    }
+
+    context.restore();
+  }
+
+  const dataUrl = canvas.toDataURL('image/png');
+  return dataUrl.split(',')[1] || '';
 }
 
 const SlotRenderPreview = memo(function SlotRenderPreview({

@@ -22,24 +22,28 @@ function LabeledField({ label, children }: LabeledFieldProps) {
 interface ExportWorkflowPageProps {
   outputDir: string;
   zipEnabled: boolean;
+  metadataCsvEnabled: boolean;
   renderDir: string;
   isBusy: boolean;
   onOutputDirChange: (value: string) => void;
   onPickOutputDir: () => void;
   canPickOutputDir: boolean;
   onZipEnabledChange: (checked: boolean) => void;
+  onMetadataCsvEnabledChange: (checked: boolean) => void;
   onExport: () => void;
 }
 
 export function ExportWorkflowPage({
   outputDir,
   zipEnabled,
+  metadataCsvEnabled,
   renderDir,
   isBusy,
   onOutputDirChange,
   onPickOutputDir,
   canPickOutputDir,
   onZipEnabledChange,
+  onMetadataCsvEnabledChange,
   onExport
 }: ExportWorkflowPageProps) {
   return (
@@ -70,6 +74,13 @@ export function ExportWorkflowPage({
                 <p className="text-sm font-medium leading-none">Create zip</p>
               </div>
               <Switch checked={zipEnabled} onCheckedChange={onZipEnabledChange} />
+            </div>
+
+            <div className="flex items-center justify-between gap-3 rounded-md border p-2.5">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium leading-none">Metadata CSV</p>
+              </div>
+              <Switch checked={metadataCsvEnabled} onCheckedChange={onMetadataCsvEnabledChange} />
             </div>
 
             <div className="flex flex-wrap gap-2">
