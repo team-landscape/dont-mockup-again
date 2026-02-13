@@ -17,6 +17,7 @@ import { WorkflowSidebar } from './components/sidebar/WorkflowSidebar';
 import { useProjectImageAssets } from './hooks/useProjectImageAssets';
 import { useProjectBootstrapPaths } from './hooks/useProjectBootstrapPaths';
 import { useBusyRunner } from './hooks/useBusyRunner';
+import { useProjectFileActions } from './hooks/useProjectFileActions';
 import { useProjectImageUploadHandlers } from './hooks/useProjectImageUploadHandlers';
 import {
   collectExpectedRenderSuffixes,
@@ -29,8 +30,6 @@ import {
   isTauriRuntime,
   listSystemFonts,
   pickOutputDir,
-  pickProjectFile,
-  pickProjectSavePath,
   readTextFile,
   runPipeline,
   writeTextFile
@@ -59,7 +58,6 @@ import {
   defaultSystemFonts,
   detectPlatformFromDeviceId,
   fieldKey,
-  getParentDirectory,
   getSlotCanvasCardSize,
   getSlotPreviewCanvasSize,
   imageMimeTypeFromPath,
@@ -192,6 +190,23 @@ export function App() {
     () => savedProjectSignature !== null && currentProjectSignature !== savedProjectSignature,
     [currentProjectSignature, savedProjectSignature]
   );
+  const { handleLoadProject, handleSaveProject, handleCreateNewProject } = useProjectFileActions({
+    projectPath,
+    outputDir,
+    defaultExportDir,
+    defaultProjectFileName: DEFAULT_PROJECT_FILE_NAME,
+    hasUnsavedChanges,
+    doc,
+    resolveOutputDir,
+    runWithBusy,
+    setDoc,
+    setOutputDir,
+    setIssues,
+    setProjectPath,
+    setSavedProjectSignature,
+    setProjectError,
+    setProjectStatus
+  });
 
   const previewRenderDir = useMemo(() => 'dist-render', []);
 
@@ -340,123 +355,6 @@ export function App() {
       mutator(next);
       return next;
     });
-  }
-
-  async function handleLoadProject() {
-    if (!isTauriRuntime()) {
-      setProjectError('Load is available only in desktop runtime.');
-      return;
-    }
-
-    try {
-      const preferredDir = getParentDirectory(projectPath) || defaultExportDir || undefined;
-      const pickedPath = await pickProjectFile(preferredDir);
-      if (!pickedPath || !pickedPath.trim()) {
-        setProjectStatus('Load cancelled.');
-        setProjectError('');
-        return;
-      }
-
-      await runWithBusy(async () => {
-        const text = await readTextFile(pickedPath);
-        const parsed = extractJson(text);
-        const normalized = normalizeProject(parsed);
-        const resolvedLoadedOutputDir = resolveOutputDir(normalized.pipelines.export.outputDir);
-        const loadedSnapshot = buildProjectSnapshotForPersistence(normalized, resolvedLoadedOutputDir, {
-          syncTemplateMain: true,
-          slotWidth: TEMPLATE_REFERENCE_WIDTH
-        });
-        setDoc(normalized);
-        setOutputDir(resolvedLoadedOutputDir);
-        setProjectPath(pickedPath);
-        setSavedProjectSignature(serializeProjectSignature(loadedSnapshot));
-      }, {
-        action: 'load-project',
-        title: 'Loading Project',
-        detail: 'Reading project file...'
-      });
-      setProjectError('');
-      setProjectStatus(`Loaded ${pickedPath}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setProjectError(message);
-    }
-  }
-
-  async function handleSaveProject(options?: { cancelStatus?: string }): Promise<boolean> {
-    if (!isTauriRuntime()) {
-      setProjectError('Save is available only in desktop runtime.');
-      return false;
-    }
-
-    try {
-      let targetPath = projectPath.trim();
-      const cancelStatus = options?.cancelStatus || 'Save cancelled.';
-      if (!targetPath) {
-        const preferredDir = defaultExportDir || undefined;
-        const pickedPath = await pickProjectSavePath(DEFAULT_PROJECT_FILE_NAME, preferredDir);
-        if (!pickedPath || !pickedPath.trim()) {
-          setProjectStatus(cancelStatus);
-          setProjectError('');
-          return false;
-        }
-        targetPath = pickedPath;
-      }
-
-      await runWithBusy(async () => {
-        const next = buildProjectSnapshotForPersistence(doc, resolveOutputDir(outputDir), {
-          syncTemplateMain: true,
-          slotWidth: TEMPLATE_REFERENCE_WIDTH
-        });
-        await writeTextFile(targetPath, JSON.stringify(next, null, 2));
-        setProjectPath(targetPath);
-        setSavedProjectSignature(serializeProjectSignature(next));
-      }, {
-        action: 'save-project',
-        title: 'Saving Project',
-        detail: 'Writing project changes...'
-      });
-      setProjectError('');
-      setProjectStatus(`Saved ${targetPath}`);
-      return true;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setProjectError(message);
-      return false;
-    }
-  }
-
-  async function handleCreateNewProject() {
-    if (hasUnsavedChanges) {
-      const shouldSave = typeof window === 'undefined' || typeof window.confirm !== 'function'
-        ? true
-        : window.confirm('저장되지 않은 변경사항이 있습니다. New 전에 먼저 저장할까요?');
-
-      if (!shouldSave) {
-        setProjectStatus('New cancelled.');
-        setProjectError('');
-        return;
-      }
-
-      const saved = await handleSaveProject({ cancelStatus: 'New cancelled (save cancelled).' });
-      if (!saved) {
-        return;
-      }
-    }
-
-    const fresh = createDefaultProject();
-    const resolvedFreshOutputDir = resolveOutputDir(fresh.pipelines.export.outputDir);
-    const freshSnapshot = buildProjectSnapshotForPersistence(fresh, resolvedFreshOutputDir, {
-      syncTemplateMain: true,
-      slotWidth: TEMPLATE_REFERENCE_WIDTH
-    });
-    setDoc(fresh);
-    setOutputDir(resolvedFreshOutputDir);
-    setIssues([]);
-    setProjectPath('');
-    setSavedProjectSignature(serializeProjectSignature(freshSnapshot));
-    setProjectError('');
-    setProjectStatus('Started a new project (unsaved). Use Save to choose a file.');
   }
 
   function togglePlatform(platform: Platform, checked: boolean) {
