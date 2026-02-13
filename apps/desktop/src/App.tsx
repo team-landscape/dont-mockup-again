@@ -2468,23 +2468,10 @@ export function App() {
 
           {activeStep === 'preview' ? (
             <PreviewWorkflowPage
-              selectedDevice={selectedDevice}
-              selectedLocale={selectedLocale}
-              selectedSlot={selectedSlot}
-              deviceOptions={doc.project.devices.map((device) => ({ value: device.id, label: device.id }))}
               localeOptions={doc.project.locales.map((locale) => ({ value: locale, label: locale }))}
               slotOptions={doc.project.slots.map((slot) => ({ value: slot.id, label: slot.name }))}
-              isBusy={isBusy}
-              expectedPreviewPath={expectedPreviewPath}
               previewPath={previewPath}
-              issues={issues}
               renderSlotPreviewCard={renderPreviewSlotCard}
-              onSelectDevice={setSelectedDevice}
-              onSelectLocale={setSelectedLocale}
-              onSelectSlot={handleSelectSlot}
-              onRender={handleRender}
-              onValidate={handleValidate}
-              onRefreshPreview={handleRefreshPreview}
             />
           ) : null}
 
