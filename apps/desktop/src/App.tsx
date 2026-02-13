@@ -819,6 +819,28 @@ function reorderSlots(slots: Slot[]): Slot[] {
     .sort((a, b) => a.order - b.order);
 }
 
+function sortSlotsByOrder(slots: Slot[]): Slot[] {
+  return [...slots].sort((a, b) => a.order - b.order);
+}
+
+function resolveNextSlotIdentity(slots: Slot[]) {
+  const existingIds = new Set(slots.map((slot) => slot.id));
+  let slotNumber = slots.reduce((max, slot) => {
+    const match = slot.id.match(/^slot(\d+)$/);
+    if (!match) return max;
+    const parsed = Number(match[1]);
+    return Number.isFinite(parsed) ? Math.max(max, parsed) : max;
+  }, 0) + 1;
+  let slotId = `slot${slotNumber}`;
+
+  while (existingIds.has(slotId)) {
+    slotNumber += 1;
+    slotId = `slot${slotNumber}`;
+  }
+
+  return { slotId, slotNumber };
+}
+
 function defaultSlotCanvasPosition(index: number, cardWidth: number, cardHeight: number): SlotCanvasPosition {
   return {
     x: SLOT_CANVAS_BASE_X + index * (cardWidth + SLOT_CANVAS_GAP_X),
@@ -1162,7 +1184,7 @@ export function App() {
 
   function moveSlot(slotId: string, direction: -1 | 1) {
     updateDoc((next) => {
-      const ordered = [...next.project.slots].sort((a, b) => a.order - b.order);
+      const ordered = sortSlotsByOrder(next.project.slots);
       const index = ordered.findIndex((slot) => slot.id === slotId);
       if (index < 0) return;
 
@@ -1177,21 +1199,9 @@ export function App() {
 
   function addSlot() {
     updateDoc((next) => {
-      const existingIds = new Set(next.project.slots.map((slot) => slot.id));
-      const orderedSlots = [...next.project.slots].sort((a, b) => a.order - b.order);
+      const orderedSlots = sortSlotsByOrder(next.project.slots);
       const referenceSlot = orderedSlots.find((slot) => slot.id === 'slot1') || orderedSlots[0];
-      let nextNumber = next.project.slots.reduce((max, slot) => {
-        const match = slot.id.match(/^slot(\d+)$/);
-        if (!match) return max;
-        const parsed = Number(match[1]);
-        return Number.isFinite(parsed) ? Math.max(max, parsed) : max;
-      }, 0) + 1;
-      let nextId = `slot${nextNumber}`;
-
-      while (existingIds.has(nextId)) {
-        nextNumber += 1;
-        nextId = `slot${nextNumber}`;
-      }
+      const { slotId: nextId, slotNumber: nextNumber } = resolveNextSlotIdentity(next.project.slots);
 
       const nextIndex = next.project.slots.length + 1;
       const newSlot = {
@@ -1273,7 +1283,7 @@ export function App() {
   }
 
   async function loadSlotPreviewMap() {
-    const sortedSlots = [...doc.project.slots].sort((a, b) => a.order - b.order);
+    const sortedSlots = sortSlotsByOrder(doc.project.slots);
     const files = await listPngFiles(renderDir);
     const urls: Record<string, string> = {};
     const paths: Record<string, string> = {};
@@ -1361,7 +1371,7 @@ export function App() {
   }
 
   const slots = useMemo(
-    () => [...doc.project.slots].sort((a, b) => a.order - b.order),
+    () => sortSlotsByOrder(doc.project.slots),
     [doc.project.slots]
   );
   const selectedSlotData = useMemo(
@@ -1418,7 +1428,7 @@ export function App() {
 
   const reorderSlotByDrag = useCallback((slotId: string, targetIndex: number) => {
     updateDoc((next) => {
-      const ordered = [...next.project.slots].sort((a, b) => a.order - b.order);
+      const ordered = sortSlotsByOrder(next.project.slots);
       const fromIndex = ordered.findIndex((slot) => slot.id === slotId);
       if (fromIndex < 0) return;
 
