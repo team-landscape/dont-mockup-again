@@ -67,19 +67,20 @@ function shouldUseGeminiPromptMode(command, argsTemplate) {
 }
 
 function buildGeminiPrompt(payload) {
-  const customPrompt = typeof payload.prompt === 'string' ? payload.prompt.trim() : '';
-  const basePrompt = [
+  const stylePrompt = typeof payload.prompt === 'string' ? payload.prompt.trim() : '';
+  const sections = [
     'You are a localization engine for app store screenshots.',
     `Translate each entry from ${payload.sourceLocale} to ${payload.targetLocale}.`,
-    'Do not modify placeholders like {app_name}, %@, {{count}}.',
-    'Return strict JSON only with this shape: {"entries":{"key":"translated"}}.'
-  ].join(' ');
+    'Never alter placeholders such as {app_name}, %@, {{count}}, or %d.',
+    'Keep brand names and product terms consistent.',
+    'Return strict JSON only with this format: {"entries":{"key":"translated"}}.'
+  ];
 
-  if (!customPrompt) {
-    return basePrompt;
+  if (stylePrompt) {
+    sections.push(`Style guidance:\n${stylePrompt}`);
   }
 
-  return `${customPrompt}\n\n${basePrompt}`;
+  return sections.join('\n');
 }
 
 function tryParseJson(text) {

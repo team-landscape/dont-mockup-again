@@ -283,10 +283,7 @@ const defaultLlmConfig: LlmCliConfig = {
     'Translate naturally for the target locale while preserving conversion intent and mobile-first readability.',
     'Keep the tone benefit-driven, concise, and action-oriented.',
     'Prefer wording that improves discoverability and relevance for app-store users in that locale.',
-    'Do not add unnecessary punctuation or emojis unless the source already uses them.',
-    'Never alter placeholders such as {app_name}, %@, {{count}}, or %d.',
-    'Keep brand names and product terms consistent.',
-    'Return strict JSON only with this format: {"entries":{"key":"translated"}}.'
+    'Do not add unnecessary punctuation or emojis unless the source already uses them.'
   ].join('\n')
 };
 const XL_MEDIA_QUERY = '(min-width: 1280px)';
@@ -901,7 +898,6 @@ export function App() {
   const [busyAction, setBusyAction] = useState('');
   const [busyTitle, setBusyTitle] = useState('');
   const [busyDetail, setBusyDetail] = useState('');
-  const [byoyPath, setByoyPath] = useState('examples/byoy.sample.json');
   const [selectedDevice, setSelectedDevice] = useState('ios_phone');
   const [selectedLocale, setSelectedLocale] = useState('en-US');
   const [selectedSlot, setSelectedSlot] = useState('slot1');
@@ -1325,31 +1321,6 @@ export function App() {
       };
     });
   }, []);
-
-  async function handleImportByoy() {
-    await runWithBusy(async () => {
-      const text = await readTextFile(byoyPath);
-      const parsed = extractJson(text);
-      if (!parsed || typeof parsed !== 'object') {
-        throw new Error('BYOY JSON format is invalid');
-      }
-
-      updateDoc((next) => {
-        for (const [key, localeMap] of Object.entries(parsed as Record<string, unknown>)) {
-          if (!localeMap || typeof localeMap !== 'object') continue;
-          next.copy.keys[key] = next.copy.keys[key] || {};
-
-          for (const [locale, value] of Object.entries(localeMap as Record<string, unknown>)) {
-            if (typeof value === 'string') next.copy.keys[key][locale] = value;
-          }
-        }
-      });
-    }, {
-      action: 'import-byoy',
-      title: 'Importing BYOY',
-      detail: 'Reading translation seed JSON...'
-    });
-  }
 
   async function handleRunLocalization() {
     await runWithBusy(async ({ setDetail }) => {
@@ -2346,7 +2317,6 @@ export function App() {
           {activeStep === 'localization' ? (
             <LocalizationWorkflowPage
               sourceLocale={doc.pipelines.localization.sourceLocale || doc.project.locales[0] || 'en-US'}
-              byoyPath={byoyPath}
               isBusy={isBusy}
               isRunningLocalization={isBusy && busyAction === 'localize'}
               localizationBusyLabel={isBusy && busyAction === 'localize' ? busyDetail : ''}
@@ -2366,13 +2336,9 @@ export function App() {
               onSourceLocaleChange={(locale) => updateDoc((next) => {
                 next.pipelines.localization.sourceLocale = locale;
               })}
-              onByoyPathChange={setByoyPath}
-              onImportByoy={handleImportByoy}
               onRunLocalization={handleRunLocalization}
               onLlmCommandChange={(value) => upsertLlmConfig((cfg) => { cfg.command = value; })}
-              onLlmArgsTemplateChange={(value) => upsertLlmConfig((cfg) => { cfg.argsTemplate = value; })}
               onLlmTimeoutSecChange={(value) => upsertLlmConfig((cfg) => { cfg.timeoutSec = value; })}
-              onLlmPromptVersionChange={(value) => upsertLlmConfig((cfg) => { cfg.promptVersion = value; })}
               onLlmPromptChange={(value) => upsertLlmConfig((cfg) => { cfg.prompt = value; })}
               getCopyValue={(key, locale) => doc.copy.keys[key]?.[locale] || ''}
               onCopyChange={updateCopyByKey}

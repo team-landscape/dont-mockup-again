@@ -43,9 +43,7 @@ Project config example (`pipelines.localization.llmCli`):
 ```json
 {
   "command": "gemini",
-  "argsTemplate": [],
   "timeoutSec": 120,
-  "promptVersion": "v1",
   "prompt": "You are an expert ASO localization copywriter for app store screenshots..."
 }
 ```
@@ -60,11 +58,11 @@ Adapter behavior:
 
 - Sends translation payload JSON into CLI input (stdin).
 - For `gemini`/`gemini-cli`, automatically uses prompt mode and parses JSON output.
-- Uses `llmCli.prompt` as direct localization prompt input.
-- Supports file-placeholder args templates (`{INPUT}`, `{OUTPUT}`, `{LOCALE}`) for custom wrappers.
+- Uses `llmCli.prompt` as style guidance input.
+- Always enforces placeholder/brand consistency and strict JSON output format internally.
 - Reads JSON output and applies to `copy.keys`.
 - Validates placeholder preservation (`{app_name}`, `%@`, `{{count}}`).
-- Caches translations by hash of `(sourceText + locale + promptVersion)`.
+- Caches translations by hash of `(sourceText + locale + prompt settings)`.
 
 ## Desktop App
 
@@ -88,7 +86,6 @@ Implemented behavior:
 - Load / Save `.storeshot.json`
 - Create a new project template in-app
 - Edit slots and copy per locale
-- Import BYOY JSON into `copy.keys`
 - Run render / validate / export / upload pipelines
 - Preview rendered PNGs directly in the app
 

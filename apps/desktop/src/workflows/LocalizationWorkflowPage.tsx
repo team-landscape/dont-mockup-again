@@ -24,15 +24,12 @@ function LabeledField({ label, children }: LabeledFieldProps) {
 
 interface LlmConfigValue {
   command: string;
-  argsTemplate: string[];
   timeoutSec: number;
-  promptVersion: string;
   prompt?: string;
 }
 
 interface LocalizationWorkflowPageProps {
   sourceLocale: string;
-  byoyPath: string;
   isBusy: boolean;
   isRunningLocalization: boolean;
   localizationBusyLabel: string;
@@ -41,13 +38,9 @@ interface LocalizationWorkflowPageProps {
   locales: string[];
   localeManagerNode: ReactNode;
   onSourceLocaleChange: (locale: string) => void;
-  onByoyPathChange: (path: string) => void;
-  onImportByoy: () => void;
   onRunLocalization: () => void;
   onLlmCommandChange: (value: string) => void;
-  onLlmArgsTemplateChange: (value: string[]) => void;
   onLlmTimeoutSecChange: (value: number) => void;
-  onLlmPromptVersionChange: (value: string) => void;
   onLlmPromptChange: (value: string) => void;
   getCopyValue: (key: string, locale: string) => string;
   onCopyChange: (key: string, locale: string, value: string) => void;
@@ -55,7 +48,6 @@ interface LocalizationWorkflowPageProps {
 
 export function LocalizationWorkflowPage({
   sourceLocale,
-  byoyPath,
   isBusy,
   isRunningLocalization,
   localizationBusyLabel,
@@ -64,13 +56,9 @@ export function LocalizationWorkflowPage({
   locales,
   localeManagerNode,
   onSourceLocaleChange,
-  onByoyPathChange,
-  onImportByoy,
   onRunLocalization,
   onLlmCommandChange,
-  onLlmArgsTemplateChange,
   onLlmTimeoutSecChange,
-  onLlmPromptVersionChange,
   onLlmPromptChange,
   getCopyValue,
   onCopyChange
@@ -110,31 +98,11 @@ export function LocalizationWorkflowPage({
               </Button>
             </div>
 
-            <LabeledField label="JSON Import Path (optional seed)">
-              <Input value={byoyPath} onChange={(event) => onByoyPathChange(event.target.value)} />
-            </LabeledField>
-            <Button variant="outline" disabled={isBusy} onClick={onImportByoy}>Import JSON to Copy</Button>
-
             <div className="rounded-md border p-3">
               <p className="mb-3 text-sm font-medium">Local LLM CLI Config</p>
               <div className="grid gap-3">
                 <LabeledField label="Command">
                   <Input value={llmConfig.command} onChange={(event) => onLlmCommandChange(event.target.value)} />
-                </LabeledField>
-                <LabeledField label="Args Template (comma separated)">
-                  <Input
-                    value={llmConfig.argsTemplate.join(', ')}
-                    onChange={(event) => {
-                      const nextArgs = event.target.value
-                        .split(',')
-                        .map((item) => item.trim())
-                        .filter(Boolean);
-                      onLlmArgsTemplateChange(nextArgs);
-                    }}
-                  />
-                </LabeledField>
-                <LabeledField label="Prompt Version">
-                  <Input value={llmConfig.promptVersion} onChange={(event) => onLlmPromptVersionChange(event.target.value)} />
                 </LabeledField>
                 <LabeledField label="Timeout Sec">
                   <Input
@@ -147,11 +115,11 @@ export function LocalizationWorkflowPage({
                     }}
                   />
                 </LabeledField>
-                <LabeledField label="Translation Prompt">
+                <LabeledField label="Style Prompt">
                   <Textarea
                     value={llmConfig.prompt || ''}
                     onChange={(event) => onLlmPromptChange(event.target.value)}
-                    className="min-h-[140px]"
+                    className="min-h-[240px]"
                   />
                 </LabeledField>
               </div>

@@ -66,10 +66,8 @@
       "sourceLocale": "en-US",
       "llmCli": {
         "command": "gemini",
-        "argsTemplate": [],
         "timeoutSec": 120,
-        "promptVersion": "v1",
-        "prompt": "You are an expert ASO localization copywriter for app store screenshots.\nTranslate naturally for the target locale while preserving conversion intent and mobile-first readability.\nKeep the tone benefit-driven, concise, and action-oriented.\nPrefer wording that improves discoverability and relevance for app-store users in that locale.\nDo not add unnecessary punctuation or emojis unless the source already uses them.\nNever alter placeholders such as {app_name}, %@, {{count}}, or %d.\nKeep brand names and product terms consistent.\nReturn strict JSON only with this format: {\"entries\":{\"key\":\"translated\"}}."
+        "prompt": "You are an expert ASO localization copywriter for app store screenshots.\nTranslate naturally for the target locale while preserving conversion intent and mobile-first readability.\nKeep the tone benefit-driven, concise, and action-oriented.\nPrefer wording that improves discoverability and relevance for app-store users in that locale.\nDo not add unnecessary punctuation or emojis unless the source already uses them."
       }
     },
     "export": {
