@@ -1,6 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { flushSync } from 'react-dom';
-import { ArrowDown, ArrowUp, FolderDown, FolderUp, Loader2, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, FolderDown, FolderUp, Plus, Save, Trash2 } from 'lucide-react';
 
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
@@ -30,6 +30,7 @@ import { ScreensWorkflowPage } from './workflows/ScreensWorkflowPage';
 import { renderTemplatePreviewBase64, SlotRenderPreview } from './components/preview/SlotPreview';
 import { InfiniteSlotCanvas, type CanvasSlotItem } from './components/canvas/InfiniteSlotCanvas';
 import { OnboardingOverlay } from './components/onboarding/OnboardingOverlay';
+import { BusyOverlay } from './components/overlay/BusyOverlay';
 import {
   browserFileToBase64,
   getDefaultExportDir,
@@ -2352,19 +2353,11 @@ export function App() {
         </div>
       </div>
 
-      {isBusy ? (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-background/70 p-4 backdrop-blur-sm">
-          <Card className="w-full max-w-[440px] shadow-2xl">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {busyTitle || 'Processing'}
-              </CardTitle>
-              <CardDescription>{busyDetail || '작업을 실행하고 있습니다. 잠시만 기다려 주세요.'}</CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
-      ) : null}
+      <BusyOverlay
+        open={isBusy}
+        title={busyTitle || 'Processing'}
+        detail={busyDetail || '작업을 실행하고 있습니다. 잠시만 기다려 주세요.'}
+      />
 
       <OnboardingOverlay
         open={isOnboardingOpen}
