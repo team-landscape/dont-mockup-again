@@ -1640,6 +1640,12 @@ export function App() {
     updateCopyByKey(selectedSubtitleKey, selectedLocale, value);
   }, [selectedLocale, selectedSubtitleKey, updateCopyByKey]);
 
+  const handleSelectSlot = useCallback((slotId: string) => {
+    startSlotTransition(() => {
+      setSelectedSlot(slotId);
+    });
+  }, [startSlotTransition]);
+
   const renderPreviewSlotCard = useCallback((params: {
     locale: string;
     slotId: string;
@@ -1817,12 +1823,6 @@ export function App() {
       main.elements = main.elements.filter((item) => item.id !== elementId);
     });
   }, [updateTemplateMain]);
-
-  const handleSelectSlot = useCallback((slotId: string) => {
-    startSlotTransition(() => {
-      setSelectedSlot(slotId);
-    });
-  }, [startSlotTransition]);
 
   const openTemplateImagePicker = useCallback((elementId: string) => {
     templateImageTargetRef.current = elementId;
