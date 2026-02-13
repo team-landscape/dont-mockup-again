@@ -17,6 +17,7 @@ import { useBusyRunner } from './hooks/useBusyRunner';
 import { useExportAction } from './hooks/useExportAction';
 import { useProjectFileActions } from './hooks/useProjectFileActions';
 import { useProjectImageUploadHandlers } from './hooks/useProjectImageUploadHandlers';
+import { usePersistProjectSnapshot } from './hooks/usePersistProjectSnapshot';
 import { usePipelineActions } from './hooks/usePipelineActions';
 import { useOnboardingActions } from './hooks/useOnboardingActions';
 import { useProjectSlotActions } from './hooks/useProjectSlotActions';
@@ -28,8 +29,7 @@ import { resolveOutputDir as resolveOutputDirPath } from './lib/output-dir';
 import {
   isTauriRuntime,
   listSystemFonts,
-  pickOutputDir,
-  writeTextFile
+  pickOutputDir
 } from './lib/desktop-runtime';
 import {
   type Device,
@@ -333,19 +333,14 @@ export function App() {
     setSavedProjectSignature(currentProjectSignature);
   }, [currentProjectSignature, isProjectBaselineReady, savedProjectSignature]);
 
-  const persistProjectSnapshot = useCallback(async (options?: { syncTemplateMain?: boolean }) => {
-    if (!projectPath.trim()) {
-      throw new Error('No project file selected. Save project first.');
-    }
-
-    const next = buildProjectSnapshotForPersistence(doc, resolveOutputDir(outputDir), {
-      syncTemplateMain: options?.syncTemplateMain !== false,
-      slotWidth: Math.max(1, selectedDeviceSpec.width || TEMPLATE_REFERENCE_WIDTH)
-    });
-    await writeTextFile(projectPath, JSON.stringify(next, null, 2));
-    setSavedProjectSignature(serializeProjectSignature(next));
-    return next;
-  }, [doc, outputDir, projectPath, resolveOutputDir, selectedDeviceSpec.width]);
+  const persistProjectSnapshot = usePersistProjectSnapshot({
+    doc,
+    outputDir,
+    projectPath,
+    selectedDeviceWidth: selectedDeviceSpec.width,
+    resolveOutputDir,
+    setSavedProjectSignature
+  });
   const handleExport = useExportAction({
     doc,
     outputDir,
@@ -500,6 +495,28 @@ export function App() {
       updateTemplateElement={updateTemplateElement}
     />
   );
+  const selectedSlotTitleValue = selectedSlotData
+    ? (doc.copy.keys[fieldKey(selectedSlotData.id, 'title')]?.[selectedLocale] || '')
+    : '';
+  const selectedSlotSubtitleValue = selectedSlotData
+    ? (doc.copy.keys[fieldKey(selectedSlotData.id, 'subtitle')]?.[selectedLocale] || '')
+    : '';
+  const deviceOptions = useMemo(
+    () => doc.project.devices.map((device) => ({ value: device.id, label: device.id })),
+    [doc.project.devices]
+  );
+  const slotOptions = useMemo(
+    () => slots.map((slot) => ({ value: slot.id, label: slot.name })),
+    [slots]
+  );
+  const previewLocaleOptions = useMemo(
+    () => doc.project.locales.map((locale) => ({ value: locale, label: locale })),
+    [doc.project.locales]
+  );
+  const previewSlotOptions = useMemo(
+    () => doc.project.slots.map((slot) => ({ value: slot.id, label: slot.name })),
+    [doc.project.slots]
+  );
 
   return (
     <div className="grid min-h-screen w-full max-w-none gap-4 p-4 lg:p-6">
@@ -564,8 +581,8 @@ export function App() {
                   selectedSlotData={selectedSlotData}
                   selectedLocale={selectedLocale}
                   selectedSlotNameDraft={selectedSlotNameDraft}
-                  titleValue={selectedSlotData ? (doc.copy.keys[fieldKey(selectedSlotData.id, 'title')]?.[selectedLocale] || '') : ''}
-                  subtitleValue={selectedSlotData ? (doc.copy.keys[fieldKey(selectedSlotData.id, 'subtitle')]?.[selectedLocale] || '') : ''}
+                  titleValue={selectedSlotTitleValue}
+                  subtitleValue={selectedSlotSubtitleValue}
                   isMoveUpDisabled={isMoveUpDisabled}
                   isMoveDownDisabled={isMoveDownDisabled}
                   templateInspectorNode={templateInspectorSection}
@@ -584,8 +601,8 @@ export function App() {
               selectedDevice={selectedDevice}
               selectedSlot={selectedSlot}
               slotCount={slots.length}
-              deviceOptions={doc.project.devices.map((device) => ({ value: device.id, label: device.id }))}
-              slotOptions={slots.map((slot) => ({ value: slot.id, label: slot.name }))}
+              deviceOptions={deviceOptions}
+              slotOptions={slotOptions}
               onSelectDevice={setSelectedDevice}
               onSelectSlot={handleSelectSlot}
               onAddSlot={addSlot}
@@ -620,11 +637,11 @@ export function App() {
 
           {activeStep === 'preview' ? (
             <PreviewWorkflowPage
-              deviceOptions={doc.project.devices.map((device) => ({ value: device.id, label: device.id }))}
+              deviceOptions={deviceOptions}
               selectedDevice={selectedDevice}
               onSelectDevice={setSelectedDevice}
-              localeOptions={doc.project.locales.map((locale) => ({ value: locale, label: locale }))}
-              slotOptions={doc.project.slots.map((slot) => ({ value: slot.id, label: slot.name }))}
+              localeOptions={previewLocaleOptions}
+              slotOptions={previewSlotOptions}
               previewPath={previewPath}
               renderSlotPreviewCard={renderPreviewSlotCard}
             />
