@@ -982,6 +982,8 @@ export function App() {
     if (typeof window === 'undefined') return false;
     return window.matchMedia(XL_MEDIA_QUERY).matches;
   });
+  const slotImageInputRef = useRef<HTMLInputElement>(null);
+  const slotImageTargetRef = useRef<string | null>(null);
   const templateImageInputRef = useRef<HTMLInputElement>(null);
   const templateImageTargetRef = useRef<string | null>(null);
   const slotSourceEntriesRef = useRef<Array<{ id: string; sourceImagePath: string }>>([]);
@@ -1357,7 +1359,14 @@ export function App() {
     });
   }
 
+  function openSlotImagePicker(slotId: string) {
+    slotImageTargetRef.current = slotId;
+    slotImageInputRef.current?.click();
+  }
+
   function addSlot() {
+    let createdSlotId = '';
+
     updateDoc((next) => {
       const orderedSlots = sortSlotsByOrder(next.project.slots);
       const referenceSlot = orderedSlots.find((slot) => slot.id === 'slot1') || orderedSlots[0];
@@ -1368,8 +1377,9 @@ export function App() {
         id: nextId,
         name: `슬롯 ${nextNumber}`,
         order: nextIndex,
-        sourceImagePath: referenceSlot?.sourceImagePath || `examples/assets/source/shot${Math.min(3, nextNumber)}.png`
+        sourceImagePath: ''
       };
+      createdSlotId = newSlot.id;
 
       const referenceTitleKey = referenceSlot ? fieldKey(referenceSlot.id, 'title') : '';
       const referenceSubtitleKey = referenceSlot ? fieldKey(referenceSlot.id, 'subtitle') : '';
@@ -1390,6 +1400,13 @@ export function App() {
       };
       next.template.main.slotElements[newSlot.id] = cloneTemplateElements(referenceElements);
     });
+
+    if (createdSlotId) {
+      startSlotTransition(() => {
+        setSelectedSlot(createdSlotId);
+      });
+      openSlotImagePicker(createdSlotId);
+    }
   }
 
   function removeSlot(slotId: string) {
@@ -1928,6 +1945,54 @@ export function App() {
     templateImageInputRef.current?.click();
   }, []);
 
+  async function handleSlotImageFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const slotId = slotImageTargetRef.current;
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!slotId || !file) {
+      slotImageTargetRef.current = null;
+      return;
+    }
+
+    const extension = file.name.includes('.')
+      ? (file.name.split('.').pop() || 'png').toLowerCase()
+      : 'png';
+    const normalizedExtension = extension.replace(/[^a-z0-9]/g, '') || 'png';
+    const outputPath = `examples/assets/source/uploads/${slotId}-${Date.now()}.${normalizedExtension}`;
+
+    try {
+      await runWithBusy(async () => {
+        const base64 = await browserFileToBase64(file);
+        const mime = imageMimeTypeFromPath(file.name);
+        const canWriteToDisk = isTauriRuntime();
+        if (canWriteToDisk) {
+          await writeFileBase64(outputPath, base64);
+        }
+
+        const sourcePath = canWriteToDisk ? outputPath : file.name;
+        updateDoc((next) => {
+          const target = next.project.slots.find((slot) => slot.id === slotId);
+          if (!target) return;
+          target.sourceImagePath = sourcePath;
+        });
+
+        setSlotSourceUrls((current) => ({
+          ...current,
+          [slotId]: `data:${mime};base64,${base64}`
+        }));
+      }, {
+        action: 'upload-slot-image',
+        title: 'Uploading Slot Image',
+        detail: 'Saving selected slot image...'
+      });
+    } catch {
+      // Keep file picker UX resilient if writing image fails.
+    } finally {
+      slotImageTargetRef.current = null;
+    }
+  }
+
   async function handleTemplateImageFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const elementId = templateImageTargetRef.current;
     const file = event.target.files?.[0];
@@ -2392,6 +2457,21 @@ export function App() {
                   />
                 </LabeledField>
 
+                <LabeledField label="Slot Image">
+                  <div className="space-y-2">
+                    <p className="truncate rounded-md border bg-muted/60 p-2 text-xs">
+                      {selectedSlotData.sourceImagePath || 'No slot image selected'}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openSlotImagePicker(selectedSlotData.id)}
+                    >
+                      Choose Image
+                    </Button>
+                  </div>
+                </LabeledField>
+
                 <InspectorCopyFields
                   locale={selectedLocale}
                   titleValue={doc.copy.keys[fieldKey(selectedSlotData.id, 'title')]?.[selectedLocale] || ''}
@@ -2435,6 +2515,14 @@ export function App() {
 
   return (
     <div className="grid min-h-screen w-full max-w-none gap-4 p-4 lg:p-6">
+      <input
+        ref={slotImageInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(event) => { void handleSlotImageFileChange(event); }}
+      />
+
       <input
         ref={templateImageInputRef}
         type="file"
