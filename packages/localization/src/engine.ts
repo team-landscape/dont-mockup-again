@@ -1,13 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { translateWithByok } from './byok.ts';
 import { translateWithCli } from './llmCli.ts';
 
-function normalizeLocalizationMode(value) {
-  if (value === 'llm-cli') {
-    return 'llm-cli';
-  }
-  return 'byok';
+function normalizeLocalizationMode(_value) {
+  return 'llm-cli';
 }
 
 function resolveSourceLocale(projectDoc, explicitSourceLocale) {
@@ -112,17 +108,6 @@ export async function localizeProjectCopy(projectDoc, options = {}) {
   const byLocale = {};
   let localizedEntryCount = 0;
 
-  const byokConfig = {
-    baseUrl: 'https://api.openai.com/v1',
-    endpointPath: '/chat/completions',
-    model: 'gpt-4o-mini',
-    apiKeyEnv: 'OPENAI_API_KEY',
-    timeoutSec: 120,
-    promptVersion: 'v1',
-    cachePath: '.storeshot/cache/translation-cache.json',
-    ...(localization.byok || {})
-  };
-
   const llmCliConfig = {
     command: 'gemini',
     argsTemplate: [],
@@ -132,39 +117,21 @@ export async function localizeProjectCopy(projectDoc, options = {}) {
     ...(localization.llmCli || {})
   };
 
-  const byokStyleGuide = await readOptionalTextFile(byokConfig.styleGuidePath, projectDir);
   const llmStyleGuide = await readOptionalTextFile(llmCliConfig.styleGuidePath, projectDir);
 
   for (const targetLocale of targetLocales) {
-    let translatedEntries = {};
-    if (mode === 'llm-cli') {
-      translatedEntries = await translateWithCli({
-        command: llmCliConfig.command,
-        argsTemplate: llmCliConfig.argsTemplate,
-        sourceLocale,
-        targetLocale,
-        entries: sourceEntries,
-        promptVersion: llmCliConfig.promptVersion,
-        styleGuide: llmStyleGuide,
-        timeoutSec: parsePositiveInt(llmCliConfig.timeoutSec, 120),
-        cachePath: resolvePath(llmCliConfig.cachePath, projectDir),
-        cwd: projectDir
-      });
-    } else {
-      translatedEntries = await translateWithByok({
-        baseUrl: byokConfig.baseUrl,
-        endpointPath: byokConfig.endpointPath,
-        model: byokConfig.model,
-        apiKeyEnv: byokConfig.apiKeyEnv,
-        sourceLocale,
-        targetLocale,
-        entries: sourceEntries,
-        promptVersion: byokConfig.promptVersion,
-        styleGuide: byokStyleGuide,
-        timeoutSec: parsePositiveInt(byokConfig.timeoutSec, 120),
-        cachePath: resolvePath(byokConfig.cachePath, projectDir)
-      });
-    }
+    const translatedEntries = await translateWithCli({
+      command: llmCliConfig.command,
+      argsTemplate: llmCliConfig.argsTemplate,
+      sourceLocale,
+      targetLocale,
+      entries: sourceEntries,
+      promptVersion: llmCliConfig.promptVersion,
+      styleGuide: llmStyleGuide,
+      timeoutSec: parsePositiveInt(llmCliConfig.timeoutSec, 120),
+      cachePath: resolvePath(llmCliConfig.cachePath, projectDir),
+      cwd: projectDir
+    });
 
     let localeUpdates = 0;
     for (const [key, translatedText] of Object.entries(translatedEntries)) {

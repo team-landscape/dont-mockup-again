@@ -6,7 +6,7 @@ Store screenshot automation tool for macOS desktop workflows.
 - Apply a main template with per `(device, locale)` overrides.
 - Render `(slot x locale x device)` PNG outputs.
 - Import translations from BYOY JSON.
-- Run translation via BYOK (OpenAI-compatible API) or local LLM CLI.
+- Run translation via local LLM CLI.
 - Export folder layout + zip + optional fastlane layout.
 
 ## Repository Layout
@@ -14,7 +14,7 @@ Store screenshot automation tool for macOS desktop workflows.
 - `apps/desktop`: Tauri + React desktop shell
 - `packages/core`: project model, template merge, text layout, validation
 - `packages/renderer`: scene renderer (Playwright first, PNG fallback)
-- `packages/localization`: BYOY importer + BYOK/LLM localization adapters
+- `packages/localization`: BYOY importer + LLM localization adapter
 - `packages/exporter`: dist/metadata/zip + fastlane-compatible layout
 - `packages/uploader`: local fastlane command wrapper
 - `examples`: sample project and assets
@@ -34,28 +34,9 @@ Or run one-shot:
 node --import tsx scripts/pipeline.js all examples/sample.storeshot.json dist
 ```
 
-## Localization Modes
+## Localization
 
-`pipelines.localization.mode` supports:
-
-- `byok`: OpenAI-compatible API with user-provided key via env var
-- `llm-cli`: local command adapter (`gemini-cli`, `ollama` wrapper, custom scripts)
-
-BYOK example (`pipelines.localization.byok`):
-
-```json
-{
-  "baseUrl": "https://api.openai.com/v1",
-  "endpointPath": "/chat/completions",
-  "model": "gpt-4o-mini",
-  "apiKeyEnv": "OPENAI_API_KEY",
-  "timeoutSec": 120,
-  "promptVersion": "v1",
-  "styleGuidePath": "style.md"
-}
-```
-
-Local LLM CLI example (`pipelines.localization.llmCli`):
+`pipelines.localization` uses local CLI mode (`llm-cli`) only.
 
 Project config example (`pipelines.localization.llmCli`):
 
@@ -75,7 +56,7 @@ Run localization:
 node --import tsx scripts/pipeline.js localize examples/sample.storeshot.json --write
 ```
 
-Adapter behavior (both modes):
+Adapter behavior:
 
 - Sends translation payload JSON into CLI input (stdin).
 - For `gemini`/`gemini-cli`, automatically uses prompt mode and parses JSON output.

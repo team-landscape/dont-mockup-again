@@ -147,19 +147,6 @@ interface LlmCliConfig {
   styleGuidePath?: string;
 }
 
-interface ByokConfig {
-  baseUrl: string;
-  endpointPath: string;
-  model: string;
-  apiKeyEnv: string;
-  timeoutSec: number;
-  promptVersion: string;
-  cachePath?: string;
-  sourceLocale?: string;
-  targetLocales?: string[];
-  styleGuidePath?: string;
-}
-
 interface StoreShotDoc {
   schemaVersion: number;
   project: {
@@ -180,9 +167,8 @@ interface StoreShotDoc {
   };
   pipelines: {
     localization: {
-      mode: 'byok' | 'llm-cli';
+      mode: 'llm-cli';
       sourceLocale?: string;
-      byok?: ByokConfig;
       llmCli?: LlmCliConfig;
     };
     export: {
@@ -219,7 +205,7 @@ interface SlotCanvasPosition {
 
 const steps: Array<{ id: StepId; title: string; description: string }> = [
   { id: 'screens', title: 'Screens', description: '미리보기 + 슬롯 + 템플릿 편집 Composer' },
-  { id: 'localization', title: 'Localization', description: 'BYOK 또는 Local LLM CLI 설정 + copy 편집' },
+  { id: 'localization', title: 'Localization', description: 'Local LLM CLI 설정 + copy 편집' },
   { id: 'preview', title: 'Preview / Validate', description: '렌더/검증/프리뷰' },
   { id: 'export', title: 'Export', description: 'dist/zip export' }
 ];
@@ -286,16 +272,6 @@ const defaultSystemFonts = [
   'Roboto',
   'Inter'
 ];
-
-const defaultByokConfig: ByokConfig = {
-  baseUrl: 'https://api.openai.com/v1',
-  endpointPath: '/chat/completions',
-  model: 'gpt-4o-mini',
-  apiKeyEnv: 'OPENAI_API_KEY',
-  timeoutSec: 120,
-  promptVersion: 'v1',
-  styleGuidePath: 'style.md'
-};
 
 const defaultLlmConfig: LlmCliConfig = {
   command: 'gemini',
@@ -752,9 +728,8 @@ function createDefaultProject(): StoreShotDoc {
     },
     pipelines: {
       localization: {
-        mode: 'byok',
+        mode: 'llm-cli',
         sourceLocale: 'en-US',
-        byok: clone(defaultByokConfig),
         llmCli: clone(defaultLlmConfig)
       },
       export: {
@@ -814,8 +789,6 @@ function normalizeProject(raw: unknown): StoreShotDoc {
     )
   });
   const mergedLocales = doc.project?.locales || base.project.locales;
-  const rawLocalizationMode = doc.pipelines?.localization?.mode;
-  const normalizedLocalizationMode = rawLocalizationMode === 'llm-cli' ? 'llm-cli' : 'byok';
   const sourceLocaleFromDoc = doc.pipelines?.localization?.sourceLocale || mergedLocales[0] || base.project.locales[0];
   const normalizedSourceLocale = mergedLocales.includes(sourceLocaleFromDoc)
     ? sourceLocaleFromDoc
@@ -841,9 +814,8 @@ function normalizeProject(raw: unknown): StoreShotDoc {
     },
     pipelines: {
       localization: {
-        mode: normalizedLocalizationMode,
+        mode: 'llm-cli',
         sourceLocale: normalizedSourceLocale,
-        byok: { ...defaultByokConfig, ...doc.pipelines?.localization?.byok },
         llmCli: { ...defaultLlmConfig, ...doc.pipelines?.localization?.llmCli }
       },
       export: {
@@ -976,7 +948,6 @@ export function App() {
     [renderDir, selectedPlatform, selectedDevice, selectedLocale, selectedSlot]
   );
 
-  const byokConfig = doc.pipelines.localization.byok || clone(defaultByokConfig);
   const llmConfig = doc.pipelines.localization.llmCli || clone(defaultLlmConfig);
   const deferredTemplateMain = useDeferredValue(doc.template.main);
   const templateElements = useMemo(
@@ -1490,13 +1461,6 @@ export function App() {
     }
 
     setIsOnboardingOpen(false);
-  }
-
-  function upsertByokConfig(mutator: (cfg: ByokConfig) => void) {
-    updateDoc((next) => {
-      next.pipelines.localization.byok = next.pipelines.localization.byok || clone(defaultByokConfig);
-      mutator(next.pipelines.localization.byok);
-    });
   }
 
   function upsertLlmConfig(mutator: (cfg: LlmCliConfig) => void) {
@@ -2368,13 +2332,11 @@ export function App() {
 
           {activeStep === 'localization' ? (
             <LocalizationWorkflowPage
-              mode={doc.pipelines.localization.mode}
               sourceLocale={doc.pipelines.localization.sourceLocale || doc.project.locales[0] || 'en-US'}
               byoyPath={byoyPath}
               isBusy={isBusy}
               isRunningLocalization={isBusy && busyAction === 'localize'}
               localizationBusyLabel={isBusy && busyAction === 'localize' ? busyDetail : ''}
-              byokConfig={byokConfig}
               llmConfig={llmConfig}
               slots={slots.map((slot) => ({ id: slot.id, name: slot.name }))}
               locales={doc.project.locales}
@@ -2388,22 +2350,12 @@ export function App() {
                   })}
                 />
               )}
-              onModeChange={(mode) => updateDoc((next) => {
-                next.pipelines.localization.mode = mode;
-              })}
               onSourceLocaleChange={(locale) => updateDoc((next) => {
                 next.pipelines.localization.sourceLocale = locale;
               })}
               onByoyPathChange={setByoyPath}
               onImportByoy={handleImportByoy}
               onRunLocalization={handleRunLocalization}
-              onByokBaseUrlChange={(value) => upsertByokConfig((cfg) => { cfg.baseUrl = value; })}
-              onByokEndpointPathChange={(value) => upsertByokConfig((cfg) => { cfg.endpointPath = value; })}
-              onByokModelChange={(value) => upsertByokConfig((cfg) => { cfg.model = value; })}
-              onByokApiKeyEnvChange={(value) => upsertByokConfig((cfg) => { cfg.apiKeyEnv = value; })}
-              onByokPromptVersionChange={(value) => upsertByokConfig((cfg) => { cfg.promptVersion = value; })}
-              onByokTimeoutSecChange={(value) => upsertByokConfig((cfg) => { cfg.timeoutSec = value; })}
-              onByokStyleGuidePathChange={(value) => upsertByokConfig((cfg) => { cfg.styleGuidePath = value; })}
               onLlmCommandChange={(value) => upsertLlmConfig((cfg) => { cfg.command = value; })}
               onLlmArgsTemplateChange={(value) => upsertLlmConfig((cfg) => { cfg.argsTemplate = value; })}
               onLlmTimeoutSecChange={(value) => upsertLlmConfig((cfg) => { cfg.timeoutSec = value; })}

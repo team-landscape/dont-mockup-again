@@ -102,7 +102,7 @@ test('exporter creates zip output', async () => {
   assert.equal(await exists(result.zipPath), true);
 });
 
-test('localization engine maps legacy byoy mode to byok', async () => {
+test('localization engine normalizes legacy mode to llm-cli', async () => {
   const project = await loadProject(sampleProjectPath);
   const doc = JSON.parse(JSON.stringify(project.doc));
   doc.project.locales = ['en-US'];
@@ -113,6 +113,6 @@ test('localization engine maps legacy byoy mode to byok', async () => {
   };
 
   const result = await localizeProjectCopy(doc, { projectDir: path.dirname(sampleProjectPath) });
-  assert.equal(result.mode, 'byok');
+  assert.equal(result.mode, 'llm-cli');
   assert.equal(result.skipped, true);
 });
