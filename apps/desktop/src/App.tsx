@@ -4693,18 +4693,12 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
 
       {editable ? (
         <div className="pointer-events-none absolute inset-0">
-          {editableLayers.map((layer) => {
-            const isSelectedLayer = selectedElementId === layer.id;
-            return (
+          {editableLayers
+            .filter((layer) => layer.id === selectedElementId)
+            .map((layer) => (
               <div
                 key={layer.id}
-                className={`pointer-events-auto absolute cursor-move rounded-md border ${
-                  isSelectedLayer
-                    ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_rgba(14,165,233,0.45)]'
-                    : layer.kind === 'text'
-                      ? 'border-amber-300/90 bg-amber-500/10'
-                      : 'border-cyan-300/90 bg-cyan-500/10'
-                }`}
+                className="pointer-events-auto absolute cursor-move rounded-md border border-primary bg-transparent shadow-[0_0_0_1px_rgba(14,165,233,0.45)]"
                 style={{
                   left: `${(layer.x / width) * 100}%`,
                   top: `${(layer.y / height) * 100}%`,
@@ -4715,18 +4709,8 @@ const SlotRenderPreview = memo(function SlotRenderPreview({
                 onPointerMove={handleLayerPointerMove}
                 onPointerUp={handleLayerPointerEnd}
                 onPointerCancel={handleLayerPointerEnd}
-              >
-                <div className={`pointer-events-none absolute left-1 top-1 rounded px-1 py-0.5 text-[9px] font-medium ${
-                  isSelectedLayer
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-background/90 text-foreground'
-                }`}
-                >
-                  {layer.name}
-                </div>
-              </div>
-            );
-          })}
+              />
+            ))}
         </div>
       ) : null}
     </div>
