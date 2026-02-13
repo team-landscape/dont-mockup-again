@@ -1,4 +1,4 @@
-# StoreShot Studio
+# dont mockup again
 
 Store screenshot automation toolkit with a desktop UI (Tauri + React) and reusable pipeline modules.
 
@@ -29,7 +29,7 @@ It helps you generate store-ready screenshot assets from one project definition:
 - `packages/uploader`: local fastlane wrapper
 - `scripts/pipeline.js`: pipeline command entrypoint
 - `scripts/generate-sample-assets.js`: generates example source screenshots
-- `examples/sample.storeshot.json`: sample StoreShot project
+- `examples/sample.storeshot.json`: sample project
 - `tests/*.test.js`: acceptance and localization CLI tests
 
 ## Tech Stack

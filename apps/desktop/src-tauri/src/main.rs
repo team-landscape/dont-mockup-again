@@ -309,7 +309,7 @@ fn write_file_base64(path: String, data_base64: String) -> Result<(), String> {
 #[tauri::command]
 fn get_default_export_dir(app: tauri::AppHandle) -> Option<String> {
     let home_dir = app.path().home_dir().ok()?;
-    let default_dir = home_dir.join("Store Metadata Studio");
+    let default_dir = home_dir.join("dont mockup again");
 
     fs::create_dir_all(&default_dir).ok()?;
     Some(default_dir.to_string_lossy().replace('\\', "/"))
@@ -324,7 +324,7 @@ fn pick_output_dir() -> Option<String> {
 
 #[tauri::command]
 fn pick_project_file(preferred_dir: Option<String>) -> Option<String> {
-    let mut dialog = rfd::FileDialog::new().add_filter("Store Metadata Studio Project", &["json"]);
+    let mut dialog = rfd::FileDialog::new().add_filter("dont mockup again project", &["json"]);
     if let Some(directory) = resolve_dialog_directory(preferred_dir) {
         dialog = dialog.set_directory(directory);
     }
@@ -339,7 +339,7 @@ fn pick_project_save_path(default_file_name: Option<String>, preferred_dir: Opti
         .unwrap_or_else(|| "project.storeshot.json".to_string());
 
     let mut dialog = rfd::FileDialog::new()
-        .add_filter("Store Metadata Studio Project", &["json"])
+        .add_filter("dont mockup again project", &["json"])
         .set_file_name(&file_name);
     if let Some(directory) = resolve_dialog_directory(preferred_dir) {
         dialog = dialog.set_directory(directory);

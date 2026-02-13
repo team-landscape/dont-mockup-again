@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": {
-    "name": "StoreShot Studio Sample",
+    "name": "dont mockup again sample",
     "bundleId": "com.example.storeshot",
     "packageName": "com.example.storeshot",
     "platforms": ["ios", "android"],

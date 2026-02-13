@@ -7,7 +7,7 @@
 
 ### 0) 프로젝트 이름
 
-**StoreShot Studio** (가칭)
+**dont mockup again**
 
 ---
 

@@ -36,7 +36,7 @@ export function OnboardingOverlay({
     <div className="fixed inset-0 z-50 grid place-items-center bg-background/90 p-4 backdrop-blur-sm">
       <Card className="w-full max-w-[760px] shadow-2xl">
         <CardHeader>
-          <CardTitle>Welcome to Store Metadata Studio</CardTitle>
+          <CardTitle>Welcome to dont mockup again</CardTitle>
           <CardDescription>첫 실행 설정입니다. 로케일/플랫폼/디바이스를 먼저 선택하세요.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

@@ -779,7 +779,7 @@ export function createDefaultProject(): StoreShotDoc {
   return {
     schemaVersion: 1,
     project: {
-      name: 'Store Metadata Studio Project',
+      name: 'dont mockup again project',
       bundleId: 'com.example.app',
       packageName: 'com.example.app',
       platforms: ['ios', 'android'],

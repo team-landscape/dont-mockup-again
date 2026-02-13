@@ -1,12 +1,12 @@
-const STORE_METADATA_SUFFIX = '/Store Metadata Studio';
-const LEGACY_STORE_METADATA_SUFFIX = '/유저/Store Metadata Studio';
+const SERVICE_DIR_SUFFIX = '/dont mockup again';
+const LEGACY_DIR_SUFFIXES = ['/Store Metadata Studio', '/유저/Store Metadata Studio'];
 
 export function deriveHomeDir(defaultExportDir: string): string {
-  if (!defaultExportDir || !defaultExportDir.endsWith(STORE_METADATA_SUFFIX)) {
+  if (!defaultExportDir || !defaultExportDir.endsWith(SERVICE_DIR_SUFFIX)) {
     return '';
   }
 
-  return defaultExportDir.slice(0, -STORE_METADATA_SUFFIX.length);
+  return defaultExportDir.slice(0, -SERVICE_DIR_SUFFIX.length);
 }
 
 export function resolveOutputDir(value: string | undefined, defaultExportDir: string): string {
@@ -20,8 +20,8 @@ export function resolveOutputDir(value: string | undefined, defaultExportDir: st
       normalized = `${homeDir}/${normalized.slice(2)}`;
     }
 
-    if (normalized.endsWith(LEGACY_STORE_METADATA_SUFFIX)) {
-      normalized = `${homeDir}${STORE_METADATA_SUFFIX}`;
+    if (LEGACY_DIR_SUFFIXES.some((suffix) => normalized.endsWith(suffix))) {
+      normalized = `${homeDir}${SERVICE_DIR_SUFFIX}`;
     }
   }
 

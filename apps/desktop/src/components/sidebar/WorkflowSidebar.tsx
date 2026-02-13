@@ -46,7 +46,7 @@ export function WorkflowSidebar({
       <div className="pointer-events-auto space-y-2">
         <Card className="border bg-card/95 shadow-xl backdrop-blur">
           <CardHeader className="gap-1 pb-2">
-            <CardTitle className="text-sm tracking-tight">Store Metadata Studio</CardTitle>
+            <CardTitle className="text-sm tracking-tight">dont mockup again</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2 pt-0">
             <p className="truncate text-[11px] text-muted-foreground" title={projectPath || ''}>
