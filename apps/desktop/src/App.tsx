@@ -15,8 +15,8 @@ import { TemplateInspectorSection } from './components/inspector/TemplateInspect
 import { OnboardingOverlay } from './components/onboarding/OnboardingOverlay';
 import { BusyOverlay } from './components/overlay/BusyOverlay';
 import { WorkflowSidebar } from './components/sidebar/WorkflowSidebar';
+import { useProjectImageUploadHandlers } from './hooks/useProjectImageUploadHandlers';
 import {
-  browserFileToBase64,
   getDefaultExportDir,
   isTauriRuntime,
   listPngFiles,
@@ -1476,101 +1476,16 @@ export function App() {
     templateImageInputRef.current?.click();
   }, []);
 
-  async function handleSlotImageFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const slotId = slotImageTargetRef.current;
-    const file = event.target.files?.[0];
-    event.target.value = '';
-
-    if (!slotId || !file) {
-      slotImageTargetRef.current = null;
-      return;
-    }
-
-    const extension = file.name.includes('.')
-      ? (file.name.split('.').pop() || 'png').toLowerCase()
-      : 'png';
-    const normalizedExtension = extension.replace(/[^a-z0-9]/g, '') || 'png';
-    const outputPath = `examples/assets/source/uploads/${slotId}-${Date.now()}.${normalizedExtension}`;
-
-    try {
-      await runWithBusy(async () => {
-        const base64 = await browserFileToBase64(file);
-        const mime = imageMimeTypeFromPath(file.name);
-        const canWriteToDisk = isTauriRuntime();
-        if (canWriteToDisk) {
-          await writeFileBase64(outputPath, base64);
-        }
-
-        const sourcePath = canWriteToDisk ? outputPath : file.name;
-        updateDoc((next) => {
-          const target = next.project.slots.find((slot) => slot.id === slotId);
-          if (!target) return;
-          target.sourceImagePath = sourcePath;
-        });
-
-        setSlotSourceUrls((current) => ({
-          ...current,
-          [slotId]: `data:${mime};base64,${base64}`
-        }));
-      }, {
-        action: 'upload-slot-image',
-        title: 'Uploading Slot Image',
-        detail: 'Saving selected slot image...'
-      });
-    } catch {
-      // Keep file picker UX resilient if writing image fails.
-    } finally {
-      slotImageTargetRef.current = null;
-    }
-  }
-
-  async function handleTemplateImageFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const elementId = templateImageTargetRef.current;
-    const file = event.target.files?.[0];
-    event.target.value = '';
-
-    if (!elementId || !file) {
-      templateImageTargetRef.current = null;
-      return;
-    }
-
-    const extension = file.name.includes('.')
-      ? (file.name.split('.').pop() || 'png').toLowerCase()
-      : 'png';
-    const normalizedExtension = extension.replace(/[^a-z0-9]/g, '') || 'png';
-    const outputPath = `examples/assets/source/uploads/${elementId}-${Date.now()}.${normalizedExtension}`;
-
-    try {
-      await runWithBusy(async () => {
-        const base64 = await browserFileToBase64(file);
-        const mime = imageMimeTypeFromPath(file.name);
-        await writeFileBase64(outputPath, base64);
-
-        updateTemplateElement(elementId, (current) => (
-          current.kind === 'image'
-            ? {
-              ...current,
-              source: 'image',
-              imagePath: outputPath
-            }
-            : current
-        ));
-
-        setTemplateImageUrls((current) => ({
-          ...current,
-          [slotTemplateImageKey(selectedSlotData?.id || selectedSlot, elementId)]: `data:${mime};base64,${base64}`
-        }));
-      }, {
-        action: 'upload-template-image',
-        title: 'Uploading Image',
-        detail: 'Saving template image asset...'
-      });
-    } catch {
-      // Keep file picker UX resilient if writing image fails.
-    } finally {
-      templateImageTargetRef.current = null;
-    }
-  }
+  const { handleSlotImageFileChange, handleTemplateImageFileChange } = useProjectImageUploadHandlers({
+    runWithBusy,
+    updateDoc,
+    updateTemplateElement,
+    setSlotSourceUrls,
+    setTemplateImageUrls,
+    slotImageTargetRef,
+    templateImageTargetRef,
+    selectedTemplateSlotId: selectedSlotData?.id || selectedSlot
+  });
 
   const templateInspectorSection = (
     <TemplateInspectorSection
