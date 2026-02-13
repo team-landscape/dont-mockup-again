@@ -1016,6 +1016,24 @@ function extractJson(raw: string): unknown {
   }
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
 export function App() {
   const [activeStep, setActiveStep] = useState<StepId>('screens');
   const projectPath = 'examples/sample.storeshot.json';
@@ -1653,6 +1671,83 @@ export function App() {
     return urlsByLocale;
   }
 
+  const renderExportImagesFromPreview = useCallback(async (
+    snapshot: StoreShotDoc,
+    targetDir: string,
+    onProgress?: (detail: string) => void
+  ) => {
+    const slots = sortSlotsByOrder(snapshot.project.slots || []);
+    const locales = snapshot.project.locales || [];
+    const platforms = snapshot.project.platforms || [];
+    const devices = snapshot.project.devices || [];
+    const templateMain = snapshot.template.main;
+    const imageUrls = { ...templateImageUrls };
+
+    const imageTargets: Array<{ key: string; path: string }> = [];
+    for (const element of templateMain.elements) {
+      if (element.kind !== 'image' || !element.imagePath) continue;
+      imageTargets.push({ key: globalTemplateImageKey(element.id), path: element.imagePath });
+    }
+    for (const [slotId, elements] of Object.entries(templateMain.slotElements || {})) {
+      for (const element of elements) {
+        if (element.kind !== 'image' || !element.imagePath) continue;
+        imageTargets.push({ key: slotTemplateImageKey(slotId, element.id), path: element.imagePath });
+      }
+    }
+
+    for (const target of imageTargets) {
+      if (imageUrls[target.key]) continue;
+      try {
+        const base64 = await readFileBase64(target.path);
+        const mime = imageMimeTypeFromPath(target.path);
+        imageUrls[target.key] = `data:${mime};base64,${base64}`;
+      } catch {
+        // Missing image path is allowed; renderer keeps placeholder.
+      }
+    }
+
+    const total = Math.max(1, devices.length * locales.length * slots.length);
+    let current = 0;
+
+    for (const device of devices) {
+      const platform = detectDevicePlatform(device, platforms);
+      if (platforms.length > 0 && !platforms.includes(platform)) continue;
+
+      for (const locale of locales) {
+        for (const slot of slots) {
+          current += 1;
+          onProgress?.(`Rendering preview images... (${current}/${total})`);
+
+          const title = snapshot.copy.keys[fieldKey(slot.id, 'title')]?.[locale] || '';
+          const subtitle = snapshot.copy.keys[fieldKey(slot.id, 'subtitle')]?.[locale] || '';
+          const template: TemplateMain = {
+            ...templateMain,
+            elements: resolveTemplateElementsForSlot(templateMain, slot.id),
+            background: {
+              ...templateMain.background,
+              ...(templateMain.slotBackgrounds[slot.id] || {})
+            }
+          };
+          const pngBase64 = await withTimeout(
+            renderTemplatePreviewBase64({
+              slotId: slot.id,
+              title,
+              subtitle,
+              template,
+              templateImageUrls: imageUrls,
+              device
+            }),
+            20000,
+            `preview render ${platform}/${device.id}/${locale}/${slot.id}`
+          );
+
+          const outPath = `${targetDir}/${platform}/${device.id}/${locale}/${slot.id}.png`;
+          await writeFileBase64(outPath, pngBase64);
+        }
+      }
+    }
+  }, [templateImageUrls]);
+
   async function handleRender() {
     await runWithBusy(async ({ setDetail }) => {
       setDetail('Saving project config...');
@@ -1694,14 +1789,9 @@ export function App() {
           setOutputDir(resolvedOutputDir);
         }
 
-        setDetail('Checking preview renders...');
-        const previewFiles = await listPngFiles(previewRenderDir);
-        if (previewFiles.length === 0) {
-          throw new Error('Preview render output is empty. Run Render first.');
-        }
-
         setDetail('Saving project config...');
-        await persistProjectSnapshot();
+        const snapshot = await persistProjectSnapshot();
+        await renderExportImagesFromPreview(snapshot, previewRenderDir, setDetail);
         setDetail('Exporting preview renders...');
         await runPipeline('export', [projectPath, previewRenderDir, resolvedOutputDir, ...flags]);
       }, {
