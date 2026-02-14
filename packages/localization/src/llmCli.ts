@@ -83,6 +83,128 @@ function buildGeminiPrompt(payload) {
   return sections.join('\n');
 }
 
+function listCommandCandidates(command) {
+  const baseCommand = String(command || '').trim();
+  if (!baseCommand) {
+    return [];
+  }
+  return [baseCommand];
+}
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function isExecutableNotFoundError(error, attemptedCommand) {
+  const message = String(error?.message || '');
+  return (
+    message.includes(`LLM CLI executable not found: ${attemptedCommand}`) ||
+    message.includes(`spawn ${attemptedCommand} ENOENT`)
+  );
+}
+
+async function resolveCommandFromLoginShell(candidates, cwd) {
+  const searchable = (candidates || [])
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean)
+    .filter((entry) => !entry.includes('/') && !entry.includes('\\'));
+
+  if (searchable.length === 0) {
+    return null;
+  }
+
+  const shell = process.env.SHELL || '/bin/zsh';
+  const script = `for cmd in ${searchable
+    .map((entry) => shellQuote(entry))
+    .join(' ')}; do resolved="$(command -v "$cmd" 2>/dev/null)"; if [ -n "$resolved" ]; then printf '%s\\n' "$resolved"; exit 0; fi; done; exit 1`;
+
+  return new Promise((resolve) => {
+    const child = spawn(shell, ['-lic', script], {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    let stdout = '';
+    const timeout = setTimeout(() => {
+      child.kill('SIGKILL');
+    }, 4000);
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString();
+    });
+
+    child.on('error', () => {
+      clearTimeout(timeout);
+      resolve(null);
+    });
+
+    child.on('close', () => {
+      clearTimeout(timeout);
+      const lines = stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      for (const line of lines) {
+        if (line.startsWith('/')) {
+          resolve(line);
+          return;
+        }
+
+        const token = line.split(/\s+/).find((part) => part.startsWith('/'));
+        if (token) {
+          resolve(token);
+          return;
+        }
+      }
+
+      resolve(null);
+    });
+  });
+}
+
+async function runCliWithCommandFallback(options) {
+  const candidates = listCommandCandidates(options.command);
+  let lastError = null;
+
+  for (const candidate of candidates) {
+    try {
+      return await runCli({
+        ...options,
+        command: candidate
+      });
+    } catch (error) {
+      lastError = error;
+      if (!isExecutableNotFoundError(error, candidate)) {
+        throw error;
+      }
+    }
+  }
+
+  const shellResolvedCommand = await resolveCommandFromLoginShell(candidates, options.cwd);
+  if (shellResolvedCommand && !candidates.includes(shellResolvedCommand)) {
+    try {
+      return await runCli({
+        ...options,
+        command: shellResolvedCommand
+      });
+    } catch (error) {
+      lastError = error;
+      if (!isExecutableNotFoundError(error, shellResolvedCommand)) {
+        throw error;
+      }
+    }
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+
+  throw new Error(
+    `LLM CLI executable not found: ${options.command}. Configure an absolute command path or ensure PATH includes this CLI.`
+  );
+}
+
 function tryParseJson(text) {
   const raw = String(text || '').trim();
   if (!raw) {
@@ -211,7 +333,7 @@ async function runCliTranslation({
 
   let result = null;
   try {
-    result = await runCli({
+    result = await runCliWithCommandFallback({
       command,
       args,
       inputFilePath,
@@ -229,7 +351,7 @@ async function runCliTranslation({
       throw error;
     }
 
-    result = await runCli({
+    result = await runCliWithCommandFallback({
       command,
       args: ['-p', buildGeminiPrompt(payload)],
       inputFilePath,

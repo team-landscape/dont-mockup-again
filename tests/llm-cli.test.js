@@ -6,12 +6,13 @@ import test from 'node:test';
 
 import { localizeProjectCopy } from '../packages/localization/src/index.ts';
 
-async function withFakeGemini(run) {
+async function withFakeGeminiCommand(commandName, run, options = {}) {
+  const { includeOriginalPath = true } = options;
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dma-llm-cli-'));
   const binDir = path.join(tempDir, 'bin');
   await fs.mkdir(binDir, { recursive: true });
 
-  const geminiPath = path.join(binDir, 'gemini');
+  const geminiPath = path.join(binDir, commandName);
   await fs.writeFile(
     geminiPath,
     `#!/usr/bin/env node
@@ -42,7 +43,9 @@ process.stdout.write(JSON.stringify({ entries }));
   );
 
   const originalPath = process.env.PATH || '';
-  process.env.PATH = `${binDir}${path.delimiter}${originalPath}`;
+  process.env.PATH = includeOriginalPath
+    ? `${binDir}${path.delimiter}${originalPath}`
+    : `${binDir}${path.delimiter}${path.dirname(process.execPath)}`;
 
   try {
     await run(tempDir);
@@ -50,6 +53,10 @@ process.stdout.write(JSON.stringify({ entries }));
     process.env.PATH = originalPath;
     await fs.rm(tempDir, { recursive: true, force: true });
   }
+}
+
+async function withFakeGemini(run) {
+  await withFakeGeminiCommand('gemini', run);
 }
 
 function createDoc(argsTemplate) {
