@@ -91,6 +91,10 @@ export function App() {
   const [previewMatrixUrls, setPreviewMatrixUrls] = useState<Record<string, Record<string, string>>>({});
   const [previewMatrixPaths, setPreviewMatrixPaths] = useState<Record<string, Record<string, string>>>({});
   const [, setIssues] = useState<ValidateIssue[]>([]);
+  const [isLocalizationRunning, setLocalizationRunning] = useState(false);
+  const [localizationBusyLabel, setLocalizationBusyLabel] = useState('');
+  const [localizationStatus, setLocalizationStatus] = useState('');
+  const [localizationError, setLocalizationError] = useState('');
   const [exportStatus, setExportStatus] = useState('');
   const [exportError, setExportError] = useState('');
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(() => {
@@ -302,7 +306,11 @@ export function App() {
     loadSlotPreviewMap,
     loadPreviewMatrix,
     setDoc,
-    setIssues
+    setIssues,
+    setLocalizationRunning,
+    setLocalizationBusyLabel,
+    setLocalizationStatus,
+    setLocalizationError
   });
 
   const handlePickOutputDir = useCallback(async () => {
@@ -521,8 +529,10 @@ export function App() {
           {activeStep === 'localization' ? (
             <LocalizationStepPanel
               sourceLocale={doc.pipelines.localization.sourceLocale || doc.project.locales[0] || 'en-US'}
-              isBusy={isBusy}
-              localizationBusyLabel={isBusy ? busyDetail : ''}
+              isBusy={isLocalizationRunning}
+              localizationBusyLabel={localizationBusyLabel}
+              localizationStatus={localizationStatus}
+              localizationError={localizationError}
               llmConfig={llmConfig}
               slots={slots}
               locales={doc.project.locales}

@@ -26,12 +26,14 @@ interface LocalizationWorkflowPageProps {
   isBusy: boolean;
   isRunningLocalization: boolean;
   localizationBusyLabel: string;
+  localizationStatus: string;
+  localizationError: string;
   llmConfig: LlmConfigValue;
   slots: Array<{ id: string; name: string }>;
   locales: string[];
   localeManagerNode: ReactNode;
   onSourceLocaleChange: (locale: string) => void;
-  onRunLocalization: () => void;
+  onRunLocalization: () => Promise<void>;
   onLlmCommandChange: (value: string) => void;
   onLlmTimeoutSecChange: (value: number) => void;
   onLlmPromptChange: (value: string) => void;
@@ -44,6 +46,8 @@ export function LocalizationWorkflowPage({
   isBusy,
   isRunningLocalization,
   localizationBusyLabel,
+  localizationStatus,
+  localizationError,
   llmConfig,
   slots,
   locales,
@@ -88,7 +92,7 @@ export function LocalizationWorkflowPage({
             </LabeledField>
 
             <div className="flex flex-wrap gap-2">
-              <Button disabled={isBusy} onClick={onRunLocalization}>
+              <Button disabled={isBusy} onClick={() => { void onRunLocalization(); }}>
                 {isRunningLocalization ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -97,6 +101,18 @@ export function LocalizationWorkflowPage({
                 ) : 'Run Localization'}
               </Button>
             </div>
+
+            {localizationStatus ? (
+              <p className="rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-900">
+                {localizationStatus}
+              </p>
+            ) : null}
+
+            {localizationError ? (
+              <p className="rounded-md border border-destructive/25 bg-destructive/10 p-2 text-xs text-destructive">
+                {localizationError}
+              </p>
+            ) : null}
 
             <div className="rounded-md border p-3">
               <p className="mb-3 text-sm font-medium">Local LLM CLI Config</p>

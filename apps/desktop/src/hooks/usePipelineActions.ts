@@ -24,6 +24,10 @@ interface UsePipelineActionsArgs {
   loadPreviewMatrix: () => Promise<Record<string, Record<string, string>>>;
   setDoc: (value: ProjectDoc) => void;
   setIssues: (value: ValidateIssue[]) => void;
+  setLocalizationRunning: (value: boolean) => void;
+  setLocalizationBusyLabel: (value: string) => void;
+  setLocalizationStatus: (value: string) => void;
+  setLocalizationError: (value: string) => void;
 }
 
 export function usePipelineActions({
@@ -34,27 +38,47 @@ export function usePipelineActions({
   loadSlotPreviewMap,
   loadPreviewMatrix,
   setDoc,
-  setIssues
+  setIssues,
+  setLocalizationRunning,
+  setLocalizationBusyLabel,
+  setLocalizationStatus,
+  setLocalizationError
 }: UsePipelineActionsArgs) {
   const handleRunLocalization = useCallback(async () => {
-    await runWithBusy(async ({ setDetail }) => {
-      setDetail('Saving project config...');
+    setLocalizationStatus('');
+    setLocalizationError('');
+    setLocalizationBusyLabel('Preparing localization run...');
+    setLocalizationRunning(true);
+    try {
+      setLocalizationBusyLabel('Saving project config...');
       await persistProjectSnapshot();
 
-      setDetail('Running localization pipeline...');
+      setLocalizationBusyLabel('Running localization pipeline...');
       await runPipeline('localize', [projectPath, '--write']);
 
-      setDetail('Reloading localized copy...');
+      setLocalizationBusyLabel('Reloading localized copy...');
       const text = await readTextFile(projectPath);
       const parsed = parseJsonOrNull(text);
       const normalized = normalizeProject(parsed);
       setDoc(normalized);
-    }, {
-      action: 'localize',
-      title: 'Localization Processing',
-      detail: 'Preparing localization run...'
-    });
-  }, [persistProjectSnapshot, projectPath, runWithBusy, setDoc]);
+
+      setLocalizationStatus('Localization completed.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setLocalizationError(message);
+    } finally {
+      setLocalizationBusyLabel('');
+      setLocalizationRunning(false);
+    }
+  }, [
+    persistProjectSnapshot,
+    projectPath,
+    setDoc,
+    setLocalizationBusyLabel,
+    setLocalizationRunning,
+    setLocalizationError,
+    setLocalizationStatus
+  ]);
 
   const handleRender = useCallback(async () => {
     await runWithBusy(async ({ setDetail }) => {
