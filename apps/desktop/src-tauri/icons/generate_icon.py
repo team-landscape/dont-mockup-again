@@ -34,15 +34,6 @@ def rounded_rect_sd(px: float, py: float, w: float, h: float, r: float) -> float
     return outside + inside - r
 
 
-def mix(c1: tuple[int, int, int], c2: tuple[int, int, int], t: float) -> tuple[float, float, float]:
-    t = clamp(t)
-    return (
-        c1[0] + (c2[0] - c1[0]) * t,
-        c1[1] + (c2[1] - c1[1]) * t,
-        c1[2] + (c2[2] - c1[2]) * t,
-    )
-
-
 class Canvas:
     def __init__(self, size: int) -> None:
         self.size = size
@@ -98,10 +89,8 @@ class Canvas:
 
 def draw_background(canvas: Canvas) -> None:
     cx = cy = SIZE * 0.5
-    w = h = SIZE * 0.88
-    r = SIZE * 0.2
-    c0 = (5, 16, 36)
-    c1 = (15, 89, 182)
+    w = h = SIZE * 0.8125  # 832 at 1024
+    r = SIZE * 0.1836      # ~188 at 1024
 
     for y in range(SIZE):
         py = y + 0.5 - cy
@@ -112,125 +101,94 @@ def draw_background(canvas: Canvas) -> None:
                 continue
             edge = clamp(0.5 - sd)
 
-            t = clamp((x * 0.62 + y * 0.38) / (SIZE - 1))
-            cr, cg, cb = mix(c0, c1, t)
-
-            glow_x = (x - SIZE * 0.28) / (SIZE * 0.5)
-            glow_y = (y - SIZE * 0.24) / (SIZE * 0.5)
-            glow = max(0.0, 1.0 - glow_x * glow_x - glow_y * glow_y) ** 2.2
-            cr += 42.0 * glow
-            cg += 32.0 * glow
-            cb += 24.0 * glow
-
-            vignette = 0.9 - clamp(y / SIZE) * 0.14
-            canvas.blend(x, y, cr * vignette, cg * vignette, cb * vignette, edge)
+            # Subtle monochrome glow in the same spirit as docs/index.html.
+            gx = (x - SIZE * 0.32) / (SIZE * 0.58)
+            gy = (y - SIZE * 0.24) / (SIZE * 0.58)
+            glow = max(0.0, 1.0 - gx * gx - gy * gy) ** 2.2
+            base = 17.0 + glow * 8.0
+            canvas.blend(x, y, base, base, base + 1.0, edge)
 
 
-def draw_card(canvas: Canvas) -> tuple[float, float]:
-    cx = SIZE * 0.5
-    cy = SIZE * 0.53
-    w = SIZE * 0.58
-    h = SIZE * 0.7
-    r = SIZE * 0.08
+def point_segment_distance(px: float, py: float, ax: float, ay: float, bx: float, by: float) -> float:
+    abx = bx - ax
+    aby = by - ay
+    apx = px - ax
+    apy = py - ay
+    denom = abx * abx + aby * aby
+    if denom <= 1e-6:
+        return math.hypot(apx, apy)
+    t = clamp((apx * abx + apy * aby) / denom)
+    qx = ax + abx * t
+    qy = ay + aby * t
+    return math.hypot(px - qx, py - qy)
 
-    half_w = w * 0.5
-    half_h = h * 0.5
-    pad = int(r + 6)
-    min_x = max(0, int(cx - half_w - pad))
-    max_x = min(SIZE - 1, int(cx + half_w + pad))
-    min_y = max(0, int(cy - half_h - pad))
-    max_y = min(SIZE - 1, int(cy + half_h + pad))
 
-    # soft shadow
+def inside_dma_monogram(x: float, y: float) -> bool:
+    outer_stem = 332.0 <= x <= 498.0 and 252.0 <= y <= 772.0
+    outer_bowl = ((x - 498.0) ** 2) / (262.0 ** 2) + ((y - 512.0) ** 2) / (260.0 ** 2) <= 1.0 and x >= 498.0
+
+    inner_stem = 420.0 <= x <= 498.0 and 340.0 <= y <= 684.0
+    inner_bowl = ((x - 498.0) ** 2) / (174.0 ** 2) + ((y - 512.0) ** 2) / (172.0 ** 2) <= 1.0 and x >= 498.0
+
+    return (outer_stem or outer_bowl) and not (inner_stem or inner_bowl)
+
+
+def inside_slash(x: float, y: float) -> bool:
+    d = point_segment_distance(x, y, 470.0, 666.0, 666.0, 362.0)
+    return d <= 31.0
+
+
+def draw_shape_aa(
+    canvas: Canvas,
+    min_x: int,
+    max_x: int,
+    min_y: int,
+    max_y: int,
+    r: float,
+    g: float,
+    b: float,
+    contains: callable,
+) -> None:
+    offsets = ((0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75))
     for y in range(min_y, max_y + 1):
-        sy = y + 0.5 - (cy + SIZE * 0.02)
         for x in range(min_x, max_x + 1):
-            sx = x + 0.5 - cx
-            sd = rounded_rect_sd(sx, sy, w, h, r)
-            if sd > 18.0:
-                continue
-            fade = clamp((18.0 - sd) / 18.0)
-            canvas.blend(x, y, 0, 6, 16, fade * 0.22)
-
-    # frame
-    for y in range(min_y, max_y + 1):
-        py = y + 0.5 - cy
-        for x in range(min_x, max_x + 1):
-            px = x + 0.5 - cx
-            sd = rounded_rect_sd(px, py, w, h, r)
-            if sd > 1.0:
-                continue
-            edge = clamp(0.5 - sd)
-            canvas.blend(x, y, 242, 248, 255, edge * 0.94)
-
-    # inner panel
-    iw = w - 26
-    ih = h - 26
-    ir = max(8.0, r - 11.0)
-    half_iw = iw * 0.5
-    half_ih = ih * 0.5
-    min_x = max(0, int(cx - half_iw - 2))
-    max_x = min(SIZE - 1, int(cx + half_iw + 2))
-    min_y = max(0, int(cy - half_ih - 2))
-    max_y = min(SIZE - 1, int(cy + half_ih + 2))
-
-    for y in range(min_y, max_y + 1):
-        py = y + 0.5 - cy
-        for x in range(min_x, max_x + 1):
-            px = x + 0.5 - cx
-            sd = rounded_rect_sd(px, py, iw, ih, ir)
-            if sd > 0.8:
-                continue
-            edge = clamp(0.5 - sd)
-
-            u = clamp((px + half_iw) / iw)
-            v = clamp((py + half_ih) / ih)
-            base = mix((8, 22, 52), (15, 44, 96), v)
-            highlight = max(0.0, 1.0 - abs((px + py * 1.2) / (iw * 0.5))) ** 2.0
-
-            cr = base[0] + 18.0 * u + 42.0 * highlight
-            cg = base[1] + 10.0 * u + 36.0 * highlight
-            cb = base[2] + 6.0 * u + 50.0 * highlight
-            canvas.blend(x, y, cr, cg, cb, edge)
-
-    return cx, cy
+            coverage = 0.0
+            for ox, oy in offsets:
+                if contains(x + ox, y + oy):
+                    coverage += 0.25
+            if coverage > 0.0:
+                canvas.blend(x, y, r, g, b, coverage)
 
 
-def draw_monogram(canvas: Canvas, cx: float, cy: float) -> None:
-    cx -= SIZE * 0.02
-    cy -= SIZE * 0.01
-    min_x = max(0, int(cx - 170))
-    max_x = min(SIZE - 1, int(cx + 170))
-    min_y = max(0, int(cy - 170))
-    max_y = min(SIZE - 1, int(cy + 170))
-
-    for y in range(min_y, max_y + 1):
-        dy = y + 0.5 - cy
-        for x in range(min_x, max_x + 1):
-            dx = x + 0.5 - cx
-
-            stem = (-134.0 <= dx <= -84.0) and (abs(dy) <= 112.0)
-            outer = (dx * dx) / (140.0 * 140.0) + (dy * dy) / (112.0 * 112.0) <= 1.0 and dx > -28.0
-            inner = (dx * dx) / (90.0 * 90.0) + (dy * dy) / (70.0 * 70.0) <= 1.0 and dx > -18.0
-            ring = outer and not inner
-            shape = stem or ring
-            if not shape:
-                continue
-
-            # slight diagonal trim for motion
-            if dx + dy * 0.45 > 118.0:
-                continue
-
-            t = clamp((dy + 112.0) / 224.0)
-            cr, cg, cb = mix((244, 249, 255), (184, 219, 255), t)
-            canvas.blend(x, y, cr, cg, cb, 0.96)
+def draw_dma_icon(canvas: Canvas) -> None:
+    draw_shape_aa(
+        canvas,
+        min_x=280,
+        max_x=804,
+        min_y=200,
+        max_y=824,
+        r=245.0,
+        g=245.0,
+        b=245.0,
+        contains=inside_dma_monogram,
+    )
+    draw_shape_aa(
+        canvas,
+        min_x=420,
+        max_x=716,
+        min_y=312,
+        max_y=716,
+        r=139.0,
+        g=141.0,
+        b=145.0,
+        contains=inside_slash,
+    )
 
 
 def main() -> None:
     canvas = Canvas(SIZE)
     draw_background(canvas)
-    card_center = draw_card(canvas)
-    draw_monogram(canvas, *card_center)
+    draw_dma_icon(canvas)
     canvas.write_png(OUT_PATH)
     print(f"Icon generated: {OUT_PATH}")
 
