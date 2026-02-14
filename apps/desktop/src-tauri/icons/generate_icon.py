@@ -99,10 +99,9 @@ class Canvas:
 def draw_background(canvas: Canvas) -> None:
     cx = cy = SIZE * 0.5
     w = h = SIZE * 0.88
-    r = SIZE * 0.21
-    c0 = (9, 15, 36)
-    c1 = (22, 78, 164)
-    c2 = (34, 211, 238)
+    r = SIZE * 0.2
+    c0 = (5, 16, 36)
+    c1 = (15, 89, 182)
 
     for y in range(SIZE):
         py = y + 0.5 - cy
@@ -113,197 +112,125 @@ def draw_background(canvas: Canvas) -> None:
                 continue
             edge = clamp(0.5 - sd)
 
-            t = (x + y) / (2.0 * (SIZE - 1))
-            if t < 0.58:
-                cr, cg, cb = mix(c0, c1, t / 0.58)
-            else:
-                cr, cg, cb = mix(c1, c2, (t - 0.58) / 0.42)
+            t = clamp((x * 0.62 + y * 0.38) / (SIZE - 1))
+            cr, cg, cb = mix(c0, c1, t)
 
-            # top-left neon bloom
-            hx = (x - SIZE * 0.30) / (SIZE * 0.42)
-            hy = (y - SIZE * 0.24) / (SIZE * 0.42)
-            bloom = max(0.0, 1.0 - (hx * hx + hy * hy)) ** 1.8
-            cr += bloom * 86.0
-            cg += bloom * 60.0
-            cb += bloom * 38.0
+            glow_x = (x - SIZE * 0.28) / (SIZE * 0.5)
+            glow_y = (y - SIZE * 0.24) / (SIZE * 0.5)
+            glow = max(0.0, 1.0 - glow_x * glow_x - glow_y * glow_y) ** 2.2
+            cr += 42.0 * glow
+            cg += 32.0 * glow
+            cb += 24.0 * glow
 
-            # subtle bottom vignette
-            v = clamp((y / SIZE) * 1.22)
-            dark = 0.88 - v * 0.22
-            cr *= dark
-            cg *= dark
-            cb *= dark
-
-            canvas.blend(x, y, cr, cg, cb, edge)
+            vignette = 0.9 - clamp(y / SIZE) * 0.14
+            canvas.blend(x, y, cr * vignette, cg * vignette, cb * vignette, edge)
 
 
-def draw_rotated_card(
-    canvas: Canvas,
-    cx: float,
-    cy: float,
-    w: float,
-    h: float,
-    radius: float,
-    angle_deg: float,
-    fill: tuple[int, int, int],
-    alpha: float,
-) -> None:
-    angle = math.radians(angle_deg)
-    cos_a = math.cos(angle)
-    sin_a = math.sin(angle)
+def draw_card(canvas: Canvas) -> tuple[float, float]:
+    cx = SIZE * 0.5
+    cy = SIZE * 0.53
+    w = SIZE * 0.58
+    h = SIZE * 0.7
+    r = SIZE * 0.08
 
     half_w = w * 0.5
     half_h = h * 0.5
-    pad = int(radius + 4)
+    pad = int(r + 6)
     min_x = max(0, int(cx - half_w - pad))
     max_x = min(SIZE - 1, int(cx + half_w + pad))
     min_y = max(0, int(cy - half_h - pad))
     max_y = min(SIZE - 1, int(cy + half_h + pad))
 
+    # soft shadow
     for y in range(min_y, max_y + 1):
-        dy = y + 0.5 - cy
+        sy = y + 0.5 - (cy + SIZE * 0.02)
         for x in range(min_x, max_x + 1):
-            dx = x + 0.5 - cx
-            lx = dx * cos_a + dy * sin_a
-            ly = -dx * sin_a + dy * cos_a
-            sd = rounded_rect_sd(lx, ly, w, h, radius)
+            sx = x + 0.5 - cx
+            sd = rounded_rect_sd(sx, sy, w, h, r)
+            if sd > 18.0:
+                continue
+            fade = clamp((18.0 - sd) / 18.0)
+            canvas.blend(x, y, 0, 6, 16, fade * 0.22)
+
+    # frame
+    for y in range(min_y, max_y + 1):
+        py = y + 0.5 - cy
+        for x in range(min_x, max_x + 1):
+            px = x + 0.5 - cx
+            sd = rounded_rect_sd(px, py, w, h, r)
             if sd > 1.0:
                 continue
             edge = clamp(0.5 - sd)
-            canvas.blend(x, y, fill[0], fill[1], fill[2], alpha * edge)
+            canvas.blend(x, y, 242, 248, 255, edge * 0.94)
+
+    # inner panel
+    iw = w - 26
+    ih = h - 26
+    ir = max(8.0, r - 11.0)
+    half_iw = iw * 0.5
+    half_ih = ih * 0.5
+    min_x = max(0, int(cx - half_iw - 2))
+    max_x = min(SIZE - 1, int(cx + half_iw + 2))
+    min_y = max(0, int(cy - half_ih - 2))
+    max_y = min(SIZE - 1, int(cy + half_ih + 2))
+
+    for y in range(min_y, max_y + 1):
+        py = y + 0.5 - cy
+        for x in range(min_x, max_x + 1):
+            px = x + 0.5 - cx
+            sd = rounded_rect_sd(px, py, iw, ih, ir)
+            if sd > 0.8:
+                continue
+            edge = clamp(0.5 - sd)
+
+            u = clamp((px + half_iw) / iw)
+            v = clamp((py + half_ih) / ih)
+            base = mix((8, 22, 52), (15, 44, 96), v)
+            highlight = max(0.0, 1.0 - abs((px + py * 1.2) / (iw * 0.5))) ** 2.0
+
+            cr = base[0] + 18.0 * u + 42.0 * highlight
+            cg = base[1] + 10.0 * u + 36.0 * highlight
+            cb = base[2] + 6.0 * u + 50.0 * highlight
+            canvas.blend(x, y, cr, cg, cb, edge)
+
+    return cx, cy
 
 
-def draw_front_card(canvas: Canvas) -> None:
-    cx = SIZE * 0.53
-    cy = SIZE * 0.55
-    w = SIZE * 0.54
-    h = SIZE * 0.69
-    r = SIZE * 0.075
-    angle = -11.0
-
-    # white frame
-    draw_rotated_card(canvas, cx, cy, w, h, r, angle, (244, 249, 255), 0.94)
-    # inner content
-    draw_rotated_card(canvas, cx, cy, w - 24, h - 24, max(8, r - 10), angle, (6, 12, 28), 1.0)
-
-    rad = math.radians(angle)
-    cos_a = math.cos(rad)
-    sin_a = math.sin(rad)
-
-    half_w = w * 0.5
-    half_h = h * 0.5
-    min_x = max(0, int(cx - half_w - 6))
-    max_x = min(SIZE - 1, int(cx + half_w + 6))
-    min_y = max(0, int(cy - half_h - 6))
-    max_y = min(SIZE - 1, int(cy + half_h + 6))
-
-    iw = w - 24
-    ih = h - 24
-    ir = max(8, r - 10)
+def draw_monogram(canvas: Canvas, cx: float, cy: float) -> None:
+    cx -= SIZE * 0.02
+    cy -= SIZE * 0.01
+    min_x = max(0, int(cx - 170))
+    max_x = min(SIZE - 1, int(cx + 170))
+    min_y = max(0, int(cy - 170))
+    max_y = min(SIZE - 1, int(cy + 170))
 
     for y in range(min_y, max_y + 1):
         dy = y + 0.5 - cy
         for x in range(min_x, max_x + 1):
             dx = x + 0.5 - cx
-            lx = dx * cos_a + dy * sin_a
-            ly = -dx * sin_a + dy * cos_a
-            sd = rounded_rect_sd(lx, ly, iw, ih, ir)
-            if sd > 0.8:
-                continue
 
-            u = clamp((lx + iw * 0.5) / iw)
-            v = clamp((ly + ih * 0.5) / ih)
-            base = mix((10, 18, 44), (16, 50, 114), v * 0.9 + 0.05)
-            glow = mix((24, 171, 242), (125, 211, 252), u)
-
-            # content stripe / lens flare
-            flare = max(0.0, 1.0 - abs((lx + ly * 1.7) / (iw * 0.36))) ** 2.0
-            grid = 0.0
-            if abs((ly + ih * 0.15) % 62.0 - 31.0) < 1.0:
-                grid = 0.22
-
-            cr = base[0] * (1.0 - 0.22 * u) + glow[0] * (0.12 + flare * 0.35)
-            cg = base[1] * (1.0 - 0.22 * u) + glow[1] * (0.12 + flare * 0.35)
-            cb = base[2] * (1.0 - 0.22 * u) + glow[2] * (0.12 + flare * 0.35)
-
-            if grid > 0:
-                cr += 255.0 * grid
-                cg += 255.0 * grid
-                cb += 255.0 * grid
-
-            edge = clamp(0.5 - sd)
-            canvas.blend(x, y, cr, cg, cb, edge)
-
-    # symbol: geometric "D"
-    sx = cx - 36
-    sy = cy - 20
-    for y in range(int(sy - 170), int(sy + 170)):
-        if y < 0 or y >= SIZE:
-            continue
-        for x in range(int(sx - 170), int(sx + 170)):
-            if x < 0 or x >= SIZE:
-                continue
-            dx = x + 0.5 - sx
-            dy = y + 0.5 - sy
-
-            outer = (dx * dx) / (150 * 150) + (dy * dy) / (126 * 126) <= 1.0 and dx > -98
-            inner = (dx * dx) / (98 * 98) + (dy * dy) / (82 * 82) <= 1.0 and dx > -62
-            stem = -120 <= dx <= -72 and abs(dy) <= 126
-            shape = stem or (outer and not inner)
+            stem = (-134.0 <= dx <= -84.0) and (abs(dy) <= 112.0)
+            outer = (dx * dx) / (140.0 * 140.0) + (dy * dy) / (112.0 * 112.0) <= 1.0 and dx > -28.0
+            inner = (dx * dx) / (90.0 * 90.0) + (dy * dy) / (70.0 * 70.0) <= 1.0 and dx > -18.0
+            ring = outer and not inner
+            shape = stem or ring
             if not shape:
                 continue
 
-            # diagonal cut for motion
-            if (dx + dy * 0.9) > 116:
+            # slight diagonal trim for motion
+            if dx + dy * 0.45 > 118.0:
                 continue
 
-            # glossy ramp
-            k = clamp((dy + 126) / 252)
-            c = mix((238, 246, 255), (123, 229, 255), k)
-            alpha = 0.94
-            if abs((dx + dy * 0.9) - 32) < 2.0:
-                alpha = 0.98
-            canvas.blend(x, y, c[0], c[1], c[2], alpha)
-
-    # sparkle accent
-    star_cx = cx + 210
-    star_cy = cy - 250
-    for y in range(int(star_cy - 78), int(star_cy + 79)):
-        if y < 0 or y >= SIZE:
-            continue
-        for x in range(int(star_cx - 78), int(star_cx + 79)):
-            if x < 0 or x >= SIZE:
-                continue
-            dx = abs(x + 0.5 - star_cx)
-            dy = abs(y + 0.5 - star_cy)
-            d = min(dx + dy * 0.45, dx * 0.45 + dy)
-            if d > 44:
-                continue
-            a = clamp((44 - d) / 44) ** 1.8 * 0.92
-            col = mix((188, 250, 255), (255, 255, 255), clamp(d / 44))
-            canvas.blend(x, y, col[0], col[1], col[2], a)
+            t = clamp((dy + 112.0) / 224.0)
+            cr, cg, cb = mix((244, 249, 255), (184, 219, 255), t)
+            canvas.blend(x, y, cr, cg, cb, 0.96)
 
 
 def main() -> None:
     canvas = Canvas(SIZE)
-
-    # base
     draw_background(canvas)
-
-    # depth cards
-    draw_rotated_card(
-        canvas,
-        cx=SIZE * 0.45,
-        cy=SIZE * 0.58,
-        w=SIZE * 0.54,
-        h=SIZE * 0.68,
-        radius=SIZE * 0.07,
-        angle_deg=-18.0,
-        fill=(2, 6, 18),
-        alpha=0.42,
-    )
-    draw_front_card(canvas)
-
+    card_center = draw_card(canvas)
+    draw_monogram(canvas, *card_center)
     canvas.write_png(OUT_PATH)
     print(f"Icon generated: {OUT_PATH}")
 
