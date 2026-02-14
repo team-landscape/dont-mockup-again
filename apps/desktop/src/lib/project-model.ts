@@ -462,7 +462,7 @@ export function createDefaultTemplateElements(main: Pick<TemplateMain, 'frame' |
       fillColor: '#111827',
       fit: main.shotPlacement.fit,
       cornerRadius: main.shotPlacement.cornerRadius,
-      deviceFrame: main.frame.enabled,
+      deviceFrame: false,
       frameInset: main.frame.inset,
       frameRadius: main.frame.radius,
       frameColor: '#ffffff',
@@ -596,7 +596,7 @@ export function normalizeTemplateElements(raw: unknown, defaults: TemplateElemen
         fillColor: typeof source.fillColor === 'string' && source.fillColor.trim() ? source.fillColor : '#111827',
         fit: source.fit === 'contain' ? 'contain' : 'cover',
         cornerRadius: Math.max(0, asNumber(source.cornerRadius, 0)),
-        deviceFrame: typeof source.deviceFrame === 'boolean' ? source.deviceFrame : false,
+        deviceFrame: false,
         frameInset: Math.max(0, asNumber(source.frameInset, 0)),
         frameRadius: Math.max(0, asNumber(source.frameRadius, 0)),
         frameColor: typeof source.frameColor === 'string' && source.frameColor.trim()

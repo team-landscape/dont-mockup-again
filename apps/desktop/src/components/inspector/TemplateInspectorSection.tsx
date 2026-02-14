@@ -257,47 +257,6 @@ export function TemplateInspectorSection({
             />
           </div>
 
-          <SwitchRow
-            label="Device Frame (Image only)"
-            checked={imageElement.deviceFrame}
-            onCheckedChange={(checked) => updateTemplateElement(imageElement.id, (current) => (
-              current.kind === 'image' ? { ...current, deviceFrame: checked } : current
-            ))}
-          />
-
-          {imageElement.deviceFrame ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <NumberField
-                label="Frame Inset"
-                value={imageElement.frameInset}
-                onValueChange={(value) => updateTemplateElement(imageElement.id, (current) => (
-                  current.kind === 'image' ? { ...current, frameInset: value } : current
-                ))}
-              />
-              <NumberField
-                label="Frame Radius"
-                value={imageElement.frameRadius}
-                onValueChange={(value) => updateTemplateElement(imageElement.id, (current) => (
-                  current.kind === 'image' ? { ...current, frameRadius: value } : current
-                ))}
-              />
-              <NumberField
-                label="Frame Width"
-                value={imageElement.frameWidth}
-                onValueChange={(value) => updateTemplateElement(imageElement.id, (current) => (
-                  current.kind === 'image' ? { ...current, frameWidth: value } : current
-                ))}
-              />
-              <ColorField
-                label="Frame Color"
-                value={imageElement.frameColor}
-                fallbackColor="#ffffff"
-                onValueChange={(value) => updateTemplateElement(imageElement.id, (current) => (
-                  current.kind === 'image' ? { ...current, frameColor: value } : current
-                ))}
-              />
-            </div>
-          ) : null}
         </>
       );
     }
