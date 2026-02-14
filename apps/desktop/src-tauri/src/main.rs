@@ -221,25 +221,29 @@ fn collect_system_fonts() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-fn run_pipeline(command: String, args: Vec<String>) -> Result<String, String> {
-    let workspace_root = project_root();
-    let script = workspace_root.join("scripts/pipeline.js");
+async fn run_pipeline(command: String, args: Vec<String>) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let workspace_root = project_root();
+        let script = workspace_root.join("scripts/pipeline.js");
 
-    let output = Command::new("node")
-        .arg("--import")
-        .arg("tsx")
-        .arg(script)
-        .arg(command)
-        .args(args)
-        .current_dir(workspace_root)
-        .output()
-        .map_err(|error| format!("failed to execute node: {}", error))?;
+        let output = Command::new("node")
+            .arg("--import")
+            .arg("tsx")
+            .arg(script)
+            .arg(command)
+            .args(args)
+            .current_dir(workspace_root)
+            .output()
+            .map_err(|error| format!("failed to execute node: {}", error))?;
 
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
 
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    })
+    .await
+    .map_err(|error| format!("failed to join run_pipeline task: {}", error))?
 }
 
 #[tauri::command]

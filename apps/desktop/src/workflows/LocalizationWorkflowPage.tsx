@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
+import { flushSync } from 'react-dom';
 
 import { LabeledField } from '../components/form/LabeledField';
 import { Button } from '../components/ui/button';
@@ -66,6 +67,27 @@ export function LocalizationWorkflowPage({
     gridTemplateColumns: `repeat(${localeColumnCount}, minmax(${localeColumnWidth}px, 1fr))`
   };
   const editorMinWidth = Math.max(980, localeColumnCount * localeColumnWidth + 80);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isButtonLoading = isRunningLocalization || isSubmitting;
+  const isButtonDisabled = isBusy || isSubmitting;
+
+  const handleRunLocalizationClick = () => {
+    if (isButtonDisabled) {
+      return;
+    }
+
+    flushSync(() => {
+      setIsSubmitting(true);
+    });
+
+    void (async () => {
+      try {
+        await onRunLocalization();
+      } finally {
+        setIsSubmitting(false);
+      }
+    })();
+  };
 
   return (
     <div className="space-y-4">
@@ -92,8 +114,8 @@ export function LocalizationWorkflowPage({
             </LabeledField>
 
             <div className="flex flex-wrap gap-2">
-              <Button disabled={isBusy} onClick={() => { void onRunLocalization(); }}>
-                {isRunningLocalization ? (
+              <Button disabled={isButtonDisabled} onClick={handleRunLocalizationClick}>
+                {isButtonLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     {localizationBusyLabel || 'Processing...'}

@@ -45,11 +45,20 @@ export function usePipelineActions({
   setLocalizationError
 }: UsePipelineActionsArgs) {
   const handleRunLocalization = useCallback(async () => {
+    const startedAt = Date.now();
+    const minVisibleMs = 280;
+
     setLocalizationStatus('');
     setLocalizationError('');
     setLocalizationBusyLabel('Preparing localization run...');
     setLocalizationRunning(true);
     try {
+      // Ensure the loading state is painted before starting any work.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      if (typeof window !== 'undefined') {
+        await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+      }
+
       setLocalizationBusyLabel('Saving project config...');
       await persistProjectSnapshot();
 
@@ -67,6 +76,10 @@ export function usePipelineActions({
       const message = error instanceof Error ? error.message : String(error);
       setLocalizationError(message);
     } finally {
+      const elapsedMs = Date.now() - startedAt;
+      if (elapsedMs < minVisibleMs) {
+        await new Promise<void>((resolve) => setTimeout(resolve, minVisibleMs - elapsedMs));
+      }
       setLocalizationBusyLabel('');
       setLocalizationRunning(false);
     }
