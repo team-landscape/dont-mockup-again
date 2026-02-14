@@ -62,28 +62,28 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Build Tauri app bundle (macOS .app)
-        run: npm --prefix apps/desktop run tauri:build -- --bundles app
+      - name: Build Tauri app bundle (macOS .dmg)
+        run: npm --prefix apps/desktop run tauri:build -- --bundles dmg
 
-      - name: Package .app bundle
+      - name: Collect .dmg bundle
         run: |
           REF_SLUG="${RELEASE_REF_NAME//\//-}-${RELEASE_SHA:0:7}"
-          BUNDLE_DIR="apps/desktop/src-tauri/target/release/bundle/macos"
-          APP_NAME="Don't Mockup Again.app"
-          ARCHIVE_PATH="${BUNDLE_DIR}/dont-mockup-again-${REF_SLUG}-macos-app.tar.gz"
-          CHECKSUM_PATH="${ARCHIVE_PATH}.sha256"
-          LATEST_ARCHIVE_PATH="${BUNDLE_DIR}/dont-mockup-again-macos-latest.tar.gz"
-          LATEST_CHECKSUM_PATH="${LATEST_ARCHIVE_PATH}.sha256"
+          BUNDLE_DIR="apps/desktop/src-tauri/target/release/bundle/dmg"
+          DMG_SOURCE_PATH="$(find "${BUNDLE_DIR}" -maxdepth 1 -type f -name '*.dmg' | sort | head -n 1)"
+          DMG_PATH="${BUNDLE_DIR}/dont-mockup-again-${REF_SLUG}-macos.dmg"
+          CHECKSUM_PATH="${DMG_PATH}.sha256"
+          LATEST_DMG_PATH="${BUNDLE_DIR}/dont-mockup-again-macos-latest.dmg"
+          LATEST_CHECKSUM_PATH="${LATEST_DMG_PATH}.sha256"
 
-          test -d "${BUNDLE_DIR}/${APP_NAME}"
-          tar -czf "${ARCHIVE_PATH}" -C "${BUNDLE_DIR}" "${APP_NAME}"
-          shasum -a 256 "${ARCHIVE_PATH}" > "${CHECKSUM_PATH}"
-          cp "${ARCHIVE_PATH}" "${LATEST_ARCHIVE_PATH}"
-          shasum -a 256 "${LATEST_ARCHIVE_PATH}" > "${LATEST_CHECKSUM_PATH}"
+          test -n "${DMG_SOURCE_PATH}"
+          cp "${DMG_SOURCE_PATH}" "${DMG_PATH}"
+          shasum -a 256 "${DMG_PATH}" > "${CHECKSUM_PATH}"
+          cp "${DMG_PATH}" "${LATEST_DMG_PATH}"
+          shasum -a 256 "${LATEST_DMG_PATH}" > "${LATEST_CHECKSUM_PATH}"
 
-          echo "ARCHIVE_PATH=${ARCHIVE_PATH}" >> "${GITHUB_ENV}"
+          echo "DMG_PATH=${DMG_PATH}" >> "${GITHUB_ENV}"
           echo "CHECKSUM_PATH=${CHECKSUM_PATH}" >> "${GITHUB_ENV}"
-          echo "LATEST_ARCHIVE_PATH=${LATEST_ARCHIVE_PATH}" >> "${GITHUB_ENV}"
+          echo "LATEST_DMG_PATH=${LATEST_DMG_PATH}" >> "${GITHUB_ENV}"
           echo "LATEST_CHECKSUM_PATH=${LATEST_CHECKSUM_PATH}" >> "${GITHUB_ENV}"
 
       - name: Upload release artifacts
@@ -91,9 +91,9 @@ jobs:
         with:
           name: desktop-macos-release-${{ env.RELEASE_REF_NAME }}-${{ env.RELEASE_SHA }}
           path: |
-            ${{ env.ARCHIVE_PATH }}
+            ${{ env.DMG_PATH }}
             ${{ env.CHECKSUM_PATH }}
-            ${{ env.LATEST_ARCHIVE_PATH }}
+            ${{ env.LATEST_DMG_PATH }}
             ${{ env.LATEST_CHECKSUM_PATH }}
           if-no-files-found: error
 
@@ -107,7 +107,7 @@ jobs:
           fail_on_unmatched_files: true
           overwrite_files: true
           files: |
-            ${{ env.ARCHIVE_PATH }}
+            ${{ env.DMG_PATH }}
             ${{ env.CHECKSUM_PATH }}
-            ${{ env.LATEST_ARCHIVE_PATH }}
+            ${{ env.LATEST_DMG_PATH }}
             ${{ env.LATEST_CHECKSUM_PATH }}
