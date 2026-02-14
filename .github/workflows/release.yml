@@ -62,7 +62,9 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Build Tauri app bundle (macOS .dmg)
+      - name: Build Tauri app bundle (macOS .dmg, ad-hoc signed)
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
         run: npm --prefix apps/desktop run tauri:build -- --bundles dmg
 
       - name: Collect .dmg bundle

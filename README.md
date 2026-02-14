@@ -194,6 +194,9 @@ Batch render in CI-like flow:
 
 - `tauri:dev` fails:
   - Check Rust toolchain and Tauri host dependencies
+- macOS shows "app is damaged" or blocks launch:
+  - Right-click the app and select `Open` once, then confirm
+  - Or run: `xattr -dr com.apple.quarantine "/Applications/Don't Mockup Again.app"`
 - LLM localization not running:
   - Verify CLI command is installed and available in PATH
 - Upload step fails:
