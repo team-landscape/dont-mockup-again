@@ -2,6 +2,8 @@ name: Release Desktop App
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
@@ -16,6 +18,7 @@ concurrency:
 jobs:
   release-macos:
     name: Build macOS App and Release
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-latest
     timeout-minutes: 60
 
@@ -51,8 +54,8 @@ jobs:
         run: |
           REF_SLUG="${GITHUB_REF_NAME//\//-}"
           BUNDLE_DIR="apps/desktop/src-tauri/target/release/bundle/macos"
-          APP_NAME="Store Metadata Studio.app"
-          ARCHIVE_PATH="${BUNDLE_DIR}/Store-Metadata-Studio-${REF_SLUG}-macos-app.tar.gz"
+          APP_NAME="Don't Mockup Again.app"
+          ARCHIVE_PATH="${BUNDLE_DIR}/dont-mockup-again-${REF_SLUG}-macos-app.tar.gz"
           CHECKSUM_PATH="${ARCHIVE_PATH}.sha256"
           LATEST_ARCHIVE_PATH="${BUNDLE_DIR}/dont-mockup-again-macos-latest.tar.gz"
           LATEST_CHECKSUM_PATH="${LATEST_ARCHIVE_PATH}.sha256"
@@ -80,9 +83,11 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('main-{0}', github.sha) }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && format('Release {0}', github.ref_name) || format('Main Build {0}', github.sha) }}
+          target_commitish: ${{ github.sha }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           overwrite_files: true
