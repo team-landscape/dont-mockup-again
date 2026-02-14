@@ -1,11 +1,13 @@
 name: Release Desktop App
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
     branches:
       - main
-    tags:
-      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -18,13 +20,18 @@ concurrency:
 jobs:
   release-macos:
     name: Build macOS App and Release
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: macos-latest
     timeout-minutes: 60
+    env:
+      RELEASE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+      RELEASE_REF_NAME: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -52,7 +59,7 @@ jobs:
 
       - name: Package .app bundle
         run: |
-          REF_SLUG="${GITHUB_REF_NAME//\//-}"
+          REF_SLUG="${RELEASE_REF_NAME//\//-}-${RELEASE_SHA:0:7}"
           BUNDLE_DIR="apps/desktop/src-tauri/target/release/bundle/macos"
           APP_NAME="Don't Mockup Again.app"
           ARCHIVE_PATH="${BUNDLE_DIR}/dont-mockup-again-${REF_SLUG}-macos-app.tar.gz"
@@ -74,7 +81,7 @@ jobs:
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-macos-release-${{ github.ref_name }}
+          name: desktop-macos-release-${{ env.RELEASE_REF_NAME }}-${{ env.RELEASE_SHA }}
           path: |
             ${{ env.ARCHIVE_PATH }}
             ${{ env.CHECKSUM_PATH }}
@@ -85,9 +92,9 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('main-{0}', github.sha) }}
-          name: ${{ startsWith(github.ref, 'refs/tags/v') && format('Release {0}', github.ref_name) || format('Main Build {0}', github.sha) }}
-          target_commitish: ${{ github.sha }}
+          tag_name: main-${{ env.RELEASE_SHA }}
+          name: Main Build ${{ env.RELEASE_SHA }}
+          target_commitish: ${{ env.RELEASE_SHA }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           overwrite_files: true
