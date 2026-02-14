@@ -48,6 +48,29 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri
 
+      - name: Validate macOS signing secrets
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          for key in APPLE_CERTIFICATE_P12_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!key}" ]; then
+              echo "::error::Missing required GitHub secret: ${key}"
+              exit 1
+            fi
+          done
+
+      - name: Import Apple signing certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+
       - name: Resolve release version
         id: version
         run: |
@@ -64,6 +87,34 @@ jobs:
 
       - name: Build Tauri app bundle (macOS .app)
         run: npm --prefix apps/desktop run tauri:build -- --bundles app
+
+      - name: Sign and notarize app bundle
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          BUNDLE_DIR="apps/desktop/src-tauri/target/release/bundle/macos"
+          APP_PATH="${BUNDLE_DIR}/Don't Mockup Again.app"
+          NOTARY_ZIP_PATH="${BUNDLE_DIR}/dont-mockup-again-notarize.zip"
+
+          test -d "${APP_PATH}"
+
+          codesign --force --deep --strict --options runtime --timestamp --sign "${APPLE_SIGNING_IDENTITY}" "${APP_PATH}"
+          codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
+
+          ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${NOTARY_ZIP_PATH}"
+          xcrun notarytool submit "${NOTARY_ZIP_PATH}" \
+            --apple-id "${APPLE_ID}" \
+            --password "${APPLE_APP_SPECIFIC_PASSWORD}" \
+            --team-id "${APPLE_TEAM_ID}" \
+            --wait
+
+          xcrun stapler staple "${APP_PATH}"
+          xcrun stapler validate "${APP_PATH}"
+          spctl --assess --type execute --verbose=4 "${APP_PATH}"
 
       - name: Package .app bundle
         run: |
