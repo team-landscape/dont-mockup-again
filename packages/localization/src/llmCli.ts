@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { constants as fsConstants } from 'node:fs';
 import { assertPlaceholdersPreserved } from './placeholders.ts';
 
 const LEGACY_FILE_ARGS_TEMPLATE = ['translate', '--in', '{INPUT}', '--out', '{OUTPUT}', '--to', '{LOCALE}'];
@@ -104,6 +105,10 @@ function isExecutableNotFoundError(error, attemptedCommand) {
 }
 
 async function resolveCommandFromLoginShell(candidates, cwd) {
+  if (process.env.DMA_DISABLE_LOGIN_SHELL_RESOLVE === '1') {
+    return null;
+  }
+
   const searchable = (candidates || [])
     .map((entry) => String(entry || '').trim())
     .filter(Boolean)
@@ -167,6 +172,21 @@ async function runCliWithCommandFallback(options) {
   const candidates = listCommandCandidates(options.command);
   let lastError = null;
 
+  const shellResolvedCommand = await resolveCommandFromLoginShell(candidates, options.cwd);
+  if (shellResolvedCommand) {
+    try {
+      return await runCli({
+        ...options,
+        command: shellResolvedCommand
+      });
+    } catch (error) {
+      lastError = error;
+      if (!isExecutableNotFoundError(error, shellResolvedCommand)) {
+        throw error;
+      }
+    }
+  }
+
   for (const candidate of candidates) {
     try {
       return await runCli({
@@ -181,21 +201,6 @@ async function runCliWithCommandFallback(options) {
     }
   }
 
-  const shellResolvedCommand = await resolveCommandFromLoginShell(candidates, options.cwd);
-  if (shellResolvedCommand && !candidates.includes(shellResolvedCommand)) {
-    try {
-      return await runCli({
-        ...options,
-        command: shellResolvedCommand
-      });
-    } catch (error) {
-      lastError = error;
-      if (!isExecutableNotFoundError(error, shellResolvedCommand)) {
-        throw error;
-      }
-    }
-  }
-
   if (lastError) {
     throw lastError;
   }
@@ -203,6 +208,55 @@ async function runCliWithCommandFallback(options) {
   throw new Error(
     `LLM CLI executable not found: ${options.command}. Configure an absolute command path or ensure PATH includes this CLI.`
   );
+}
+
+function buildSpawnEnv(command, cwd) {
+  const env = { ...process.env };
+  const executable = String(command || '').trim();
+  const hasPathSeparator = executable.includes('/') || executable.includes('\\');
+  if (!hasPathSeparator) {
+    return env;
+  }
+
+  const resolvedExecutable = path.isAbsolute(executable)
+    ? executable
+    : path.resolve(cwd || process.cwd(), executable);
+  const executableDir = path.dirname(resolvedExecutable);
+
+  const existingPath = String(env.PATH || '');
+  const entries = existingPath
+    .split(path.delimiter)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .filter((entry) => entry !== executableDir);
+  entries.unshift(executableDir);
+  env.PATH = entries.join(path.delimiter);
+
+  return env;
+}
+
+async function resolveExecutableCommand(command, cwd) {
+  const executable = String(command || '').trim();
+  const hasPathSeparator = executable.includes('/') || executable.includes('\\');
+  if (!hasPathSeparator) {
+    return executable;
+  }
+
+  const resolvedExecutable = path.isAbsolute(executable)
+    ? executable
+    : path.resolve(cwd || process.cwd(), executable);
+
+  try {
+    await fs.access(resolvedExecutable, fsConstants.X_OK);
+  } catch {
+    return resolvedExecutable;
+  }
+
+  try {
+    return await fs.realpath(resolvedExecutable);
+  } catch {
+    return resolvedExecutable;
+  }
 }
 
 function tryParseJson(text) {
@@ -244,9 +298,11 @@ function tryParseJson(text) {
 }
 
 async function runCli({ command, args, inputFilePath, timeoutSec, cwd }) {
+  const executableCommand = await resolveExecutableCommand(command, cwd);
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const child = spawn(executableCommand, args, {
       cwd,
+      env: buildSpawnEnv(executableCommand, cwd),
       stdio: ['pipe', 'pipe', 'pipe']
     });
 

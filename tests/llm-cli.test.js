@@ -43,14 +43,21 @@ process.stdout.write(JSON.stringify({ entries }));
   );
 
   const originalPath = process.env.PATH || '';
+  const originalDisableLoginShellResolve = process.env.DMA_DISABLE_LOGIN_SHELL_RESOLVE;
   process.env.PATH = includeOriginalPath
     ? `${binDir}${path.delimiter}${originalPath}`
     : `${binDir}${path.delimiter}${path.dirname(process.execPath)}`;
+  process.env.DMA_DISABLE_LOGIN_SHELL_RESOLVE = '1';
 
   try {
     await run(tempDir);
   } finally {
     process.env.PATH = originalPath;
+    if (typeof originalDisableLoginShellResolve === 'string') {
+      process.env.DMA_DISABLE_LOGIN_SHELL_RESOLVE = originalDisableLoginShellResolve;
+    } else {
+      delete process.env.DMA_DISABLE_LOGIN_SHELL_RESOLVE;
+    }
     await fs.rm(tempDir, { recursive: true, force: true });
   }
 }
