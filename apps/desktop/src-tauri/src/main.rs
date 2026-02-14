@@ -220,21 +220,90 @@ fn collect_system_fonts() -> Result<Vec<String>, String> {
     Ok(fallback_font_list())
 }
 
-#[tauri::command]
-async fn run_pipeline(command: String, args: Vec<String>) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let workspace_root = project_root();
-        let script = workspace_root.join("scripts/pipeline.js");
+struct PipelineRuntime {
+    node_cmd: PathBuf,
+    script_path: PathBuf,
+    use_tsx_loader: bool,
+    working_dir: PathBuf,
+}
 
-        let output = Command::new("node")
-            .arg("--import")
-            .arg("tsx")
-            .arg(script)
+fn resolve_pipeline_working_dir(args: &[String]) -> PathBuf {
+    if let Some(first) = args.first() {
+        let candidate = PathBuf::from(first);
+        if candidate.is_absolute() {
+            if candidate.is_dir() {
+                return candidate;
+            }
+            if let Some(parent) = candidate.parent() {
+                return parent.to_path_buf();
+            }
+        }
+    }
+
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"))
+}
+
+fn resolve_pipeline_runtime(app: &tauri::AppHandle, args: &[String]) -> PipelineRuntime {
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let node_candidates = [
+            resource_dir.join("bin").join("node"),
+            resource_dir.join("resources").join("bin").join("node"),
+        ];
+        let pipeline_candidates = [
+            resource_dir.join("pipeline.bundle.mjs"),
+            resource_dir.join("resources").join("pipeline.bundle.mjs"),
+        ];
+
+        for bundled_node in node_candidates {
+            for bundled_pipeline in &pipeline_candidates {
+                if bundled_node.exists() && bundled_pipeline.exists() {
+                    return PipelineRuntime {
+                        node_cmd: bundled_node.clone(),
+                        script_path: bundled_pipeline.clone(),
+                        use_tsx_loader: false,
+                        working_dir: resolve_pipeline_working_dir(args),
+                    };
+                }
+            }
+        }
+    }
+
+    let workspace_root = project_root();
+    PipelineRuntime {
+        node_cmd: PathBuf::from("node"),
+        script_path: workspace_root.join("scripts/pipeline.js"),
+        use_tsx_loader: true,
+        working_dir: workspace_root,
+    }
+}
+
+#[tauri::command]
+async fn run_pipeline(
+    app: tauri::AppHandle,
+    command: String,
+    args: Vec<String>,
+) -> Result<String, String> {
+    let runtime = resolve_pipeline_runtime(&app, &args);
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut process = Command::new(&runtime.node_cmd);
+        if runtime.use_tsx_loader {
+            process.arg("--import").arg("tsx");
+        }
+
+        let output = process
+            .arg(&runtime.script_path)
             .arg(command)
             .args(args)
-            .current_dir(workspace_root)
+            .current_dir(&runtime.working_dir)
             .output()
-            .map_err(|error| format!("failed to execute node: {}", error))?;
+            .map_err(|error| {
+                format!(
+                    "failed to execute node `{}` with script `{}`: {}",
+                    runtime.node_cmd.display(),
+                    runtime.script_path.display(),
+                    error
+                )
+            })?;
 
         if !output.status.success() {
             return Err(String::from_utf8_lossy(&output.stderr).to_string());

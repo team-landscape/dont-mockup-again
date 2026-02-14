@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:5173",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run bundle:pipeline && npm run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -20,6 +20,10 @@
     ]
   },
   "bundle": {
+    "resources": [
+      "resources/pipeline.bundle.mjs",
+      "resources/bin/node"
+    ],
     "icon": [
       "icons/icon.icns"
     ]
