@@ -6,6 +6,10 @@ You can run it in two ways:
 - Desktop app (`Tauri + React`) for interactive workflows
 - Pipeline CLI for automation and CI-like batch runs
 
+## UI Preview
+
+![Screens Composer UI](docs/screens-composer.png)
+
 ## What It Does
 
 - Define slots/screens once and reuse them across locales/devices
@@ -209,6 +213,9 @@ Current tests cover:
 
 ## Troubleshooting
 
+- macOS DMG install:
+  - open the `.dmg`, then drag `Don't Mockup Again.app` into `Applications` and launch from `/Applications`
+  - avoid running directly from the mounted DMG/translocation path
 - `tauri:dev` fails:
   - verify Rust toolchain and Tauri host prerequisites
 - macOS blocks app launch (“damaged”/untrusted):
