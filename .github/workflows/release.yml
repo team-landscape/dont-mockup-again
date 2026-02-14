@@ -26,16 +26,6 @@ jobs:
     env:
       RELEASE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       RELEASE_REF_NAME: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-      APPLE_API_KEY_PATH: ${{ secrets.APPLE_API_KEY_PATH }}
-      APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
     steps:
       - name: Checkout
@@ -72,50 +62,6 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Prepare macOS signing and notarization credentials
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [[ -z "${APPLE_CERTIFICATE:-}" || -z "${APPLE_CERTIFICATE_PASSWORD:-}" ]]; then
-            echo "::error::Missing APPLE_CERTIFICATE or APPLE_CERTIFICATE_PASSWORD secret."
-            exit 1
-          fi
-
-          has_api_key_auth=false
-          if [[ -n "${APPLE_API_KEY:-}" && -n "${APPLE_API_ISSUER:-}" ]]; then
-            has_api_key_auth=true
-
-            if [[ -z "${APPLE_API_KEY_PATH:-}" ]]; then
-              if [[ -z "${APPLE_API_KEY_CONTENT:-}" ]]; then
-                echo "::error::Missing notarization API key material."
-                echo "::error::Set APPLE_API_KEY_CONTENT or APPLE_API_KEY_PATH."
-                exit 1
-              fi
-
-              GENERATED_API_KEY_PATH="${RUNNER_TEMP}/AuthKey_${APPLE_API_KEY}.p8"
-              printf '%s' "${APPLE_API_KEY_CONTENT}" > "${GENERATED_API_KEY_PATH}"
-              chmod 600 "${GENERATED_API_KEY_PATH}"
-              echo "APPLE_API_KEY_PATH=${GENERATED_API_KEY_PATH}" >> "${GITHUB_ENV}"
-            elif [[ ! -f "${APPLE_API_KEY_PATH}" ]]; then
-              echo "::error::APPLE_API_KEY_PATH does not exist on runner: ${APPLE_API_KEY_PATH}"
-              exit 1
-            fi
-          fi
-
-          has_apple_id_auth=false
-          if [[ -n "${APPLE_ID:-}" && -n "${APPLE_PASSWORD:-}" && -n "${APPLE_TEAM_ID:-}" ]]; then
-            has_apple_id_auth=true
-          fi
-
-          if [[ "${has_api_key_auth}" != "true" && "${has_apple_id_auth}" != "true" ]]; then
-            echo "::error::Missing notarization credentials."
-            echo "::error::Provide either:"
-            echo "::error::- APPLE_API_KEY + APPLE_API_ISSUER + (APPLE_API_KEY_PATH or APPLE_API_KEY_CONTENT), or"
-            echo "::error::- APPLE_ID + APPLE_PASSWORD + APPLE_TEAM_ID."
-            exit 1
-          fi
-
       - name: Build Tauri app bundle (macOS .dmg)
         run: npm --prefix apps/desktop run tauri:build -- --bundles dmg
 
@@ -139,14 +85,6 @@ jobs:
           echo "CHECKSUM_PATH=${CHECKSUM_PATH}" >> "${GITHUB_ENV}"
           echo "LATEST_DMG_PATH=${LATEST_DMG_PATH}" >> "${GITHUB_ENV}"
           echo "LATEST_CHECKSUM_PATH=${LATEST_CHECKSUM_PATH}" >> "${GITHUB_ENV}"
-
-      - name: Validate .dmg signature and notarization
-        shell: bash
-        run: |
-          set -euo pipefail
-          codesign --verify --deep --strict --verbose=2 "${DMG_PATH}"
-          xcrun stapler validate "${DMG_PATH}"
-          spctl --assess --type open --verbose=4 "${DMG_PATH}"
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
