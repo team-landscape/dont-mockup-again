@@ -147,6 +147,15 @@ async function runCli({ command, args, inputFilePath, timeoutSec, cwd }) {
 
     child.on('error', (error) => {
       clearTimeout(timeout);
+      if (error && error.code === 'ENOENT') {
+        reject(
+          new Error(
+            `LLM CLI executable not found: ${command}. Configure an absolute command path or ensure PATH includes this CLI.`
+          )
+        );
+        return;
+      }
+
       reject(error);
     });
 

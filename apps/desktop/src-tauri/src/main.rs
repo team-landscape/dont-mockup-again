@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::OnceLock;
 use tauri::Manager;
 
 #[cfg(target_os = "macos")]
@@ -277,6 +278,97 @@ fn resolve_pipeline_runtime(app: &tauri::AppHandle, args: &[String]) -> Pipeline
     }
 }
 
+fn append_unique_path(paths: &mut Vec<PathBuf>, candidate: PathBuf) {
+    if candidate.as_os_str().is_empty() {
+        return;
+    }
+
+    if !paths.iter().any(|existing| existing == &candidate) {
+        paths.push(candidate);
+    }
+}
+
+fn extend_paths_from_string(paths: &mut Vec<PathBuf>, value: &str) {
+    for candidate in std::env::split_paths(value) {
+        append_unique_path(paths, candidate);
+    }
+}
+
+fn resolve_login_shell_path() -> Option<String> {
+    #[cfg(unix)]
+    {
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+        let output = Command::new(shell)
+            .args(["-lc", "printf %s \"$PATH\""])
+            .output()
+            .ok()?;
+
+        if !output.status.success() {
+            return None;
+        }
+
+        let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if value.is_empty() {
+            None
+        } else {
+            Some(value)
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        None
+    }
+}
+
+fn build_augmented_path_env() -> Option<String> {
+    let mut paths = Vec::new();
+
+    if let Ok(current_path) = std::env::var("PATH") {
+        extend_paths_from_string(&mut paths, &current_path);
+    }
+
+    if let Some(login_shell_path) = resolve_login_shell_path() {
+        extend_paths_from_string(&mut paths, &login_shell_path);
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        for system_path in [
+            "/opt/homebrew/bin",
+            "/opt/homebrew/sbin",
+            "/usr/local/bin",
+            "/usr/local/sbin",
+            "/opt/local/bin",
+            "/opt/local/sbin",
+        ] {
+            append_unique_path(&mut paths, PathBuf::from(system_path));
+        }
+
+        if let Ok(home) = std::env::var("HOME") {
+            let home = PathBuf::from(home);
+            for suffix in [
+                ".local/bin",
+                ".npm-global/bin",
+                ".volta/bin",
+                ".asdf/shims",
+                ".nvm/current/bin",
+            ] {
+                append_unique_path(&mut paths, home.join(suffix));
+            }
+        }
+    }
+
+    std::env::join_paths(paths)
+        .ok()
+        .map(|joined| joined.to_string_lossy().to_string())
+}
+
+fn resolve_pipeline_path_env() -> Option<String> {
+    static CACHED_PATH: OnceLock<Option<String>> = OnceLock::new();
+    CACHED_PATH.get_or_init(build_augmented_path_env).clone()
+}
+
 #[tauri::command]
 async fn run_pipeline(
     app: tauri::AppHandle,
@@ -286,6 +378,10 @@ async fn run_pipeline(
     let runtime = resolve_pipeline_runtime(&app, &args);
     tauri::async_runtime::spawn_blocking(move || {
         let mut process = Command::new(&runtime.node_cmd);
+        if let Some(path_env) = resolve_pipeline_path_env() {
+            process.env("PATH", path_env);
+        }
+
         if runtime.use_tsx_loader {
             process.arg("--import").arg("tsx");
         }
