@@ -214,4 +214,8 @@ Current landing source path:
 
 ## License
 
-No license file is currently included in this repository.
+Copyright (c) 2026 Team Landscape. All rights reserved.
+
+This project and its source code are proprietary to Team Landscape.
+No permission is granted to use, copy, modify, or distribute this software
+without prior written authorization from Team Landscape.
