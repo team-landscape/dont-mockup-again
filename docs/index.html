@@ -30,7 +30,7 @@
       html,
       body {
         margin: 0;
-        min-height: 100%;
+        min-height: 100vh;
       }
 
       body {
@@ -39,16 +39,26 @@
         background:
           radial-gradient(920px 420px at 88% -8%, oklch(0.29 0 0 / 0.35) 0%, transparent 60%),
           var(--background);
+        display: grid;
+        grid-template-rows: 1fr auto;
       }
 
       .wrap {
-        min-height: 100vh;
+        width: 100%;
         max-width: 920px;
         margin: 0 auto;
         padding: clamp(1.1rem, 3vw, 2.2rem);
         display: grid;
-        align-content: center;
+        place-content: center;
         gap: 1rem;
+      }
+
+      .site-footer {
+        text-align: center;
+        color: var(--muted-foreground);
+        font-size: 0.78rem;
+        letter-spacing: 0.02em;
+        padding: 0 1rem 1.1rem;
       }
 
       .brand {
@@ -127,5 +137,6 @@
         <a class="btn ghost" href="https://github.com/team-landscape/dont-mockup-again/releases/latest/download/dont-mockup-again-macos-latest.tar.gz" target="_blank" rel="noreferrer">Download Desktop App</a>
       </div>
     </main>
+    <footer class="site-footer">&copy; 2026 Team Landscape. All rights reserved.</footer>
   </body>
 </html>
