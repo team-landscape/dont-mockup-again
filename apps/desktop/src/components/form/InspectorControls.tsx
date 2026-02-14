@@ -27,13 +27,18 @@ interface SwitchRowProps {
   label: string;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
+  disabled?: boolean;
 }
 
-export function SwitchRow({ label, checked, onCheckedChange }: SwitchRowProps) {
+export function SwitchRow({ label, checked, onCheckedChange, disabled = false }: SwitchRowProps) {
   return (
     <div className="flex items-center justify-between rounded-md border px-2 py-1.5">
       <Label className="text-xs">{label}</Label>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+      <Switch
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onCheckedChange}
+      />
     </div>
   );
 }

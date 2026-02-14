@@ -32,6 +32,11 @@ export function OnboardingOverlay({
     return null;
   }
 
+  const platformSections: Array<{ key: Platform; label: string }> = [
+    { key: 'ios', label: 'iOS' },
+    { key: 'android', label: 'Android' }
+  ];
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-background/90 p-4 backdrop-blur-sm">
       <Card className="w-full max-w-[760px] shadow-2xl">
@@ -51,26 +56,31 @@ export function OnboardingOverlay({
 
           <div className="space-y-2 rounded-lg border p-3">
             <p className="text-sm font-medium">Platforms & Devices</p>
-            <SwitchRow
-              label="iOS"
-              checked={platforms.includes('ios')}
-              onCheckedChange={(checked) => onPlatformToggle('ios', checked)}
-            />
-            <SwitchRow
-              label="Android"
-              checked={platforms.includes('android')}
-              onCheckedChange={(checked) => onPlatformToggle('android', checked)}
-            />
-            <div className="space-y-1.5 rounded-md border p-1.5">
-              {devicePresets.map((preset) => (
-                <SwitchRow
-                  key={preset.value.id}
-                  label={preset.label}
-                  checked={devices.some((device) => device.id === preset.value.id)}
-                  onCheckedChange={(checked) => onDeviceToggle(preset.value, checked)}
-                />
-              ))}
-            </div>
+            {platformSections.map(({ key, label }) => {
+              const platformEnabled = platforms.includes(key);
+              const presets = devicePresets.filter((preset) => preset.value.platform === key);
+
+              return (
+                <div key={key} className="space-y-1.5 rounded-md border p-1.5">
+                  <SwitchRow
+                    label={label}
+                    checked={platformEnabled}
+                    onCheckedChange={(checked) => onPlatformToggle(key, checked)}
+                  />
+                  <div className="space-y-1.5 pl-3">
+                    {presets.map((preset) => (
+                      <SwitchRow
+                        key={preset.value.id}
+                        label={preset.label}
+                        disabled={!platformEnabled}
+                        checked={platformEnabled && devices.some((device) => device.id === preset.value.id)}
+                        onCheckedChange={(checked) => onDeviceToggle(preset.value, checked)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           <div className="flex items-center justify-between">
