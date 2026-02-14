@@ -18,5 +18,10 @@
         "resizable": true
       }
     ]
+  },
+  "bundle": {
+    "icon": [
+      "icons/icon.icns"
+    ]
   }
 }
