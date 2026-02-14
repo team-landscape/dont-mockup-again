@@ -1,4 +1,5 @@
 import { Loader2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
 
 import { Card, CardDescription, CardHeader, CardTitle } from '../ui/card';
 
@@ -13,8 +14,12 @@ export function BusyOverlay({ open, title, detail }: BusyOverlayProps) {
     return null;
   }
 
-  return (
-    <div className="fixed inset-0 z-[70] grid place-items-center bg-background/70 p-4 backdrop-blur-sm">
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[1200] grid place-items-center bg-black/55 p-4 backdrop-blur-sm">
       <Card className="w-full max-w-[440px] shadow-2xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -24,6 +29,7 @@ export function BusyOverlay({ open, title, detail }: BusyOverlayProps) {
           <CardDescription>{detail}</CardDescription>
         </CardHeader>
       </Card>
-    </div>
+    </div>,
+    document.body
   );
 }

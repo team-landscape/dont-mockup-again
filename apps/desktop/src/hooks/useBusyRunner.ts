@@ -5,6 +5,7 @@ export interface BusyRunOptions {
   action?: string;
   title?: string;
   detail?: string;
+  minVisibleMs?: number;
 }
 
 export interface BusyHelpers {
@@ -27,6 +28,7 @@ export function useBusyRunner({
     async (action: (helpers: BusyHelpers) => Promise<void>, options: BusyRunOptions = {}) => {
       const updateTitle = (value: string) => setBusyTitle(value);
       const updateDetail = (value: string) => setBusyDetail(value);
+      const startedAt = Date.now();
 
       flushSync(() => {
         setBusyTitle(options.title || 'Processing');
@@ -40,6 +42,13 @@ export function useBusyRunner({
       try {
         await action({ setTitle: updateTitle, setDetail: updateDetail });
       } finally {
+        const minVisibleMs = Math.max(0, options.minVisibleMs || 0);
+        if (minVisibleMs > 0) {
+          const elapsedMs = Date.now() - startedAt;
+          if (elapsedMs < minVisibleMs) {
+            await new Promise<void>((resolve) => setTimeout(resolve, minVisibleMs - elapsedMs));
+          }
+        }
         setIsBusy(false);
         setBusyTitle('');
         setBusyDetail('');
