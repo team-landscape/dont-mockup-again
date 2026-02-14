@@ -259,6 +259,24 @@ async function resolveExecutableCommand(command, cwd) {
   }
 }
 
+function shouldUseCurrentNodeForGemini(originalCommand, resolvedCommand) {
+  const resolved = String(resolvedCommand || '');
+  const hasResolvedPathSeparator = resolved.includes('/') || resolved.includes('\\');
+  if (!hasResolvedPathSeparator) {
+    return false;
+  }
+
+  if (isGeminiCommand(originalCommand) || isGeminiCommand(resolvedCommand)) {
+    return true;
+  }
+
+  if (resolved.toLowerCase().endsWith('/gemini.js')) {
+    return true;
+  }
+
+  return resolved.includes('/@google/gemini-cli/');
+}
+
 function tryParseJson(text) {
   const raw = String(text || '').trim();
   if (!raw) {
@@ -299,8 +317,9 @@ function tryParseJson(text) {
 
 async function runCli({ command, args, inputFilePath, timeoutSec, cwd }) {
   const executableCommand = await resolveExecutableCommand(command, cwd);
+  const useCurrentNodeForGemini = shouldUseCurrentNodeForGemini(command, executableCommand);
   return new Promise((resolve, reject) => {
-    const child = spawn(executableCommand, args, {
+    const child = spawn(useCurrentNodeForGemini ? process.execPath : executableCommand, useCurrentNodeForGemini ? [executableCommand, ...args] : args, {
       cwd,
       env: buildSpawnEnv(executableCommand, cwd),
       stdio: ['pipe', 'pipe', 'pipe']
