@@ -127,7 +127,7 @@ export interface LlmCliConfig {
   targetLocales?: string[];
 }
 
-export interface StoreShotDoc {
+export interface ProjectDoc {
   schemaVersion: number;
   project: {
     name: string;
@@ -749,7 +749,7 @@ export function syncTemplateLegacyFields(main: TemplateMain, slotWidth = 1290): 
   };
 }
 
-export function createDefaultProject(): StoreShotDoc {
+export function createDefaultProject(): ProjectDoc {
   const defaultSlots: Slot[] = [
     { id: 'slot1', name: 'Slot 1', order: 1, sourceImagePath: 'examples/assets/source/shot1.png' },
     { id: 'slot2', name: 'Slot 2', order: 2, sourceImagePath: 'examples/assets/source/shot2.png' },
@@ -827,11 +827,11 @@ export function createDefaultProject(): StoreShotDoc {
   };
 }
 
-export function normalizeProject(raw: unknown): StoreShotDoc {
+export function normalizeProject(raw: unknown): ProjectDoc {
   const base = createDefaultProject();
   if (!raw || typeof raw !== 'object') return base;
 
-  const doc = raw as Partial<StoreShotDoc>;
+  const doc = raw as Partial<ProjectDoc>;
   const normalizedSlots = (doc.project?.slots || base.project.slots)
     .map((slot, index) => ({
       ...slot,
@@ -923,10 +923,10 @@ export function reorderSlots(slots: Slot[]): Slot[] {
 }
 
 export function buildProjectSnapshotForPersistence(
-  doc: StoreShotDoc,
+  doc: ProjectDoc,
   resolvedOutputDir: string,
   options?: { syncTemplateMain?: boolean; slotWidth?: number }
-): StoreShotDoc {
+): ProjectDoc {
   const next = clone(doc);
   next.project.slots = reorderSlots(next.project.slots);
 
@@ -944,7 +944,7 @@ export function buildProjectSnapshotForPersistence(
   return next;
 }
 
-export function serializeProjectSignature(snapshot: StoreShotDoc): string {
+export function serializeProjectSignature(snapshot: ProjectDoc): string {
   return JSON.stringify(snapshot);
 }
 

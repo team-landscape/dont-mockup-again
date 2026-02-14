@@ -11,13 +11,13 @@ import {
   type Device,
   type LlmCliConfig,
   type Platform,
-  type StoreShotDoc,
+  type ProjectDoc,
   clone,
   defaultLlmConfig
 } from '../lib/project-model';
 
 interface UseProjectSlotActionsArgs {
-  setDoc: (value: StoreShotDoc | ((current: StoreShotDoc) => StoreShotDoc)) => void;
+  setDoc: (value: ProjectDoc | ((current: ProjectDoc) => ProjectDoc)) => void;
   setSelectedSlot: (value: string) => void;
   slotImageInputRef: MutableRefObject<HTMLInputElement | null>;
   slotImageTargetRef: MutableRefObject<string | null>;
@@ -31,7 +31,7 @@ export function useProjectSlotActions({
   slotImageTargetRef,
   startSlotTransition
 }: UseProjectSlotActionsArgs) {
-  const updateDoc = useCallback((mutator: (next: StoreShotDoc) => void) => {
+  const updateDoc = useCallback((mutator: (next: ProjectDoc) => void) => {
     setDoc((current) => {
       const next = clone(current);
       mutator(next);

@@ -29,7 +29,7 @@ It helps you generate store-ready screenshot assets from one project definition:
 - `packages/uploader`: local fastlane wrapper
 - `scripts/pipeline.js`: pipeline command entrypoint
 - `scripts/generate-sample-assets.js`: generates example source screenshots
-- `examples/sample.storeshot.json`: sample project
+- `examples/sample.dma.json`: sample project
 - `tests/*.test.js`: acceptance and localization CLI tests
 
 ## Tech Stack
@@ -70,15 +70,15 @@ node --import tsx scripts/generate-sample-assets.js
 Run full pipeline in one shot:
 
 ```bash
-node --import tsx scripts/pipeline.js all examples/sample.storeshot.json dist
+node --import tsx scripts/pipeline.js all examples/sample.dma.json dist
 ```
 
 Or run step-by-step:
 
 ```bash
-node --import tsx scripts/pipeline.js localize examples/sample.storeshot.json --write
-node --import tsx scripts/pipeline.js render examples/sample.storeshot.json dist-render
-node --import tsx scripts/pipeline.js export examples/sample.storeshot.json dist-render dist --zip --fastlane
+node --import tsx scripts/pipeline.js localize examples/sample.dma.json --write
+node --import tsx scripts/pipeline.js render examples/sample.dma.json dist-render
+node --import tsx scripts/pipeline.js export examples/sample.dma.json dist-render dist --zip --fastlane
 ```
 
 ## Localization Modes
@@ -144,11 +144,11 @@ The Rust shell exposes local commands used by the UI:
 
 ## Project File
 
-Primary project artifact: `*.storeshot.json`
+Primary project artifact: `*.dma.json`
 
 See:
 
-- `examples/sample.storeshot.json` for full structure
+- `examples/sample.dma.json` for full structure
 - `packages/core/src` for model and validation logic
 
 Core domains in file:
@@ -180,7 +180,7 @@ Current coverage includes:
 Create/update project via desktop app:
 
 1. Open app (`tauri:dev`)
-2. Load `examples/sample.storeshot.json` or create new
+2. Load `examples/sample.dma.json` or create new
 3. Edit slots/template/copy
 4. Run Localization / Preview / Export
 

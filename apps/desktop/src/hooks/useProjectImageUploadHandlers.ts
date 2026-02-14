@@ -10,14 +10,14 @@ import { browserFileToBase64, isTauriRuntime, writeFileBase64 } from '../lib/des
 import {
   imageMimeTypeFromPath,
   slotTemplateImageKey,
-  type StoreShotDoc,
+  type ProjectDoc,
   type TemplateElement
 } from '../lib/project-model';
 import type { BusyHelpers, BusyRunOptions } from './useBusyRunner';
 
 interface UseProjectImageUploadHandlersArgs {
   runWithBusy: (action: (helpers: BusyHelpers) => Promise<void>, options?: BusyRunOptions) => Promise<void>;
-  updateDoc: (mutator: (next: StoreShotDoc) => void) => void;
+  updateDoc: (mutator: (next: ProjectDoc) => void) => void;
   updateTemplateElement: (elementId: string, mutator: (element: TemplateElement) => TemplateElement) => void;
   setSlotSourceUrls: Dispatch<SetStateAction<Record<string, string>>>;
   setTemplateImageUrls: Dispatch<SetStateAction<Record<string, string>>>;

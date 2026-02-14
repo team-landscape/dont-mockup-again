@@ -181,7 +181,7 @@ async function runCliTranslation({
   timeoutSec,
   cwd
 }) {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'storeshot-llm-'));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dma-llm-'));
   const inputFilePath = path.join(tempDir, 'input.json');
   const outputFilePath = path.join(tempDir, 'output.json');
 
@@ -260,7 +260,7 @@ export async function translateWithCli(options) {
     glossary = null,
     styleGuide = null,
     timeoutSec = 120,
-    cachePath = '.storeshot/cache/translation-cache.json',
+    cachePath = '.dma/cache/translation-cache.json',
     cwd = process.cwd()
   } = options;
 

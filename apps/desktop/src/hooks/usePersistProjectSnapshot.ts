@@ -2,14 +2,14 @@ import { useCallback } from 'react';
 
 import { writeTextFile } from '../lib/desktop-runtime';
 import {
-  type StoreShotDoc,
+  type ProjectDoc,
   TEMPLATE_REFERENCE_WIDTH,
   buildProjectSnapshotForPersistence,
   serializeProjectSignature
 } from '../lib/project-model';
 
 interface UsePersistProjectSnapshotArgs {
-  doc: StoreShotDoc;
+  doc: ProjectDoc;
   outputDir: string;
   projectPath: string;
   selectedDeviceWidth: number;

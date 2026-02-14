@@ -1,7 +1,7 @@
 import {
   type Device,
   type Platform,
-  type StoreShotDoc,
+  type ProjectDoc,
   clone,
   cloneTemplateElements,
   detectPlatformFromDeviceId,
@@ -12,7 +12,7 @@ import {
   sortSlotsByOrder
 } from './project-model';
 
-export function applyTogglePlatform(next: StoreShotDoc, platform: Platform, checked: boolean) {
+export function applyTogglePlatform(next: ProjectDoc, platform: Platform, checked: boolean) {
   const current = new Set(next.project.platforms);
   if (checked) {
     current.add(platform);
@@ -27,7 +27,7 @@ export function applyTogglePlatform(next: StoreShotDoc, platform: Platform, chec
   });
 }
 
-export function applyToggleDevicePreset(next: StoreShotDoc, presetDevice: Device, checked: boolean) {
+export function applyToggleDevicePreset(next: ProjectDoc, presetDevice: Device, checked: boolean) {
   const exists = next.project.devices.some((device) => device.id === presetDevice.id);
   if (checked && !exists) {
     next.project.devices.push(clone(presetDevice));
@@ -38,7 +38,7 @@ export function applyToggleDevicePreset(next: StoreShotDoc, presetDevice: Device
   }
 }
 
-export function applyMoveSlot(next: StoreShotDoc, slotId: string, direction: -1 | 1) {
+export function applyMoveSlot(next: ProjectDoc, slotId: string, direction: -1 | 1) {
   const ordered = sortSlotsByOrder(next.project.slots);
   const index = ordered.findIndex((slot) => slot.id === slotId);
   if (index < 0) {
@@ -55,7 +55,7 @@ export function applyMoveSlot(next: StoreShotDoc, slotId: string, direction: -1 
   next.project.slots = reorderSlots(ordered);
 }
 
-export function applyAddSlot(next: StoreShotDoc): string {
+export function applyAddSlot(next: ProjectDoc): string {
   const orderedSlots = sortSlotsByOrder(next.project.slots);
   const referenceSlot = orderedSlots.find((slot) => slot.id === 'slot1') || orderedSlots[0];
   const { slotId: nextId, slotNumber: nextNumber } = resolveNextSlotIdentity(next.project.slots);
@@ -90,7 +90,7 @@ export function applyAddSlot(next: StoreShotDoc): string {
   return newSlot.id;
 }
 
-export function applyRemoveSlot(next: StoreShotDoc, slotId: string) {
+export function applyRemoveSlot(next: ProjectDoc, slotId: string) {
   next.project.slots = reorderSlots(next.project.slots.filter((slot) => slot.id !== slotId));
   delete next.copy.keys[fieldKey(slotId, 'title')];
   delete next.copy.keys[fieldKey(slotId, 'subtitle')];

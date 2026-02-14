@@ -3,7 +3,7 @@ import { useCallback } from 'react';
 import { isTauriRuntime, pickProjectFile, pickProjectSavePath, readTextFile, writeTextFile } from '../lib/desktop-runtime';
 import { parseJsonOrNull } from '../lib/json-utils';
 import {
-  type StoreShotDoc,
+  type ProjectDoc,
   TEMPLATE_REFERENCE_WIDTH,
   buildProjectSnapshotForPersistence,
   createDefaultProject,
@@ -19,10 +19,10 @@ interface UseProjectFileActionsArgs {
   defaultExportDir: string;
   defaultProjectFileName: string;
   hasUnsavedChanges: boolean;
-  doc: StoreShotDoc;
+  doc: ProjectDoc;
   resolveOutputDir: (value: string | undefined) => string;
   runWithBusy: (action: (helpers: BusyHelpers) => Promise<void>, options?: BusyRunOptions) => Promise<void>;
-  setDoc: (value: StoreShotDoc) => void;
+  setDoc: (value: ProjectDoc) => void;
   setOutputDir: (value: string) => void;
   setIssues: (value: Array<{ level: 'error' | 'warning'; code: string; message: string }>) => void;
   setProjectPath: (value: string) => void;

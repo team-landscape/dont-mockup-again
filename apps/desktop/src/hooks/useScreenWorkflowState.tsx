@@ -12,7 +12,7 @@ import { type CanvasSlotItem } from '../components/canvas/InfiniteSlotCanvas';
 import {
   type Device,
   type SlotCanvasPosition,
-  type StoreShotDoc,
+  type ProjectDoc,
   type TemplateBackground,
   type TemplateMain,
   defaultSlotCanvasPosition,
@@ -24,7 +24,7 @@ import {
 } from '../lib/project-model';
 
 interface UseScreenWorkflowStateArgs {
-  doc: StoreShotDoc;
+  doc: ProjectDoc;
   selectedSlot: string;
   selectedLocale: string;
   selectedSlotNameDraft: string;
@@ -34,7 +34,7 @@ interface UseScreenWorkflowStateArgs {
   slotSourceUrls: Record<string, string>;
   previewMatrixUrls: Record<string, Record<string, string>>;
   templateImageUrls: Record<string, string>;
-  setDoc: Dispatch<SetStateAction<StoreShotDoc>>;
+  setDoc: Dispatch<SetStateAction<ProjectDoc>>;
   setSelectedSlot: Dispatch<SetStateAction<string>>;
   setSelectedLocale: Dispatch<SetStateAction<string>>;
   setSelectedSlotNameDraft: Dispatch<SetStateAction<string>>;
@@ -42,7 +42,7 @@ interface UseScreenWorkflowStateArgs {
   renameSlot: (slotId: string, nextName: string) => void;
   moveSlot: (slotId: string, direction: -1 | 1) => void;
   removeSlot: (slotId: string) => void;
-  updateDoc: (mutator: (next: StoreShotDoc) => void) => void;
+  updateDoc: (mutator: (next: ProjectDoc) => void) => void;
 }
 
 export function useScreenWorkflowState({

@@ -8,18 +8,18 @@ import {
 } from '../lib/export-preview-renderer';
 import { withTimeout } from '../lib/async-utils';
 import { parseJsonOrNull } from '../lib/json-utils';
-import type { StoreShotDoc } from '../lib/project-model';
+import type { ProjectDoc } from '../lib/project-model';
 import type { BusyHelpers, BusyRunOptions } from './useBusyRunner';
 
 interface UseExportActionArgs {
-  doc: StoreShotDoc;
+  doc: ProjectDoc;
   outputDir: string;
   previewRenderDir: string;
   projectPath: string;
   templateImageUrls: Record<string, string>;
   resolveOutputDir: (value: string | undefined) => string;
   runWithBusy: (action: (helpers: BusyHelpers) => Promise<void>, options?: BusyRunOptions) => Promise<void>;
-  persistProjectSnapshot: (options?: { syncTemplateMain?: boolean }) => Promise<StoreShotDoc>;
+  persistProjectSnapshot: (options?: { syncTemplateMain?: boolean }) => Promise<ProjectDoc>;
   setOutputDir: (value: string) => void;
   setExportStatus: (value: string) => void;
   setExportError: (value: string) => void;

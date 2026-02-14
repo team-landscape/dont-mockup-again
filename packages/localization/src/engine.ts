@@ -127,7 +127,7 @@ export async function localizeProjectCopy(projectDoc, options = {}) {
     argsTemplate: [],
     timeoutSec: 120,
     promptVersion: 'v1',
-    cachePath: '.storeshot/cache/translation-cache.json',
+    cachePath: '.dma/cache/translation-cache.json',
     ...(localization.llmCli || {})
   };
 

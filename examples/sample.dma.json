@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "project": {
     "name": "Don't Mockup Again Sample",
-    "bundleId": "com.example.storeshot",
-    "packageName": "com.example.storeshot",
+    "bundleId": "com.example.dontmockupagain",
+    "packageName": "com.example.dontmockupagain",
     "platforms": ["ios", "android"],
     "locales": ["en-US", "es-ES"],
     "devices": [

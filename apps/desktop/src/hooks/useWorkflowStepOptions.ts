@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { fieldKey, type Device, type Slot, type StoreShotDoc } from '../lib/project-model';
+import { fieldKey, type Device, type Slot, type ProjectDoc } from '../lib/project-model';
 import { type SelectOption } from '../types/ui';
 
 interface UseWorkflowStepOptionsParams {
@@ -9,7 +9,7 @@ interface UseWorkflowStepOptionsParams {
   slots: Slot[];
   selectedSlotData: Slot | null;
   selectedLocale: string;
-  copyKeys: StoreShotDoc['copy']['keys'];
+  copyKeys: ProjectDoc['copy']['keys'];
 }
 
 interface UseWorkflowStepOptionsResult {

@@ -8,12 +8,12 @@ import {
   resolveTemplateElementsForSlot,
   slotTemplateImageKey,
   sortSlotsByOrder,
-  type StoreShotDoc,
+  type ProjectDoc,
   type TemplateMain
 } from './project-model';
 
 interface RenderExportImagesFromSnapshotArgs {
-  snapshot: StoreShotDoc;
+  snapshot: ProjectDoc;
   targetDir: string;
   templateImageUrls: Record<string, string>;
   runWithTimeout: <T>(promise: Promise<T>, timeoutMs: number, label: string) => Promise<T>;
@@ -99,7 +99,7 @@ export async function renderExportImagesFromSnapshot({
   }
 }
 
-export function collectExpectedRenderSuffixes(snapshot: StoreShotDoc) {
+export function collectExpectedRenderSuffixes(snapshot: ProjectDoc) {
   const suffixes: string[] = [];
   const slots = sortSlotsByOrder(snapshot.project.slots || []);
   const locales = snapshot.project.locales || [];

@@ -35,7 +35,7 @@ import {
 import {
   type Device,
   type Platform,
-  type StoreShotDoc,
+  type ProjectDoc,
   buildProjectSnapshotForPersistence,
   clone,
   createDefaultProject,
@@ -65,8 +65,8 @@ const steps: Array<{ id: StepId; title: string }> = [
 ];
 
 const XL_MEDIA_QUERY = '(min-width: 1280px)';
-const ONBOARDING_STORAGE_KEY = 'storeshot.desktop.onboarding.v1.completed';
-const DEFAULT_PROJECT_FILE_NAME = 'project.storeshot.json';
+const ONBOARDING_STORAGE_KEY = 'dma.desktop.onboarding.v1.completed';
+const DEFAULT_PROJECT_FILE_NAME = 'project.dma.json';
 const PREVIEW_RENDER_DIR = 'dist-render';
 
 export function App() {
@@ -75,7 +75,7 @@ export function App() {
   const [savedProjectSignature, setSavedProjectSignature] = useState<string | null>(null);
   const [projectStatus, setProjectStatus] = useState('');
   const [projectError, setProjectError] = useState('');
-  const [doc, setDoc] = useState<StoreShotDoc>(() => createDefaultProject());
+  const [doc, setDoc] = useState<ProjectDoc>(() => createDefaultProject());
   const [outputDir, setOutputDir] = useState('dist');
   const [isBusy, setIsBusy] = useState(false);
   const [busyTitle, setBusyTitle] = useState('');

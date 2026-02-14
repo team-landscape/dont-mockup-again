@@ -86,7 +86,7 @@
 
 ## 5) 데이터 모델 (프로젝트 파일 포맷)
 
-프로젝트는 하나의 파일로 저장: `*.storeshot.json`
+프로젝트는 하나의 파일로 저장: `*.dma.json`
 
 ```json
 {
@@ -161,7 +161,7 @@
 
 ## 6) 렌더링 엔진 요구사항 (Playwright 기반 권장)
 
-* 입력: `.storeshot.json` + 원본 스크린샷 이미지 + 템플릿
+* 입력: `.dma.json` + 원본 스크린샷 이미지 + 템플릿
 * 출력: 각 (slot × locale × device) PNG
 * 구현 방식:
 
@@ -281,7 +281,7 @@
   * 샘플 프로젝트 파일
 * 샘플 assets 포함:
 
-  * `examples/sample.storeshot.json`
+  * `examples/sample.dma.json`
   * `examples/assets/source/*.png`
 
 ---

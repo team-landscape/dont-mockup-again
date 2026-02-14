@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
 
-import type { LlmCliConfig, StoreShotDoc } from '../lib/project-model';
+import type { LlmCliConfig, ProjectDoc } from '../lib/project-model';
 
 interface UseProjectWorkflowActionsArgs {
-  updateDoc: (mutator: (next: StoreShotDoc) => void) => void;
+  updateDoc: (mutator: (next: ProjectDoc) => void) => void;
   upsertLlmConfig: (mutator: (cfg: LlmCliConfig) => void) => void;
 }
 

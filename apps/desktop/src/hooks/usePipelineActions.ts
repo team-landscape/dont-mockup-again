@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 
 import { readTextFile, runPipeline } from '../lib/desktop-runtime';
 import { parseJsonOrNull } from '../lib/json-utils';
-import { normalizeProject, type StoreShotDoc } from '../lib/project-model';
+import { normalizeProject, type ProjectDoc } from '../lib/project-model';
 import type { BusyHelpers, BusyRunOptions } from './useBusyRunner';
 
 interface ValidateIssue {
@@ -15,14 +15,14 @@ interface UsePipelineActionsArgs {
   projectPath: string;
   previewRenderDir: string;
   runWithBusy: (action: (helpers: BusyHelpers) => Promise<void>, options?: BusyRunOptions) => Promise<void>;
-  persistProjectSnapshot: (options?: { syncTemplateMain?: boolean }) => Promise<StoreShotDoc>;
+  persistProjectSnapshot: (options?: { syncTemplateMain?: boolean }) => Promise<ProjectDoc>;
   loadSlotPreviewMap: () => Promise<{
     loaded: number;
     total: number;
     selectedPath: string;
   }>;
   loadPreviewMatrix: () => Promise<Record<string, Record<string, string>>>;
-  setDoc: (value: StoreShotDoc) => void;
+  setDoc: (value: ProjectDoc) => void;
   setIssues: (value: ValidateIssue[]) => void;
 }
 

@@ -7,7 +7,7 @@ import test from 'node:test';
 import { localizeProjectCopy } from '../packages/localization/src/index.ts';
 
 async function withFakeGemini(run) {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'storeshot-llm-cli-'));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dma-llm-cli-'));
   const binDir = path.join(tempDir, 'bin');
   await fs.mkdir(binDir, { recursive: true });
 

@@ -1,7 +1,7 @@
 import { useCallback, type MutableRefObject, type TransitionStartFunction } from 'react';
 
 import {
-  type StoreShotDoc,
+  type ProjectDoc,
   type TemplateElement,
   type TemplateElementKind,
   type TemplateImageElement,
@@ -17,7 +17,7 @@ import {
 } from '../lib/project-model';
 
 interface UseTemplateEditorActionsArgs {
-  setDoc: (value: StoreShotDoc | ((current: StoreShotDoc) => StoreShotDoc)) => void;
+  setDoc: (value: ProjectDoc | ((current: ProjectDoc) => ProjectDoc)) => void;
   startTemplateTransition: TransitionStartFunction;
   selectedSlot: string;
   selectedSlotDataId?: string;

@@ -336,7 +336,7 @@ fn pick_project_save_path(default_file_name: Option<String>, preferred_dir: Opti
     let file_name = default_file_name
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "project.storeshot.json".to_string());
+        .unwrap_or_else(|| "project.dma.json".to_string());
 
     let mut dialog = rfd::FileDialog::new()
         .add_filter("Don't Mockup Again Project", &["json"])

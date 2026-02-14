@@ -1,5 +1,5 @@
 {
-  "name": "@storeshot/localization",
+  "name": "@dont-mockup-again/localization",
   "version": "0.1.0",
   "type": "module",
   "exports": "./src/index.ts"

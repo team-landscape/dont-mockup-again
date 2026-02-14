@@ -11,7 +11,7 @@ import { exportProject } from '../packages/exporter/src/index.ts';
 import { createDefaultProject } from '../apps/desktop/src/lib/project-model.ts';
 
 const rootDir = path.resolve('.');
-const sampleProjectPath = path.join(rootDir, 'examples', 'sample.storeshot.json');
+const sampleProjectPath = path.join(rootDir, 'examples', 'sample.dma.json');
 
 async function exists(filePath) {
   try {
@@ -23,7 +23,7 @@ async function exists(filePath) {
 }
 
 test('renders 12 outputs for 3 slots x 2 locales x 2 devices', async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'storeshot-render-'));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dma-render-'));
   const renderDir = path.join(tempDir, 'dist-render');
 
   const result = await renderProject(sampleProjectPath, {
@@ -98,7 +98,7 @@ test('placeholder protection rejects broken translation', () => {
 });
 
 test('exporter creates zip output', async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'storeshot-export-'));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dma-export-'));
   const renderDir = path.join(tempDir, 'dist-render');
   const outDir = path.join(tempDir, 'dist');
 
