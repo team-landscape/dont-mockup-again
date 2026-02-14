@@ -48,7 +48,8 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri
 
-      - name: Validate macOS signing secrets
+      - name: Detect signing configuration
+        id: signing
         env:
           APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -58,14 +59,21 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
-          for key in APPLE_CERTIFICATE_P12_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
-            if [ -z "${!key}" ]; then
-              echo "::error::Missing required GitHub secret: ${key}"
-              exit 1
-            fi
-          done
+          if [ -n "${APPLE_CERTIFICATE_P12_BASE64}" ] \
+            && [ -n "${APPLE_CERTIFICATE_PASSWORD}" ] \
+            && [ -n "${APPLE_SIGNING_IDENTITY}" ] \
+            && [ -n "${APPLE_ID}" ] \
+            && [ -n "${APPLE_APP_SPECIFIC_PASSWORD}" ] \
+            && [ -n "${APPLE_TEAM_ID}" ]; then
+            echo "enabled=true" >> "${GITHUB_OUTPUT}"
+            echo "Signing + notarization enabled."
+          else
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+            echo "::warning::Apple signing secrets are missing. Releasing unsigned app bundle."
+          fi
 
       - name: Import Apple signing certificate
+        if: steps.signing.outputs.enabled == 'true'
         uses: apple-actions/import-codesign-certs@v3
         with:
           p12-file-base64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
@@ -89,6 +97,7 @@ jobs:
         run: npm --prefix apps/desktop run tauri:build -- --bundles app
 
       - name: Sign and notarize app bundle
+        if: steps.signing.outputs.enabled == 'true'
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -115,6 +124,15 @@ jobs:
           xcrun stapler staple "${APP_PATH}"
           xcrun stapler validate "${APP_PATH}"
           spctl --assess --type execute --verbose=4 "${APP_PATH}"
+
+      - name: Verify unsigned app bundle
+        if: steps.signing.outputs.enabled != 'true'
+        run: |
+          set -euo pipefail
+          BUNDLE_DIR="apps/desktop/src-tauri/target/release/bundle/macos"
+          APP_PATH="${BUNDLE_DIR}/Don't Mockup Again.app"
+          test -d "${APP_PATH}"
+          echo "Unsigned build prepared at ${APP_PATH}"
 
       - name: Package .app bundle
         run: |
